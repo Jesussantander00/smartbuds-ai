@@ -7,6 +7,7 @@ import '../../core/command_router/command_router.dart';
 import '../../core/connector_manager.dart';
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
+import '../../core/voice_engine/command_parser.dart';
 
 /// Un reproductor con sus capacidades efectivas para la pantalla.
 class PlayerView {
@@ -40,6 +41,10 @@ class DetectedPlayerController extends ChangeNotifier {
   CommandResult? lastResult;
   bool busy = false;
 
+  /// Se llama con el reproductor activo en cada actualización
+  /// (lo usa el perfil musical para aprender qué escuchas).
+  void Function(PlayerStatus? active)? onActivePlayer;
+
   /// Para probar políticas sin el motor de voz: los botones envían
   /// el comando como si viniera de la voz.
   CommandSource testSource = CommandSource.voice;
@@ -70,6 +75,8 @@ class DetectedPlayerController extends ChangeNotifier {
     }
     players = views;
     detection = detector.detect(candidates);
+    final d = detection;
+    onActivePlayer?.call(d is PlayerDetected ? d.candidate.status : null);
     notifyListeners();
   }
 
@@ -78,17 +85,46 @@ class DetectedPlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> send(MusicCommand command) => _run(
+  Future<CommandResult?> send(MusicCommand command) => _run(
       () => router.route(command, source: testSource));
 
-  Future<void> sendTo(PlayerCandidate c, MusicCommand command) => _run(
+  /// Campo de búsqueda de pruebas: acepta lo mismo que la voz
+  /// («Ojalá Ryan Castro» o «Ojalá en Apple Music»).
+  Future<void> search(String text, {CommandSource? source}) async {
+    if (text.trim().isEmpty) return;
+    final request = const CommandParser().parseSearch('busca $text') ??
+        SearchRequest(text.trim());
+    await searchRequest(request, source: source ?? testSource);
+  }
+
+  Future<CommandResult?> searchRequest(SearchRequest r, {CommandSource? source}) async {
+    if (busy) return null;
+    return _run(() => router.routeSearch(
+          r.query,
+          appPackage: r.appPackage,
+          appName: r.appName,
+          source: source ?? testSource,
+        ));
+  }
+
+  Future<CommandResult?> searchVoice(SearchRequest r) =>
+      searchRequest(r, source: CommandSource.voice);
+
+  /// Comando que llega del Voice Engine (siempre con origen voz).
+  Future<CommandResult?> sendVoice(MusicCommand command) async {
+    if (busy) return null;
+    return _run(() => router.route(command, source: CommandSource.voice));
+  }
+
+  Future<CommandResult?> sendTo(PlayerCandidate c, MusicCommand command) => _run(
       () => router.executeOn(c, command, source: testSource));
 
-  Future<void> _run(Future<CommandResult> Function() action) async {
+  Future<CommandResult?> _run(Future<CommandResult> Function() action) async {
     busy = true;
     notifyListeners();
     try {
       lastResult = await action();
+      return lastResult;
     } finally {
       busy = false;
       await refresh();

@@ -1,5 +1,6 @@
 package com.smartbuds.smartbuds_ai
 
+import android.app.SearchManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,8 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Bundle
+import android.provider.MediaStore
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -94,6 +97,27 @@ class MediaSessionConnector(
                 "sendCommand" -> result.success(
                     sendCommand(call.argument("playerId"), call.argument("command"))
                 )
+                "playFromSearch" -> result.success(
+                    playFromSearch(
+                        call.argument<String>("packageName"),
+                        call.argument<String>("query") ?: "",
+                        call.argument<String>("mode") ?: "auto"
+                    )
+                )
+                "playUriInSession" -> result.success(
+                    playUriInSession(
+                        call.argument("packageName"),
+                        call.argument("uri"),
+                        call.argument("mediaId")
+                    )
+                )
+                "openUri" -> result.success(
+                    openUri(call.argument("uri"), call.argument("packageName"))
+                )
+                "filesDir" -> result.success(context.filesDir.absolutePath)
+                "bringToFront" -> {
+                    bringToFront(); result.success(null)
+                }
                 "adjustSystemVolume" -> result.success(
                     adjustVolume(call.argument<String>("direction") == "up")
                 )
@@ -161,6 +185,90 @@ class MediaSessionConnector(
             else -> return false
         }
         return true
+    }
+
+    /**
+     * Busca y reproduce en la app indicada.
+     * - mode "session": pide playFromSearch a la sesión multimedia activa de esa
+     *   app, aunque no declare ACTION_PLAY_FROM_SEARCH (algunas lo aceptan igual).
+     * - mode "intent": intención estándar MEDIA_PLAY_FROM_SEARCH (la del Asistente),
+     *   indicando que lo buscado es una canción.
+     * - mode "auto": sesión si la declara; si no, intención.
+     */
+    private fun playFromSearch(packageName: String?, query: String, mode: String): Boolean {
+        if (query.isBlank() || packageName.isNullOrBlank()) return false
+        val session = activeControllers().firstOrNull { it.packageName == packageName }
+        val declares = ((session?.playbackState?.actions ?: 0L) and
+            PlaybackState.ACTION_PLAY_FROM_SEARCH) != 0L
+
+        if (mode == "session" || (mode == "auto" && declares)) {
+            if (session == null) return false
+            session.transportControls.playFromSearch(query, Bundle())
+            return true
+        }
+
+        val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+            setPackage(packageName)
+            putExtra(SearchManager.QUERY, query)
+            putExtra(MediaStore.EXTRA_MEDIA_FOCUS, MediaStore.Audio.Media.ENTRY_CONTENT_TYPE)
+            putExtra(MediaStore.EXTRA_MEDIA_TITLE, query)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Trae SmartBuds de vuelta al frente sin detener la música del otro reproductor.
+     * En Android 10+ el sistema puede bloquearlo si la app lleva tiempo en segundo
+     * plano; se hace justo después de la búsqueda, cuando aún está permitido.
+     */
+    /**
+     * Pide a la sesión multimedia de la app que reproduzca un enlace, sin abrir
+     * su pantalla (mismo canal invisible que «Cambia»). La app puede ignorarlo;
+     * Dart verifica si la canción cambió.
+     */
+    private fun playUriInSession(packageName: String?, uri: String?, mediaId: String?): Boolean {
+        val session = activeControllers().firstOrNull { it.packageName == packageName }
+            ?: return false
+        val controls = session.transportControls
+        if (!uri.isNullOrBlank()) controls.playFromUri(android.net.Uri.parse(uri), Bundle())
+        if (!mediaId.isNullOrBlank()) controls.playFromMediaId(mediaId, Bundle())
+        return true
+    }
+
+    /** Abre un enlace (p. ej. music.youtube.com/watch?v=…) en la app indicada. */
+    private fun openUri(uri: String?, packageName: String?): Boolean {
+        if (uri.isNullOrBlank()) return false
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).apply {
+            if (!packageName.isNullOrBlank()) setPackage(packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun bringToFront() {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        try {
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            // Sin permiso para volver al frente: la música sigue igual.
+        }
     }
 
     private fun adjustVolume(up: Boolean): Boolean {

@@ -1,4 +1,4 @@
-# SmartBuds AI — Módulo 1: Active Player Detector + Connector Manager
+# SmartBuds AI
 
 Primer entregable de la arquitectura **SmartBuds AutoConnect**: detectar el
 reproductor activo en Android, saber qué permite hacer y enviarle «Cambia» y
@@ -9,6 +9,53 @@ lanzan con botones, que pueden simular que vienen de la voz para probar las pol�
 
 - [Arquitectura técnica y plan de desarrollo](docs/01-arquitectura-tecnica-y-plan.md)
 - [Arquitectura AutoConnect](docs/02-arquitectura-autoconnect.md)
+
+## Qué hace hoy
+
+| Función | Cómo |
+|---|---|
+| Detectar el reproductor activo | YouTube Music, Apple Music, Amazon Music… (Acceso a notificaciones) |
+| Control por voz sin internet | Vosk: «Cambia», «Devuelve», «Pausa», «Continúa», «Sube», «Baja» |
+| Pantalla apagada | Servicio en primer plano con notificación «SmartBuds está escuchando» |
+| Buscar y reproducir | «Busca Vacío de Hamilton» → suena en YouTube Music sin abrirla (API de YouTube) |
+| Elegir reproductor | «Busca … en Apple Music / Amazon Music / Deezer» |
+| Mejor reconocimiento de nombres | «Busca» solo → «¿Qué canción?» → reconocedor preciso del sistema |
+| Inteligencia musical | Aprende de lo que escuchas: completa +2, repetida +3, «Me gusta» +5, saltada −2, «No me gusta» −5 |
+| «Pon algo que me guste» | Elige una de tus mejores canciones que no haya sonado hace poco |
+| Respuesta por voz | «Reproduciendo Vacío», «Guardada en tus favoritas» (se puede apagar) |
+| Audífonos | Pausa la escucha al quitarlos y la reanuda al conectarlos |
+| Sincronización | Perfil en el teléfono y, opcionalmente, en Supabase |
+| App cerrada | El motor vive en la aplicación: sigue escuchando hasta tocar «Detener» en la notificación |
+| Momentos del día | «Pon algo que me guste» prioriza lo que disfrutas a esa hora |
+| Descubrir | «Pon algo nuevo»: canciones que no conoces de tus artistas favoritos |
+| Pedidos naturales | «Pon algo de Ryan Castro», «Pon algo para entrenar / tranquilo / de fiesta» |
+| Solo mi voz | Entrena tu voz (3 veces «Cambia») y SmartBuds ignora a otras personas |
+
+Documentos: `docs/politica-de-privacidad.md` y `docs/publicacion-play-store.md`.
+
+Pantallas: bienvenida con permisos paso a paso, **Inicio**, **Asistente**, **Mi música** y **Dispositivos** (diagnóstico).
+
+## Claves (secrets.json)
+
+`secrets.json` está excluido de GitHub. Copia `secrets.example.json` y complétalo:
+
+- `YOUTUBE_API_KEY`: clave de YouTube Data API v3 (búsqueda exacta de canciones).
+- `SUPABASE_URL` y `SUPABASE_ANON_KEY` (opcional): respaldo del perfil musical en la nube.
+  Crea las tablas ejecutando `supabase/schema.sql` en el SQL Editor de Supabase.
+
+Compila siempre con:
+
+```bash
+flutter run -d 127.0.0.1:5555 --dart-define-from-file=secrets.json
+```
+
+### Seguridad de la clave de YouTube (antes de publicar)
+
+1. En Google Cloud → *Credenciales*, crea una clave nueva y **borra la anterior** si alguna vez la compartiste.
+2. Al publicar, restringe la clave a *Apps para Android* (paquete `com.smartbuds.smartbuds_ai`
+   y huella SHA-1 de la firma). Para eso la app debe enviar su firma en cada búsqueda
+   (cabeceras `X-Android-Package` y `X-Android-Cert`): se agrega en la fase de publicación.
+3. Deja *Restricciones de API* solo en **YouTube Data API v3**.
 
 ## Puesta en marcha
 

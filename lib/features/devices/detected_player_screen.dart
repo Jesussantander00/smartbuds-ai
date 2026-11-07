@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
+import '../../core/voice_engine/voice_engine.dart';
 import 'detected_player_controller.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
   const DetectedPlayerScreen({
     super.key,
     required this.controller,
+    this.voice,
     this.onOpenPermissions,
     this.platformNote,
   });
 
   final DetectedPlayerController controller;
+
+  /// Motor de voz; null en plataformas sin reconocimiento (y en pruebas).
+  final VoiceEngine? voice;
   final Future<void> Function()? onOpenPermissions;
 
   /// Aviso de plataforma (p. ej. limitaciones de iOS).
@@ -80,6 +85,10 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 ),
               _DetectionCard(controller: c),
               const SizedBox(height: 12),
+              if (widget.voice != null) ...[
+                _VoiceBar(voice: widget.voice!),
+                const SizedBox(height: 12),
+              ],
               _TestControls(controller: c),
               if (c.lastResult != null) _ResultTile(result: c.lastResult!),
               const SizedBox(height: 20),
@@ -181,13 +190,81 @@ class _DetectionCard extends StatelessWidget {
   }
 }
 
-class _TestControls extends StatelessWidget {
+class _VoiceBar extends StatelessWidget {
+  const _VoiceBar({required this.voice});
+  final VoiceEngine voice;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final on = voice.enabled;
+        final status = !on
+            ? 'Toca para que SmartBuds te escuche'
+            : voice.listening
+                ? 'Escuchando… di «Cambia», «Pausa», «Sube» o «Busca» y una canción'
+                : 'Preparando el micrófono…';
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                IconButton.filled(
+                  iconSize: 32,
+                  tooltip: on ? 'Dejar de escuchar' : 'Escuchar',
+                  onPressed: voice.toggle,
+                  icon: Icon(on ? Icons.mic : Icons.mic_none),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(status, style: theme.textTheme.bodyMedium),
+                      if (voice.lastHeard.isNotEmpty)
+                        Text('Oí: «${voice.lastHeard}»',
+                            style: theme.textTheme.bodySmall),
+                      if (voice.error != null)
+                        Text(voice.error!,
+                            style: TextStyle(color: theme.colorScheme.error)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TestControls extends StatefulWidget {
   const _TestControls({required this.controller});
   final DetectedPlayerController controller;
 
   @override
+  State<_TestControls> createState() => _TestControlsState();
+}
+
+class _TestControlsState extends State<_TestControls> {
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _search() {
+    widget.controller.search(_query.text);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final c = controller;
+    final c = widget.controller;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -217,6 +294,30 @@ class _TestControls extends StatelessWidget {
             _cmd(c, MusicCommand.next, Icons.skip_next, 'Cambia'),
             _cmd(c, MusicCommand.volumeDown, Icons.volume_down, 'Baja'),
             _cmd(c, MusicCommand.volumeUp, Icons.volume_up, 'Sube'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _query,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _search(),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  hintText: 'Ojalá Ryan Castro',
+                  labelText: '«Busca…» (prueba sin voz)',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: c.busy ? null : _search,
+              icon: const Icon(Icons.search),
+              label: const Text('Buscar'),
+            ),
           ],
         ),
       ],

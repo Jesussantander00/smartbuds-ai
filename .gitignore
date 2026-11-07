@@ -30,3 +30,10 @@ ios/Flutter/Flutter.podspec
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 **/xcuserdata/
+
+# Modelo de voz Vosk (~40 MB): se descarga con scripts/descargar-modelo-voz.ps1
+android/app/src/main/assets/model-es/
+
+# Claves locales (YouTube Data API): nunca subir a GitHub
+secrets.json
+android/app/src/main/assets/model-spk/

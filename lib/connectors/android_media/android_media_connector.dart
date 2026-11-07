@@ -13,7 +13,8 @@ class AndroidMediaChannel {
 
 /// Fuente Android: consulta las sesiones activas mediante
 /// MediaSessionManager (requiere acceso a notificaciones).
-class AndroidMediaSource implements PlayerSource, SystemVolumeController {
+class AndroidMediaSource
+    implements PlayerSource, SystemVolumeController, SearchPlayer {
   AndroidMediaSource({MethodChannel? channel, EventChannel? events})
       : _channel = channel ?? AndroidMediaChannel.method,
         _events = events ?? AndroidMediaChannel.events;
@@ -70,9 +71,51 @@ class AndroidMediaSource implements PlayerSource, SystemVolumeController {
       false;
 
   @override
-  Future<bool> adjust({required bool up}) async =>
+  Future<bool> adjust({required bool up}) async {
+    // Tres pasos para que el cambio se note (Android tiene ~15 niveles).
+    var ok = true;
+    for (var i = 0; i < 3; i++) {
+      ok = (await _channel.invokeMethod<bool>(
+                  'adjustSystemVolume', {'direction': up ? 'up' : 'down'}) ??
+              false) &&
+          ok;
+    }
+    return ok;
+  }
+
+  @override
+  Future<bool> playFromSearch({
+    required String packageName,
+    required String query,
+    SearchMode mode = SearchMode.intent,
+  }) async =>
+      await _channel.invokeMethod<bool>('playFromSearch', {
+        'packageName': packageName,
+        'query': query,
+        'mode': mode.name,
+      }) ??
+      false;
+
+  @override
+  Future<void> returnToApp() => _channel.invokeMethod('bringToFront');
+
+  @override
+  Future<bool> playUriInSession({
+    required String packageName,
+    required String uri,
+    String? mediaId,
+  }) async =>
+      await _channel.invokeMethod<bool>('playUriInSession', {
+        'packageName': packageName,
+        'uri': uri,
+        'mediaId': mediaId,
+      }) ??
+      false;
+
+  @override
+  Future<bool> openUri({required String uri, required String packageName}) async =>
       await _channel.invokeMethod<bool>(
-          'adjustSystemVolume', {'direction': up ? 'up' : 'down'}) ??
+          'openUri', {'uri': uri, 'packageName': packageName}) ??
       false;
 
   /// Últimos datos conocidos sin ir al canal nativo (para la UI).

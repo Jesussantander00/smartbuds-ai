@@ -1,5 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Voice Engine: escuchar los comandos de voz mientras la app esta abierta. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Reproductor propio: buscar y reproducir canciones del catálogo (Audius). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Escucha con pantalla apagada: servicio en primer plano de tipo micrófono. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Android 13+: mostrar la notificación «SmartBuds está escuchando». -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Android 11+: necesario para mostrar el nombre de las apps de música
          detectadas (visibilidad de paquetes). -->
     <queries>
@@ -9,11 +19,22 @@
         <intent>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>
+        <intent>
+            <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+        </intent>
+        <!-- Voz de respuesta (TextToSpeech) en Android 11+. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- Android 11+: necesario para usar el reconocedor de voz del sistema. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application
         android:label="SmartBuds AI"
-        android:name="${applicationName}"
+        android:name=".SmartBudsApplication"
         android:icon="@mipmap/ic_launcher">
 
         <activity
@@ -33,6 +54,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Mantiene la escucha con la pantalla apagada. -->
+        <service
+            android:name=".VoiceForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Autorizado por el usuario en Ajustes → Acceso a notificaciones.
              Permite a MediaSessionManager listar las sesiones activas. -->
