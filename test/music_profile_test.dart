@@ -359,8 +359,8 @@ void main() {
 
       // Tres saltos seguidos (cada uno antes de 30 s, tras «Cambia»).
       for (final t in ['B', 'C', 'D', 'E']) {
+        now = now.add(const Duration(seconds: 10)); // escuchó 10 s y dijo «Cambia»
         profile.noteCommand(MusicCommand.next);
-        now = now.add(const Duration(seconds: 10));
         profile.observe(playing(t));
       }
       expect(profile.recentSkipStreak(), greaterThanOrEqualTo(3));
