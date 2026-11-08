@@ -52,8 +52,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .now-text small { color: #cfeef5; }
 .now-text strong { font-size: 1.25rem; font-weight: 400; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
-.player-wrap { margin-top: 12px; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9;
-  background: #00000055; }
+.player-wrap { margin: 12px auto 0; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9;
+  background: #00000055; max-width: 360px; }
 .player-wrap.empty { display: none; }
 .player-wrap iframe, #player { width: 100%; height: 100%; display: block; border: 0; }
 .controls { display: flex; justify-content: center; gap: 14px; margin-top: 14px; }
@@ -94,3 +94,11 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .tabbar button span { font-size: 1.2rem; padding: 3px 18px; border-radius: 16px; }
 .tabbar button.active { color: var(--text); font-weight: 600; }
 .tabbar button.active span { background: #2f4a53; }
+
+/* Elegir app de música */
+.target { justify-content: space-between; padding: 10px 16px; }
+.target select { font: inherit; color: var(--text); background: var(--surface2); border: 0;
+  border-radius: 10px; padding: 10px 12px; }
+.open-card { margin-top: 12px; text-align: center; }
+.open-btn { display: inline-block; background: #e0f7fb; color: var(--now); font-weight: 600;
+  text-decoration: none; padding: 12px 22px; border-radius: 26px; }

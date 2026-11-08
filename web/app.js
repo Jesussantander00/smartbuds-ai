@@ -159,7 +159,12 @@
     player = new YT.Player('player', {
       width: '100%',
       height: '100%',
-      playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+      // Sin controles de YouTube ni pantalla completa ni videos sugeridos:
+      // se maneja con los botones de SmartBuds y no te saca de la página.
+      playerVars: {
+        playsinline: 1, controls: 0, disablekb: 1, fs: 0, rel: 0,
+        iv_load_policy: 3, modestbranding: 1, origin: location.origin,
+      },
       events: {
         onReady: () => {
           playerReady = true;
@@ -195,23 +200,107 @@
     return { title: clean, artist: video.channel.replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim() };
   }
 
+  // ================================================================ Apps de música del teléfono
+  // Cada persona usa SU app (con su cuenta). SmartBuds elige la canción y la
+  // abre allí; para «Cambia» vuelves a SmartBuds y abre la siguiente.
+  const APPS = {
+    here: { name: 'SmartBuds' },
+    youtube: { name: 'YouTube Music' },
+    spotify: { name: 'Spotify' },
+    apple: { name: 'Apple Music' },
+    amazon: { name: 'Amazon Music' },
+    deezer: { name: 'Deezer' },
+  };
+  let target = loadJSON('smartbuds.target') || (IOS ? 'youtube' : 'here');
+  if (!APPS[target]) target = 'here';
+
+  // Apple (iTunes) también exige JSONP para pedirle datos desde otra página.
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cb = `cb${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+      const s = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 7000);
+      function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
+      window[cb] = (data) => { cleanup(); resolve(data); };
+      s.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`;
+      s.onerror = () => { cleanup(); reject(new Error('jsonp')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Enlace que abre la canción en la app elegida (enlaces universales). */
+  async function appLink(app, query) {
+    const q = encodeURIComponent(query);
+    switch (app) {
+      case 'youtube': {
+        try { return { url: `https://music.youtube.com/watch?v=${(await findVideo(query)).id}`, exact: true }; }
+        catch { return { url: `https://music.youtube.com/search?q=${q}` }; }
+      }
+      case 'apple': {
+        try {
+          const r = await jsonp(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1&country=co`);
+          const t = r.results?.[0];
+          if (t?.trackViewUrl) return { url: t.trackViewUrl, exact: true, title: t.trackName, artist: t.artistName };
+        } catch { /* sin resultado: búsqueda */ }
+        return { url: `https://music.apple.com/search?term=${q}` };
+      }
+      case 'deezer': {
+        try {
+          const r = await deezer(`/search?q=${q}&limit=1`);
+          const t = r.data?.[0];
+          if (t) return { url: `https://www.deezer.com/track/${t.id}`, exact: true, title: t.title, artist: t.artist?.name };
+        } catch { /* sin resultado: búsqueda */ }
+        return { url: `https://www.deezer.com/search/${q}` };
+      }
+      case 'spotify': return { url: `https://open.spotify.com/search/${q}` };
+      case 'amazon': return { url: `https://music.amazon.com/search/${q}` };
+      default: return null;
+    }
+  }
+
+  function showOpenCard(url, label) {
+    const a = $('openApp');
+    a.href = url;
+    a.textContent = `▶ Abrir en ${label}`;
+    $('openCard').classList.remove('hidden');
+  }
+
   /** Pone una canción {title, artist} o una búsqueda libre {query}. */
   async function play(item, { fromHistory = false, skipped = false } = {}) {
     status('Buscando…');
     try {
       const query = item.query || [item.title, item.artist].filter(Boolean).join(' ');
-      const video = await findVideo(query);
-      const info = item.title ? { title: item.title, artist: item.artist } : parseTitle(video);
+      let info;
+      let videoId = null;
+      if (target === 'here') {
+        const video = await findVideo(query);
+        videoId = video.id;
+        info = item.title ? { title: item.title, artist: item.artist } : parseTitle(video);
+      } else {
+        const link = await appLink(target, query);
+        info = item.title ? { title: item.title, artist: item.artist }
+          : (link.title ? { title: link.title, artist: link.artist } : { title: query, artist: '' });
+        showOpenCard(link.url, APPS[target].name);
+        // Se abre la app (con la cuenta de cada persona). Si el teléfono no la
+        // abre solo, queda el botón «Abrir en …» para tocarlo.
+        setTimeout(() => { window.location.href = link.url; }, 150);
+      }
       finishCurrent(skipped);
       if (current && !fromHistory) history.push({ title: current.title, artist: current.artist });
-      current = { ...info, key: keyFor(info.title, info.artist), videoId: video.id, startedAt: Date.now() };
-      $('playerWrap').classList.remove('empty');
-      if (playerReady) player.loadVideoById(video.id); else pendingVideo = video.id;
-      $('nowSource').textContent = 'Sonando en SmartBuds';
+      current = { ...info, key: keyFor(info.title, info.artist), videoId, startedAt: Date.now() };
+      if (videoId) {
+        $('playerWrap').classList.remove('empty');
+        $('openCard').classList.add('hidden');
+        if (playerReady) player.loadVideoById(videoId); else pendingVideo = videoId;
+      } else {
+        $('playerWrap').classList.add('empty');
+        if (playerReady) player.pauseVideo();
+      }
+      $('nowSource').textContent = `Sonando en ${APPS[target].name}`;
       $('nowTitle').textContent = [info.title, info.artist].filter(Boolean).join(' — ');
       record(current, 'play');
-      status('');
-      say(`Reproduciendo ${info.title}`);
+      status(target === 'here' ? '' : `Abriendo en ${APPS[target].name}. Vuelve aquí y toca ⏭ para la siguiente.`);
+      if (target === 'here') say(`Reproduciendo ${info.title}`);
     } catch (e) {
       status(e.message);
       say('No pude ponerla.');
@@ -235,12 +324,18 @@
   }
 
   function toggle() {
+    if (target !== 'here') {
+      if (current) status('La pausa se hace en la app de música (o con el botón de tus audífonos).');
+      else favorites();
+      return;
+    }
     if (!playerReady || !current) return favorites();
     const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
     playing ? player.pauseVideo() : player.playVideo();
   }
 
   function setVol(delta) {
+    if (target !== 'here') { status('El volumen se cambia con los botones del teléfono.'); return; }
     volume = Math.max(0, Math.min(100, volume + delta));
     if (playerReady) player.setVolume(volume);
     status(IOS ? 'En iPhone el volumen se cambia con los botones del teléfono.' : `Volumen ${volume}%`);
@@ -535,6 +630,15 @@
   $('login').onsubmit = (e) => { e.preventDefault(); doAuth('signin'); };
   $('signup').onclick = () => doAuth('signup');
   $('logout').onclick = signOut;
+  const sel = $('target');
+  for (const [id, a] of Object.entries(APPS)) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = id === 'here' ? 'Aquí mismo (SmartBuds)' : a.name;
+    sel.appendChild(o);
+  }
+  sel.value = target;
+  sel.onchange = () => { target = sel.value; saveJSON('smartbuds.target', target); status(`Ahora la música se abre en ${APPS[target].name}.`); };
   $('continuous').checked = continuous;
   $('continuous').onchange = (e) => {
     continuous = e.target.checked;

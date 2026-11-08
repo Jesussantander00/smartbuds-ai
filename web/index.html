@@ -27,6 +27,12 @@
         <p>En Safari toca <b>Compartir</b> y luego <b>«Agregar a inicio»</b>.</p>
       </div>
 
+      <!-- Dónde suena la música: la app de cada persona, con su cuenta -->
+      <label class="target card row">
+        <span>Reproducir en</span>
+        <select id="target" aria-label="App de música"></select>
+      </label>
+
       <!-- Sonando ahora -->
       <div class="now card">
         <div class="now-head">
@@ -37,6 +43,9 @@
           </div>
         </div>
         <div class="player-wrap" id="playerWrap"><div id="player"></div></div>
+        <div id="openCard" class="hidden open-card">
+          <a id="openApp" class="open-btn" href="#">▶ Abrir</a>
+        </div>
         <div class="controls">
           <button data-cmd="previous" aria-label="Devuelve">⏮</button>
           <button data-cmd="toggle" id="playBtn" class="main" aria-label="Pausa o continúa">▶</button>
