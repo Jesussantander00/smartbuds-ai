@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'core/player_detector/active_player_detector.dart';
 import 'core/settings/app_settings.dart';
 import 'core/storage/json_store.dart';
 import 'core/voice_engine/voice_engine.dart';
+import 'core/telemetry/error_reporter.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
 import 'features/devices/detected_player_controller.dart';
@@ -55,7 +57,29 @@ Future<void> main() async {
     await sync.pushAll(profile);
   };
 
-  runApp(SmartBudsApp(settings: settings, profile: profile, sync: sync, auth: auth));
+  // Reportes anónimos de errores (se pueden apagar en Ajustes).
+  final errors = SupabaseSync.configured
+      ? ErrorReporter(
+          url: SupabaseSync.envUrl,
+          anonKey: SupabaseSync.envKey,
+          deviceId: settings.deviceId,
+          enabled: () => settings.errorReports,
+        )
+      : null;
+  if (errors != null) {
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      unawaited(errors.report('flutter', details.exceptionAsString()));
+      previous?.call(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      unawaited(errors.report('sin_capturar', error));
+      return false;
+    };
+  }
+
+  runApp(SmartBudsApp(
+      settings: settings, profile: profile, sync: sync, auth: auth, errors: errors));
 }
 
 class SmartBudsApp extends StatefulWidget {
@@ -65,12 +89,14 @@ class SmartBudsApp extends StatefulWidget {
     required this.profile,
     this.sync,
     this.auth,
+    this.errors,
   });
 
   final AppSettings settings;
   final MusicProfile profile;
   final SupabaseSync? sync;
   final SupabaseAuth? auth;
+  final ErrorReporter? errors;
 
   @override
   State<SmartBudsApp> createState() => _SmartBudsAppState();
@@ -111,14 +137,25 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       detector: detector,
       capabilities: capabilities,
       router: router,
-    )..onActivePlayer = widget.profile.observe;
+    );
 
     assistant = Assistant(
       controller: controller,
       profile: widget.profile,
       finder: finder,
       similar: DeezerSimilarArtists(),
+      media: android,
+      settings: widget.settings,
+      errors: widget.errors,
     );
+
+    // Cada cambio del reproductor: perfil, asistente (radio, anuncios…) y
+    // modo de escucha (abierta si no suena nada).
+    controller.onActivePlayer = (status) {
+      widget.profile.observe(status);
+      assistant.onPlayerUpdate(status);
+      unawaited(voice?.setFreeMode(!(status?.isPlaying ?? false)) ?? Future.value());
+    };
 
     if (Platform.isAndroid || Platform.isIOS) {
       final v = VoiceEngine(
@@ -129,7 +166,13 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..feedbackEnabled = widget.settings.voiceFeedback
         ..followHeadphones = widget.settings.followHeadphones
         ..requireWakeWord = widget.settings.wakeWord
+        ..onHeadphonesChanged = ((c) => unawaited(assistant.onHeadphonesChanged(c)))
         ..attach(); // estado de audífonos desde el inicio
+      unawaited(v.setCustomWake(widget.settings.wakePhrase));
+      v.addListener(() {
+        final e = v.error;
+        if (e != null) unawaited(widget.errors?.report('voz', e) ?? Future.value());
+      });
       v.guard
         ..voiceprint = widget.settings.voiceprint
         ..enabled = widget.settings.onlyMyVoice
@@ -165,6 +208,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   @override
   void dispose() {
     voice?.dispose();
+    assistant.dispose();
     controller.dispose();
     widget.profile.dispose();
     super.dispose();
@@ -172,14 +216,23 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(listenable: widget.settings, builder: (context, _) => _app());
+  }
+
+  Widget _app() {
+    // Apariencia elegida en Ajustes (claro/oscuro y color principal).
+    final seed = Color(widget.settings.seedColor);
     return MaterialApp(
       title: 'SmartBuds AI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF00B4D8),
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      themeMode: switch (widget.settings.themeMode) {
+        'light' => ThemeMode.light,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.dark,
+      },
+      theme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.light, useMaterial3: true),
+      darkTheme:
+          ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
       home: ListenableBuilder(
         listenable: widget.settings,
         builder: (context, _) {

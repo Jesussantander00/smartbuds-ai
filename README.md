@@ -31,6 +31,16 @@ lanzan con botones, que pueden simular que vienen de la voz para probar las pol�
 | Pedidos naturales | «Pon algo de» → «¿De quién?», «Pon algo para entrenar / tranquilo / de fiesta» |
 | Toques en los audífonos | Dos toques: siguiente. Tres: anterior (sin permisos extra) |
 | Cuenta | Correo y contraseña (Supabase Auth); tus gustos te siguen a otro teléfono |
+| «¿Qué suena?», «Repite», «Adelanta/Atrasa» | Nombre de la canción, empezar de nuevo, saltar 30 s |
+| Temporizador | «Apaga en veinte minutos»: baja el volumen y pausa |
+| Deshacer | «Deshacer» o el botón: vuelve a la canción de antes, donde iba |
+| Radio SmartBuds | Música sin parar (favoritas + descubrimientos); cambia de estilo si saltas 3 seguidas |
+| Escucha abierta | Sin música sonando: «pon Ojalá de Ryan Castro» directo |
+| Palabra propia | Elige tu palabra de activación además de «Oye música» |
+| Audífonos | Anunciar cada canción y retomar al reconectar |
+| Modo carro, compartir, tema | Botones gigantes, enlace para WhatsApp, claro/oscuro y colores |
+| Mi semana | Resumen y gráficos de lo que escuchaste |
+| Reportes de errores | Anónimos, en Supabase (`supabase/errores.sql`); se pueden apagar |
 | Solo mi voz | Entrena tu voz (3 veces «Cambia») y SmartBuds ignora a otras personas |
 
 Documentos: `docs/politica-de-privacidad.md`, `docs/publicacion-play-store.md` y `docs/ficha-play-store.md` (textos, ícono y gráfico para la tienda).

@@ -68,6 +68,44 @@ class VoiceEngine extends ChangeNotifier {
   /// Solo obedece después de «Oye música» (menos activaciones por error).
   bool requireWakeWord = false;
 
+  /// Escucha abierta: sin música sonando, también se aceptan pedidos
+  /// libres («pon Ojalá de Ryan Castro») sin decir antes «Oye música».
+  bool freeMode = false;
+
+  /// Palabra de activación propia (además de «Oye música»), tal como se dice.
+  String customWake = '';
+
+  /// Avisa al conectar/desconectar audífonos (p. ej. para retomar la música).
+  void Function(bool connected)? onHeadphonesChanged;
+
+  /// Frases para el reconocedor: órdenes + la palabra de activación propia.
+  List<String> get grammar => [
+        ...CommandParser.voskGrammar.where((p) => p != '[unk]'),
+        if (customWake.trim().isNotEmpty) customWake.trim().toLowerCase(),
+        '[unk]',
+      ];
+
+  /// Cambia la palabra de activación propia y recarga el reconocedor.
+  Future<void> setCustomWake(String phrase) async {
+    customWake = phrase.trim();
+    CommandParser.customWakePhrases =
+        customWake.isEmpty ? {} : {CommandParser.normalize(customWake)};
+    if (!enabled) return;
+    try {
+      await _method.invokeMethod('setGrammar', {'grammar': grammar});
+    } catch (_) {}
+  }
+
+  /// Con música sonando: solo órdenes (gramática). Sin música: escucha abierta.
+  Future<void> setFreeMode(bool value) async {
+    if (freeMode == value) return;
+    freeMode = value;
+    if (!enabled) return;
+    try {
+      await _method.invokeMethod('setGrammarEnabled', {'enabled': !value});
+    } catch (_) {}
+  }
+
   /// «Solo mi voz».
   final SpeakerGuard guard = SpeakerGuard();
 
@@ -159,7 +197,7 @@ class VoiceEngine extends ChangeNotifier {
       return;
     }
     attach();
-    await _method.invokeMethod('start', {'grammar': CommandParser.voskGrammar});
+    await _method.invokeMethod('start', {'grammar': grammar, 'grammarEnabled': !freeMode});
     enabled = true;
     paused = false;
     notifyListeners();
@@ -233,7 +271,8 @@ class VoiceEngine extends ChangeNotifier {
         lastRejectedVoice = !guard.accepts(spk);
         if (lastRejectedVoice) break; // no es tu voz
         for (final t in texts) {
-          final intent = parser.parseIntent(t);
+          final intent =
+              freeMode && !requireWakeWord ? parser.parseOpen(t) : parser.parseIntent(t);
           // Con palabra de activación, solo «Oye música» abre la escucha.
           if (requireWakeWord && intent is! WakeIntent) continue;
           if (intent != null) {
@@ -267,7 +306,14 @@ class VoiceEngine extends ChangeNotifier {
         unawaited(_askForArtist());
       case WakeIntent():
         unawaited(_listenAfterWake());
-      case LikeIntent() ||
+      case NowPlayingIntent() ||
+            RestartIntent() ||
+            SeekIntent() ||
+            SleepIntent() ||
+            UndoIntent() ||
+            ShareIntent() ||
+            RadioIntent() ||
+            LikeIntent() ||
             DislikeIntent() ||
             FavoriteIntent() ||
             DiscoverIntent() ||
@@ -355,6 +401,7 @@ class VoiceEngine extends ChangeNotifier {
   void _onHeadphones(bool connected) {
     final changed = connected != headphonesConnected;
     headphonesConnected = connected;
+    if (changed) onHeadphonesChanged?.call(connected);
     if (!changed || !followHeadphones || !enabled) return;
     unawaited(setPaused(!connected));
   }

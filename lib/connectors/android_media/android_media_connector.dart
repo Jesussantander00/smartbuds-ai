@@ -38,6 +38,29 @@ class AndroidMediaSource
             'el reproductor activo.';
   }
 
+  /// Salta a [positionMs] o mueve [deltaMs] en la canción del reproductor.
+  Future<bool> seek(String playerId, {int? positionMs, int? deltaMs}) async {
+    try {
+      return await _channel.invokeMethod<bool>('seek', {
+            'playerId': playerId,
+            'positionMs': positionMs,
+            'deltaMs': deltaMs,
+          }) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Menú «Compartir» del sistema con [text].
+  Future<bool> shareText(String text) async {
+    try {
+      return await _channel.invokeMethod<bool>('shareText', {'text': text}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// iPhone: permiso para controlar Apple Music (en Android no hace falta).
   Future<bool> hasMusicAccess() async {
     try {

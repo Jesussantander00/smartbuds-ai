@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../account/account_card.dart';
+import 'weekly_stats.dart';
 import '../account/supabase_auth.dart';
 import '../assistant/assistant.dart';
 import 'music_profile.dart';
@@ -50,6 +51,8 @@ class MyMusicScreen extends StatelessWidget {
                 AccountCard(auth: auth!),
                 const SizedBox(height: 12),
               ],
+              WeeklyStatsCard(profile: profile),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   _Stat(label: 'Canciones', value: '${profile.tracks.length}'),

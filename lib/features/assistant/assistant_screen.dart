@@ -48,7 +48,54 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Pon algo nuevo»', 'Canciones que no conoces de tus artistas'),
     ('«Pon algo de»', 'Te pregunta «¿De quién?» y pone música de ese artista'),
     ('«Pon algo para entrenar»', 'También: tranquilo, de fiesta, para dormir, para estudiar'),
+    ('«Pon …» (sin música)', 'Si no suena nada: «pon Ojalá de Ryan Castro» directo'),
+    ('«¿Qué suena?»', 'Te dice el nombre de la canción'),
+    ('«Repite» / «Otra vez»', 'La canción desde el principio'),
+    ('«Adelanta» / «Atrasa»', '30 segundos adelante o atrás'),
+    ('«Apaga en veinte minutos»', 'Temporizador: baja el volumen y pausa. «Cancela el temporizador»'),
+    ('«Deshacer»', 'Vuelve a la canción de antes, donde iba'),
+    ('«Comparte esta»', 'Prepara el enlace para WhatsApp'),
+    ('«Pon mi radio»', 'Música sin parar: favoritas y descubrimientos'),
   ];
+
+  Future<void> _editWake(BuildContext context) async {
+    final settings = widget.settings;
+    final ctrl = TextEditingController(text: settings.wakePhrase);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tu palabra de activación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Usa dos palabras comunes en español, por ejemplo «hola amigo» '
+                'u «oye parce». Nombres raros o en inglés pueden no reconocerse.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'hola amigo',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, ''), child: const Text('Quitar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (value == null) return;
+    settings.update(wakePhrase: value);
+    await widget.voice?.setCustomWake(value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +160,68 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 widget.onHeadphoneTapsChanged?.call(v);
               },
             ),
+            SwitchListTile(
+              title: const Text('Radio SmartBuds'),
+              subtitle: const Text('Cuando termina una canción, SmartBuds elige la siguiente.'),
+              value: settings.radioMode,
+              onChanged: (v) => settings.update(radioMode: v),
+            ),
+            SwitchListTile(
+              title: const Text('Anunciar cada canción'),
+              subtitle: const Text('Dice suavemente el nombre de la canción nueva.'),
+              value: settings.announceSongs,
+              onChanged: (v) => settings.update(announceSongs: v),
+            ),
+            SwitchListTile(
+              title: const Text('Retomar al conectar audífonos'),
+              subtitle: const Text('La música sigue donde la dejaste.'),
+              value: settings.resumeOnHeadphones,
+              onChanged: (v) => settings.update(resumeOnHeadphones: v),
+            ),
+            ListTile(
+              leading: const Icon(Icons.campaign),
+              title: const Text('Tu palabra de activación'),
+              subtitle: Text(settings.wakePhrase.isEmpty
+                  ? 'Además de «Oye música». Toca para elegir una.'
+                  : '«${settings.wakePhrase}» (y también «Oye música»)'),
+              onTap: () => _editWake(context),
+            ),
+            SwitchListTile(
+              title: const Text('Enviar reportes de errores'),
+              subtitle: const Text('Anónimos: solo el tipo de error, nunca tu voz ni lo que dices.'),
+              value: settings.errorReports,
+              onChanged: (v) => settings.update(errorReports: v),
+            ),
+            const SizedBox(height: 8),
+            Text('Apariencia', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'dark', label: Text('Oscuro'), icon: Icon(Icons.dark_mode)),
+                ButtonSegment(value: 'light', label: Text('Claro'), icon: Icon(Icons.light_mode)),
+                ButtonSegment(value: 'system', label: Text('Auto'), icon: Icon(Icons.brightness_auto)),
+              ],
+              selected: {settings.themeMode},
+              onSelectionChanged: (v) => settings.update(themeMode: v.first),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              children: [
+                for (final c in const [0xFF00B4D8, 0xFF7C4DFF, 0xFFE91E63, 0xFF4CAF50, 0xFFFF9800])
+                  GestureDetector(
+                    onTap: () => settings.update(seedColor: c),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Color(c),
+                      child: settings.seedColor == c
+                          ? const Icon(Icons.check, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
             if (voice != null)
               ListTile(
                 leading: const Icon(Icons.record_voice_over),

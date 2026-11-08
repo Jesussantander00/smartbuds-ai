@@ -160,7 +160,7 @@ class MusicProfile extends ChangeNotifier {
   static const completeAfter = Duration(seconds: 90);
   static const skipBefore = Duration(seconds: 30);
   static const commandWindow = Duration(seconds: 6);
-  static const maxHistory = 300;
+  static const maxHistory = 3000; // ~varias semanas, para el resumen semanal
 
   final Map<String, TrackStats> tracks = {};
   final List<ListenEvent> history = [];
@@ -280,6 +280,83 @@ class MusicProfile extends ChangeNotifier {
     return c;
   }
 
+  /// «Repite»: la misma canción otra vez desde el principio (+3).
+  TrackStats? markRepeat() {
+    final c = _current;
+    if (c == null) return null;
+    c.repeats++;
+    _record(c, ListenEventType.repeat);
+    _currentStart = _clock(); // cuenta como escucha nueva
+    notifyListeners();
+    return c;
+  }
+
+  /// Saltadas seguidas al final del historial (para notar el aburrimiento).
+  int recentSkipStreak({Duration within = const Duration(minutes: 5)}) {
+    final now = _clock();
+    var n = 0;
+    for (final ev in history.reversed) {
+      if (ev.type == ListenEventType.play) continue; // «sonó» no corta la racha
+      if (ev.type != ListenEventType.skip || now.difference(ev.at) > within) break;
+      n++;
+    }
+    return n;
+  }
+
+  /// Resumen de los últimos [days] días a partir del historial.
+  WeekSummary summary({int days = 7}) {
+    final now = _clock();
+    final from = DateTime(now.year, now.month, now.day).subtract(Duration(days: days - 1));
+    final perDay = List<int>.filled(days, 0);
+    final perDaypart = {for (final d in Daypart.values) d: 0};
+    final songCount = <String, int>{};
+    var completes = 0;
+    var plays = 0;
+    for (final ev in history) {
+      if (ev.at.isBefore(from)) continue;
+      if (ev.type == ListenEventType.play) {
+        plays++;
+        final day = DateTime(ev.at.year, ev.at.month, ev.at.day).difference(from).inDays;
+        if (day >= 0 && day < days) perDay[day]++;
+        perDaypart[Daypart.of(ev.at)] = perDaypart[Daypart.of(ev.at)]! + 1;
+        songCount[ev.key] = (songCount[ev.key] ?? 0) + 1;
+      } else if (ev.type == ListenEventType.complete) {
+        completes++;
+      }
+    }
+    String? topKey;
+    var best = 0;
+    songCount.forEach((k, v) {
+      if (v > best) {
+        best = v;
+        topKey = k;
+      }
+    });
+    final artistCount = <String, int>{};
+    songCount.forEach((k, v) {
+      final a = tracks[k]?.artist;
+      if (a != null && a.isNotEmpty) artistCount[a] = (artistCount[a] ?? 0) + v;
+    });
+    String? topArtist;
+    best = 0;
+    artistCount.forEach((a, v) {
+      if (v > best) {
+        best = v;
+        topArtist = a;
+      }
+    });
+    return WeekSummary(
+      from: from,
+      playsPerDay: perDay,
+      playsPerDaypart: perDaypart,
+      plays: plays,
+      // Aproximado: ~3,5 min por canción completa y ~1 min por las demás.
+      minutes: (completes * 3.5 + (plays - completes).clamp(0, plays) * 1.0).round(),
+      topSong: topKey == null ? null : tracks[topKey],
+      topArtist: topArtist,
+    );
+  }
+
   /// «No me gusta».
   TrackStats? dislike() {
     final c = _current;
@@ -388,4 +465,27 @@ class MusicProfile extends ChangeNotifier {
     _store.save(_toJson());
     super.dispose();
   }
+}
+
+/// Resumen de escucha de la semana (para «Mi música»).
+class WeekSummary {
+  const WeekSummary({
+    required this.from,
+    required this.playsPerDay,
+    required this.playsPerDaypart,
+    required this.plays,
+    required this.minutes,
+    this.topSong,
+    this.topArtist,
+  });
+
+  final DateTime from;
+  final List<int> playsPerDay;
+  final Map<Daypart, int> playsPerDaypart;
+  final int plays;
+
+  /// Minutos aproximados de escucha.
+  final int minutes;
+  final TrackStats? topSong;
+  final String? topArtist;
 }

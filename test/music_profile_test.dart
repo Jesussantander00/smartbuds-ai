@@ -311,4 +311,64 @@ void main() {
       expect(b.signedIn, isFalse);
     });
   });
+
+  group('20 mejoras: órdenes nuevas', () {
+    const p = CommandParser();
+
+    test('¿qué suena?, repite, adelanta, deshacer, compartir, radio', () {
+      expect(p.parseIntent('¿Qué suena?'), isA<NowPlayingIntent>());
+      expect(p.parseIntent('otra vez'), isA<RestartIntent>());
+      expect((p.parseIntent('adelanta') as SeekIntent).seconds, 30);
+      expect((p.parseIntent('atrasa') as SeekIntent).seconds, -30);
+      expect(p.parseIntent('deshacer'), isA<UndoIntent>());
+      expect(p.parseIntent('comparte esta'), isA<ShareIntent>());
+      expect((p.parseIntent('pon mi radio') as RadioIntent).on, isTrue);
+      expect((p.parseIntent('quita la radio') as RadioIntent).on, isFalse);
+    });
+
+    test('temporizador en palabras y números', () {
+      expect((p.parseIntent('apaga en veinte minutos') as SleepIntent).minutes, 20);
+      expect((p.parseIntent('apaga en 45 minutos') as SleepIntent).minutes, 45);
+      expect((p.parseIntent('apaga en una hora') as SleepIntent).minutes, 60);
+      expect((p.parseIntent('cancela el temporizador') as SleepIntent).minutes, 0);
+      expect(p.parseSleep('apaga en mil minutos'), isNull);
+    });
+
+    test('escucha abierta: «pon …» sí, conversación no', () {
+      final s = p.parseOpen('pon ojalá de ryan castro') as SearchIntent;
+      expect(s.request.query, 'ojala de ryan castro');
+      expect(p.parseOpen('cambia'), isA<CommandIntent>());
+      expect(p.parseOpen('mañana voy a la casa de mi mamá'), isNull);
+    });
+
+    test('palabra de activación propia', () {
+      CommandParser.customWakePhrases = {'hola amigo'};
+      expect(p.parseIntent('Hola amigo'), isA<WakeIntent>());
+      CommandParser.customWakePhrases = {};
+      expect(p.parseIntent('hola amigo'), isNull);
+    });
+  });
+
+  group('20 mejoras: perfil', () {
+    test('repetir suma, racha de saltos y resumen semanal', () {
+      var now = DateTime(2026, 11, 5, 20);
+      final profile = MusicProfile(clock: () => now);
+      profile.observe(playing('A'));
+      profile.markRepeat();
+      expect(profile.tracks.values.first.repeats, 1);
+
+      // Tres saltos seguidos (cada uno antes de 30 s, tras «Cambia»).
+      for (final t in ['B', 'C', 'D', 'E']) {
+        profile.noteCommand(MusicCommand.next);
+        now = now.add(const Duration(seconds: 10));
+        profile.observe(playing(t));
+      }
+      expect(profile.recentSkipStreak(), greaterThanOrEqualTo(3));
+
+      final s = profile.summary();
+      expect(s.plays, 5);
+      expect(s.playsPerDay.length, 7);
+      expect(s.playsPerDaypart[Daypart.noche], 5);
+    });
+  });
 }
