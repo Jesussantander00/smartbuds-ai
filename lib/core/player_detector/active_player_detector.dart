@@ -64,10 +64,15 @@ class ActivePlayerDetector {
   DetectionResult detect(List<PlayerCandidate> candidates) {
     if (candidates.isEmpty) return const NoPlayer();
 
-    // 1. Reproduciendo ahora. Si hay varios, el más reciente.
+    // 1. Reproduciendo ahora. Si hay varios, se prefieren los que muestran
+    //    una canción (un video sin título, una nota de voz o un sonido del
+    //    sistema no deben «robar» las órdenes); entre ellos, el más reciente.
     final playing = candidates.where((c) => c.status.isPlaying).toList();
     if (playing.isNotEmpty) {
-      return PlayerDetected(_mostRecent(playing), DetectionReason.playing);
+      final withSong =
+          playing.where((c) => (c.status.title ?? '').trim().isNotEmpty).toList();
+      final pool = withSong.isNotEmpty ? withSong : playing;
+      return PlayerDetected(_mostRecent(pool), DetectionReason.playing);
     }
 
     // 2. Activo hace poco (pausado dentro de la ventana).

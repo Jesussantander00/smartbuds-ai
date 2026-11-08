@@ -1,0 +1,27 @@
+# Compila SmartBuds para iPhone en la nube (Codemagic tiene un plan gratis
+# mensual con Mac). Este flujo NO firma la app: sirve para comprobar que el
+# código de iPhone compila sin tener una Mac. Para instalarla en un iPhone
+# hace falta la cuenta de desarrollador de Apple (ver docs/iphone.md).
+workflows:
+  ios-compila:
+    name: iPhone · comprobar que compila
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+    triggering:
+      events: [push, pull_request]
+      branch_patterns:
+        - pattern: '*'
+    scripts:
+      - name: Dependencias
+        script: flutter pub get
+      - name: Pruebas
+        script: flutter test
+      - name: Compilar para iPhone (sin firmar)
+        script: |
+          echo '{"YOUTUBE_API_KEY":"","SUPABASE_URL":"","SUPABASE_ANON_KEY":""}' > secrets.json
+          flutter build ios --release --no-codesign --dart-define-from-file=secrets.json
+    artifacts:
+      - build/ios/iphoneos/*.app

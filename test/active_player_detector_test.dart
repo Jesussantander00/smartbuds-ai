@@ -40,6 +40,16 @@ void main() {
     expect(r.candidate.status.appName, 'B');
   });
 
+  test('1. varios reproduciendo → gana el que muestra una canción', () {
+    // Un video sin título (más reciente) no debe quitarle las órdenes a la música.
+    final r = detector.detect([
+      c(status('Chrome', state: PlaybackState.playing, title: '', lastActive: t0)),
+      c(status('YouTube Music', state: PlaybackState.playing,
+          lastActive: t0.subtract(const Duration(minutes: 1)))),
+    ]) as PlayerDetected;
+    expect(r.candidate.status.appName, 'YouTube Music');
+  });
+
   test('1. empate → respeta el orden del sistema', () {
     final r = detector.detect([
       c(status('A', state: PlaybackState.playing)),

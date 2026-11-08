@@ -19,6 +19,8 @@ class CommandRouter {
     this.search,
     this.songFinder,
     this.verifier = const PlaybackVerifier(),
+    this.searchPackage = defaultSearchPackage,
+    this.searchAppName = 'YouTube Music',
   });
 
   /// Encuentra la canción exacta en YouTube (requiere clave). Con ella,
@@ -27,6 +29,11 @@ class CommandRouter {
 
   /// App por defecto para buscar cuando no hay ningún reproductor activo.
   static const defaultSearchPackage = 'com.google.android.apps.youtube.music';
+
+  /// App donde buscar si no hay reproductor activo. En iPhone es Apple Music
+  /// (la única que el sistema deja controlar desde otra app).
+  final String searchPackage;
+  final String searchAppName;
 
   final ConnectorManager connectors;
   final ActivePlayerDetector detector;
@@ -144,10 +151,10 @@ class CommandRouter {
       pkg = active.packageName;
       player = active;
     } else {
-      pkg = lastSearchPackage ?? defaultSearchPackage;
+      pkg = lastSearchPackage ?? searchPackage;
     }
     final targetName = player?.appName ?? appName ??
-        (pkg == defaultSearchPackage ? 'YouTube Music' : pkg);
+        (pkg == searchPackage ? searchAppName : pkg);
 
     final policy = capabilities.policyFor(pkg);
     if (policy != null && policy.blockedSources.contains(source)) {
