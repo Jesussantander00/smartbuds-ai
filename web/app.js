@@ -6,7 +6,10 @@
   'use strict';
   const { SUPABASE_URL: SB, SUPABASE_ANON_KEY: KEY } = window.SMARTBUDS_CONFIG || {};
   const $ = (id) => document.getElementById(id);
-  const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const STANDALONE = window.navigator.standalone === true
+    || matchMedia('(display-mode: standalone)').matches;
   // Mismos pesos que la app: completa +2, repetida +3, me gusta +5, saltada −2, no me gusta −5.
   const W = { completes: 2, repeats: 3, likes: 5, skips: -2, dislikes: -5 };
   const COMPLETE_MS = 90000;
@@ -294,6 +297,9 @@
         if (playerReady) player.loadVideoById(videoId); else pendingVideo = videoId;
       } else {
         $('playerWrap').classList.add('empty');
+  $('nowSource').textContent = IOS ? 'SmartBuds no puede ver lo que suena en otras apps del iPhone'
+                                   : 'SmartBuds';
+  $('nowTitle').textContent = 'Pide una canción';
         if (playerReady) player.pauseVideo();
       }
       $('nowSource').textContent = `Sonando en ${APPS[target].name}`;
@@ -465,10 +471,24 @@
    * cuentan las órdenes exactas (para que la música o una conversación no
    * disparen nada).
    */
+  let awaitingSong = false; // después de «Busca», la siguiente frase es la canción
+
   function handleSpeech(said, free) {
     const n = norm(said);
     if (!n) return false;
     $('heard').textContent = `Oí: «${said}»`;
+    if (awaitingSong) {
+      awaitingSong = false;
+      play({ query: said.replace(/^(la cancion|cancion)\s+/i, '') });
+      return true;
+    }
+    if (['busca', 'buscar', 'buscame', 'busca una cancion'].includes(n)) {
+      awaitingSong = true;
+      say('¿Qué canción?');
+      $('micStatus').textContent = '¿Qué canción? Dímela…';
+      setTimeout(() => startListening(true), 1300); // tras la pregunta
+      return true;
+    }
     if (COMMANDS[n]) { COMMANDS[n](); return true; }
     const search = n.match(/^(busca|buscar|buscame|pon la cancion|reproduce)\s+(.+)$/);
     if (search) { play({ query: search[2] }); return true; }
@@ -491,7 +511,9 @@
 
   function setupVoice() {
     if (!SR) {
-      $('micStatus').textContent = 'Este navegador no permite la voz. Usa los botones o el buscador.';
+      $('micStatus').textContent = IOS && STANDALONE
+        ? 'En iPhone la voz no funciona desde el ícono de inicio. Ábrela en Safari para hablarle.'
+        : 'Este navegador no permite la voz. Usa los botones o el buscador.';
       $('mic').disabled = true;
       $('continuous').disabled = true;
       return;
@@ -503,15 +525,24 @@
     rec.onstart = () => { listening = true; renderMic(); };
     rec.onend = () => {
       listening = false;
-      renderMic();
+      if (!awaitingSong) renderMic();
       if (continuous) setTimeout(startListening, 400); // sigue escuchando
     };
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         continuous = false;
         $('continuous').checked = false;
-        $('micStatus').textContent = 'Permite el micrófono para usar la voz.';
+        $('micStatus').textContent = STANDALONE && IOS
+          ? 'En iPhone la voz no funciona desde el ícono de inicio. Ábrela en Safari para hablarle.'
+          : 'Permite el micrófono para SmartBuds (Ajustes → Safari → Micrófono).';
+      } else if (e.error === 'no-speech') {
+        $('micStatus').textContent = 'No te escuché. Toca y habla otra vez.';
+      } else if (e.error === 'audio-capture') {
+        $('micStatus').textContent = 'Otra app está usando el micrófono.';
+      } else {
+        $('micStatus').textContent = `La voz falló (${e.error}). Toca y vuelve a intentar.`;
       }
+      awaitingSong = false;
     };
     rec.onresult = (e) => {
       const res = e.results[e.results.length - 1];
@@ -651,8 +682,7 @@
   if (IOS) {
     $('iosNote').textContent = 'En iPhone: la música se detiene si bloqueas la pantalla o sales de la página, '
       + 'y el volumen se cambia con los botones del teléfono. Apple no deja a las páginas hacer más.';
-    const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-    if (!standalone) $('install').classList.remove('hidden');
+    if (!STANDALONE) $('install').classList.remove('hidden');
   }
   $('playerWrap').classList.add('empty');
   if (!SB || !KEY) authMsg('Falta configurar Supabase en config.js.', true);
