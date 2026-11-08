@@ -30,3 +30,13 @@ SmartBuds AI («la app») es un asistente para controlar tu música con la voz. 
 ## Contacto
 
 Para preguntas sobre esta política: jesusdanielquintanasantander@gmail.com
+
+
+## Reportes de errores
+
+Si está activado (Asistente → Ajustes → «Enviar reportes de errores»), cuando
+algo falla la app envía un reporte **anónimo** con: un identificador aleatorio
+del teléfono, el sistema (Android o iOS y su versión), el tipo de error y un
+mensaje técnico corto. **Nunca** se envía audio, lo que dices ni tu correo. Se
+guardan en Supabase y solo el desarrollador puede leerlos. Se puede apagar en
+cualquier momento.

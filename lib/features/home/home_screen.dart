@@ -4,6 +4,7 @@ import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../assistant/assistant.dart';
+import 'car_mode_screen.dart';
 import '../devices/detected_player_controller.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
@@ -34,15 +35,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final listenables = <Listenable>[widget.controller, if (widget.voice != null) widget.voice!];
+    final listenables = <Listenable>[
+      widget.controller,
+      widget.assistant,
+      if (widget.voice != null) widget.voice!,
+    ];
     return Scaffold(
-      appBar: AppBar(title: const Text('SmartBuds AI')),
+      appBar: AppBar(
+        title: const Text('SmartBuds AI'),
+        actions: [
+          IconButton(
+            tooltip: 'Compartir canción',
+            icon: const Icon(Icons.share),
+            onPressed: widget.assistant.shareCurrent,
+          ),
+          IconButton(
+            tooltip: 'Modo carro',
+            icon: const Icon(Icons.directions_car),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => CarModeScreen(
+                controller: widget.controller,
+                assistant: widget.assistant,
+                voice: widget.voice,
+              ),
+            )),
+          ),
+        ],
+      ),
       body: ListenableBuilder(
         listenable: Listenable.merge(listenables),
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _NowPlaying(detection: widget.controller.detection),
+            _ExtrasRow(assistant: widget.assistant),
+            if (widget.assistant.contextSuggestion != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.schedule),
+                  title: Text(widget.assistant.contextSuggestion!),
+                  trailing: TextButton(
+                    onPressed: widget.assistant.playFavorite,
+                    child: const Text('Sí'),
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
             if (widget.voice != null) _MicCard(voice: widget.voice!),
             const SizedBox(height: 16),
@@ -191,5 +228,67 @@ class _ResultLine extends StatelessWidget {
           color: ok ? Colors.green : Colors.orange),
       title: Text(result.message),
     );
+  }
+}
+
+
+/// Deshacer el último «Cambia», temporizador activo y radio.
+class _ExtrasRow extends StatelessWidget {
+  const _ExtrasRow({required this.assistant});
+
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final sleepAt = assistant.sleepAt;
+    final radio = assistant.settings?.radioMode ?? false;
+    final chips = <Widget>[
+      if (assistant.canUndo)
+        ActionChip(
+          avatar: const Icon(Icons.undo, size: 18),
+          label: const Text('Deshacer «Cambia»'),
+          onPressed: assistant.undo,
+        ),
+      if (sleepAt != null)
+        InputChip(
+          avatar: const Icon(Icons.bedtime, size: 18),
+          label: Text('Se apaga a las ${TimeOfDay.fromDateTime(sleepAt).format(context)}'),
+          onDeleted: assistant.cancelSleep,
+        ),
+      FilterChip(
+        avatar: const Icon(Icons.radio, size: 18),
+        label: const Text('Radio SmartBuds'),
+        selected: radio,
+        onSelected: assistant.setRadio,
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.timer_outlined, size: 18),
+        label: const Text('Apagar en…'),
+        onPressed: () => _pickSleep(context),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(spacing: 8, runSpacing: 4, children: chips),
+    );
+  }
+
+  Future<void> _pickSleep(BuildContext context) async {
+    final minutes = await showModalBottomSheet<int>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            for (final m in [10, 15, 20, 30, 45, 60])
+              ListTile(
+                leading: const Icon(Icons.bedtime),
+                title: Text(m == 60 ? '1 hora' : '$m minutos'),
+                onTap: () => Navigator.pop(context, m),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (minutes != null) await assistant.sleepIn(minutes);
   }
 }

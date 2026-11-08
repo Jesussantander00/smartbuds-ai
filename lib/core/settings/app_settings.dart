@@ -31,6 +31,25 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Dos toques al audífono = siguiente, tres = anterior.
   bool headphoneTaps = true;
 
+  /// Palabra de activación propia (además de «Oye música»).
+  String wakePhrase = '';
+
+  /// Radio SmartBuds: al terminar una canción, elige la siguiente.
+  bool radioMode = false;
+
+  /// Decir el nombre de cada canción nueva.
+  bool announceSongs = false;
+
+  /// Retomar la música al volver a conectar los audífonos.
+  bool resumeOnHeadphones = true;
+
+  /// Enviar reportes anónimos de errores para mejorar la app.
+  bool errorReports = true;
+
+  /// Apariencia: 'system' | 'light' | 'dark', y color principal (ARGB).
+  String themeMode = 'dark';
+  int seedColor = 0xFF00B4D8;
+
   /// Sesión de la cuenta (Supabase Auth). Vacía = sin cuenta.
   String? authEmail;
   String? authUserId;
@@ -65,6 +84,13 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     onlyMyVoice = d['onlyMyVoice'] == true;
     voiceThreshold = (d['voiceThreshold'] as num?)?.toDouble() ?? 0.5;
     wakeWord = d['wakeWord'] == true;
+    wakePhrase = (d['wakePhrase'] as String?) ?? '';
+    radioMode = d['radioMode'] == true;
+    announceSongs = d['announceSongs'] == true;
+    resumeOnHeadphones = d['resumeOnHeadphones'] != false;
+    errorReports = d['errorReports'] != false;
+    themeMode = (d['themeMode'] as String?) ?? 'dark';
+    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF00B4D8;
     headphoneTaps = d['headphoneTaps'] != false;
     authEmail = d['authEmail'] as String?;
     authUserId = d['authUserId'] as String?;
@@ -87,7 +113,21 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     double? voiceThreshold,
     bool? wakeWord,
     bool? headphoneTaps,
+    String? wakePhrase,
+    bool? radioMode,
+    bool? announceSongs,
+    bool? resumeOnHeadphones,
+    bool? errorReports,
+    String? themeMode,
+    int? seedColor,
   }) {
+    if (wakePhrase != null) this.wakePhrase = wakePhrase;
+    if (radioMode != null) this.radioMode = radioMode;
+    if (announceSongs != null) this.announceSongs = announceSongs;
+    if (resumeOnHeadphones != null) this.resumeOnHeadphones = resumeOnHeadphones;
+    if (errorReports != null) this.errorReports = errorReports;
+    if (themeMode != null) this.themeMode = themeMode;
+    if (seedColor != null) this.seedColor = seedColor;
     if (wakeWord != null) this.wakeWord = wakeWord;
     if (headphoneTaps != null) this.headphoneTaps = headphoneTaps;
     if (voiceprint != null) this.voiceprint = voiceprint;
@@ -129,6 +169,13 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'voiceThreshold': voiceThreshold,
         'wakeWord': wakeWord,
         'headphoneTaps': headphoneTaps,
+        'wakePhrase': wakePhrase,
+        'radioMode': radioMode,
+        'announceSongs': announceSongs,
+        'resumeOnHeadphones': resumeOnHeadphones,
+        'errorReports': errorReports,
+        'themeMode': themeMode,
+        'seedColor': seedColor,
         'authEmail': authEmail,
         'authUserId': authUserId,
         'authAccessToken': authAccessToken,

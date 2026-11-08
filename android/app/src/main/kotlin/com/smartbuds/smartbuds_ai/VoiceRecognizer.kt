@@ -81,6 +81,8 @@ class VoiceRecognizer(
     private var spkModel: SpeakerModel? = null
     /** Frases permitidas (JSON) para Vosk; null = escucha libre. */
     private var grammarJson: String? = null
+    /** false = escucha abierta (sin música sonando, para «pon …»). */
+    private var grammarEnabled = true
     private var speechService: SpeechService? = null
 
     /** El usuario quiere que SmartBuds escuche (aunque esté en pausa un momento). */
@@ -140,6 +142,7 @@ class VoiceRecognizer(
                 val phrases = call.argument<List<String>>("grammar")
                 grammarJson = if (phrases.isNullOrEmpty()) null
                 else org.json.JSONArray(phrases).toString()
+                grammarEnabled = call.argument<Boolean>("grammarEnabled") != false
                 wanted = true
                 pausedByUser = false
                 VoiceForegroundService.start(context)
@@ -164,6 +167,21 @@ class VoiceRecognizer(
                 result.success(true)
             }
             "listenOnce" -> listenOnce(result)
+            "setGrammarEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") != false
+                if (enabled != grammarEnabled) {
+                    grammarEnabled = enabled
+                    reloadRecognizer()
+                }
+                result.success(true)
+            }
+            "setGrammar" -> {
+                val phrases = call.argument<List<String>>("grammar")
+                grammarJson = if (phrases.isNullOrEmpty()) null
+                else org.json.JSONArray(phrases).toString()
+                reloadRecognizer()
+                result.success(true)
+            }
             "headphonesConnected" -> result.success(headphonesConnected())
             "speakerAvailable" -> result.success(assetBundled(ASSET_SPK))
             else -> result.notImplemented()
@@ -256,8 +274,15 @@ class VoiceRecognizer(
      * entiende mucho mejor con música de fondo. Con modelo de hablante, cada
      * frase trae además una «huella» de la voz para «Solo mi voz».
      */
+    /** Vuelve a crear el reconocedor con la configuración nueva (si está escuchando). */
+    private fun reloadRecognizer() {
+        if (speechService == null) return
+        stopVosk()
+        startVosk()
+    }
+
     private fun buildRecognizer(m: Model): Recognizer {
-        val grammar = grammarJson
+        val grammar = if (grammarEnabled) grammarJson else null
         val recognizer = if (grammar != null) {
             try {
                 Recognizer(m, SAMPLE_RATE, grammar)

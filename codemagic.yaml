@@ -25,3 +25,45 @@ workflows:
           flutter build ios --release --no-codesign --dart-define-from-file=secrets.json
     artifacts:
       - build/ios/iphoneos/*.app
+
+  # APK de Android para probar con amigos (gratis, sin Play Store).
+  # Opcional: en Codemagic → Environment variables crea el grupo «smartbuds»
+  # con YOUTUBE_API_KEY, SUPABASE_URL y SUPABASE_ANON_KEY, y descomenta
+  # «groups» abajo, para que la búsqueda y la cuenta funcionen en el APK.
+  android-apk:
+    name: Android · APK para compartir
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      # groups:
+      #   - smartbuds
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: main
+    scripts:
+      - name: Dependencias
+        script: flutter pub get
+      - name: Pruebas
+        script: flutter test
+      - name: Modelos de voz (Vosk, ~45 MB)
+        script: |
+          set -e
+          A=android/app/src/main/assets
+          mkdir -p $A /tmp/vosk && cd /tmp/vosk
+          curl -sSL -o es.zip https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+          curl -sSL -o spk.zip https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip
+          unzip -q es.zip && unzip -q spk.zip
+          cd -
+          rm -rf $A/model-es $A/model-spk
+          mv /tmp/vosk/vosk-model-small-es-0.42 $A/model-es
+          mv /tmp/vosk/vosk-model-spk-0.4 $A/model-spk
+      - name: Claves (si están configuradas)
+        script: |
+          printf '{"YOUTUBE_API_KEY":"%s","SUPABASE_URL":"%s","SUPABASE_ANON_KEY":"%s"}' \
+            "${YOUTUBE_API_KEY:-}" "${SUPABASE_URL:-}" "${SUPABASE_ANON_KEY:-}" > secrets.json
+      - name: Compilar APK
+        script: flutter build apk --release --dart-define-from-file=secrets.json
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk

@@ -46,6 +46,44 @@ class WakeIntent extends VoiceIntent {
   const WakeIntent();
 }
 
+/// «¿Qué suena?»: SmartBuds dice el nombre de la canción.
+class NowPlayingIntent extends VoiceIntent {
+  const NowPlayingIntent();
+}
+
+/// «Repite» / «Otra vez»: la canción actual desde el principio.
+class RestartIntent extends VoiceIntent {
+  const RestartIntent();
+}
+
+/// «Adelanta» / «Atrasa»: salta [seconds] (negativo = atrás).
+class SeekIntent extends VoiceIntent {
+  const SeekIntent(this.seconds);
+  final int seconds;
+}
+
+/// «Apaga en 20 minutos». [minutes] = 0 cancela el temporizador.
+class SleepIntent extends VoiceIntent {
+  const SleepIntent(this.minutes);
+  final int minutes;
+}
+
+/// «Deshacer»: vuelve a la canción anterior en el punto donde iba.
+class UndoIntent extends VoiceIntent {
+  const UndoIntent();
+}
+
+/// «Comparte esta»: prepara el enlace de la canción para enviarlo.
+class ShareIntent extends VoiceIntent {
+  const ShareIntent();
+}
+
+/// «Pon mi radio»: música sin parar, mezclando favoritas y descubrimientos.
+class RadioIntent extends VoiceIntent {
+  const RadioIntent({this.on = true});
+  final bool on;
+}
+
 /// «Me gusta» / «Me encanta».
 class LikeIntent extends VoiceIntent {
   const LikeIntent();
@@ -200,6 +238,30 @@ class CommandParser {
   /// Palabra de activación. Debe existir en el vocabulario de Vosk en español.
   static const wakePhrases = {'oye musica', 'hola musica'};
 
+  /// Palabra de activación elegida por la persona (ajustes), ya normalizada.
+  static Set<String> customWakePhrases = {};
+
+  static const _nowPlaying = {
+    'que suena', 'que esta sonando', 'que cancion es esta', 'como se llama esta cancion',
+    'que cancion es', 'como se llama',
+  };
+  static const _restart = {'repite', 'repitela', 'otra vez', 'desde el principio', 'de nuevo'};
+  static const _seek = {
+    'adelanta': 30, 'adelantala': 30, 'adelanta un poco': 30,
+    'atrasa': -30, 'atrasala': -30, 'atrasa un poco': -30,
+  };
+  static const _undo = {'deshacer', 'deshaz', 'me equivoque', 'deshaz eso'};
+  static const _share = {'comparte esta', 'comparte la cancion', 'compartir', 'comparte esta cancion'};
+  static const _radioOn = {'pon mi radio', 'modo radio', 'radio', 'pon la radio'};
+  static const _radioOff = {'quita la radio', 'apaga la radio'};
+  static const _sleepCancel = {'cancela el temporizador', 'no apagues', 'cancela el apagado'};
+
+  /// Números dichos en palabras (para «apaga en veinte minutos»).
+  static const sleepNumbers = {
+    'cinco': 5, 'diez': 10, 'quince': 15, 'veinte': 20, 'treinta': 30,
+    'cuarenta y cinco': 45, 'sesenta': 60,
+  };
+
   static const _artistPrompts = {
     'pon algo de', 'pon musica de', 'pon canciones de', 'quiero escuchar a',
   };
@@ -231,6 +293,16 @@ class CommandParser {
     'pon algo alegre', 'pon algo triste',
     'pon algo de', 'pon música de',
     'oye música', 'hola música',
+    'qué suena', 'qué está sonando', 'qué canción es esta', 'cómo se llama esta canción',
+    'repite', 'otra vez', 'desde el principio', 'de nuevo',
+    'adelanta', 'atrasa', 'adelanta un poco', 'atrasa un poco',
+    'deshacer', 'deshaz', 'me equivoqué',
+    'comparte esta', 'comparte la canción',
+    'pon mi radio', 'modo radio', 'quita la radio',
+    'cancela el temporizador', 'no apagues',
+    'apaga en cinco minutos', 'apaga en diez minutos', 'apaga en quince minutos',
+    'apaga en veinte minutos', 'apaga en treinta minutos',
+    'apaga en cuarenta y cinco minutos', 'apaga en sesenta minutos', 'apaga en una hora',
     '[unk]',
   ];
 
@@ -244,7 +316,20 @@ class CommandParser {
   VoiceIntent? parseIntent(String heard) {
     final text = normalize(heard);
     if (text.isEmpty) return null;
-    if (wakePhrases.contains(text)) return const WakeIntent();
+    if (wakePhrases.contains(text) || customWakePhrases.contains(text)) {
+      return const WakeIntent();
+    }
+    if (_nowPlaying.contains(text)) return const NowPlayingIntent();
+    if (_restart.contains(text)) return const RestartIntent();
+    final seek = _seek[text];
+    if (seek != null) return SeekIntent(seek);
+    if (_undo.contains(text)) return const UndoIntent();
+    if (_share.contains(text)) return const ShareIntent();
+    if (_radioOn.contains(text)) return const RadioIntent();
+    if (_radioOff.contains(text)) return const RadioIntent(on: false);
+    if (_sleepCancel.contains(text)) return const SleepIntent(0);
+    final sleep = parseSleep(text);
+    if (sleep != null) return SleepIntent(sleep);
     if (_searchPrompts.contains(text)) return const SearchPromptIntent();
     if (_dislikes.contains(text)) return const DislikeIntent();
     if (_likes.contains(text)) return const LikeIntent();
@@ -267,6 +352,33 @@ class CommandParser {
     final cmd = parseExact(text);
     if (cmd != null) return CommandIntent(cmd);
     return null;
+  }
+
+  /// «apaga en veinte minutos», «apaga en 20 minutos», «apaga en una hora».
+  int? parseSleep(String heard) {
+    final text = normalize(heard);
+    final m = RegExp(r'^(apaga|apagar|duerme|apagate) en (.+?)( minutos?)?$').firstMatch(text);
+    if (m == null) return null;
+    final what = m.group(2)!;
+    if (what == 'una hora' || what == 'una hora mas') return 60;
+    final n = int.tryParse(what) ?? sleepNumbers[what];
+    if (n == null || n <= 0 || n > 180) return null;
+    return n;
+  }
+
+  /// Escucha abierta (no hay música sonando): además de las órdenes, se
+  /// aceptan pedidos que empiezan con «pon …», «reproduce …» o «quiero
+  /// escuchar …». Cualquier otra conversación se ignora.
+  VoiceIntent? parseOpen(String heard) {
+    final intent = parseIntent(heard);
+    if (intent != null) return intent;
+    final text = normalize(heard);
+    final m = RegExp(r'^(pon|ponme|reproduce|quiero escuchar|toca) (la cancion |a |el tema )?(.+)$')
+        .firstMatch(text);
+    if (m == null) return null;
+    final query = m.group(3)!.trim();
+    if (query.split(' ').length < 2 && query.length < 4) return null; // muy corto
+    return SearchIntent(SearchRequest(query));
   }
 
   /// Frase libre dicha después de «Oye música»: una orden o pedido si lo es;

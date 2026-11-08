@@ -121,6 +121,14 @@ class MediaSessionConnector(
                 "bringToFront" -> {
                     bringToFront(); result.success(null)
                 }
+                "seek" -> result.success(
+                    seek(
+                        call.argument("playerId"),
+                        call.argument<Number>("positionMs")?.toLong(),
+                        call.argument<Number>("deltaMs")?.toLong(),
+                    )
+                )
+                "shareText" -> result.success(shareText(call.argument<String>("text") ?: ""))
                 "setTapGestures" -> {
                     taps.enabled = call.argument<Boolean>("enabled") != false
                     result.success(true)
@@ -193,6 +201,36 @@ class MediaSessionConnector(
             else -> return false
         }
         return true
+    }
+
+    /** Salta a [positionMs] (absoluto) o mueve [deltaMs] desde donde va. */
+    private fun seek(id: String?, positionMs: Long?, deltaMs: Long?): Boolean {
+        val c = findController(id) ?: return false
+        val ps = c.playbackState ?: return false
+        if ((ps.actions and PlaybackState.ACTION_SEEK_TO) == 0L) return false
+        val target = positionMs ?: (currentPosition(ps) + (deltaMs ?: 0L))
+        val duration = c.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val clamped = if (duration > 2000) target.coerceIn(0L, duration - 1000L) else target.coerceAtLeast(0L)
+        taps.suppress()
+        c.transportControls.seekTo(clamped)
+        return true
+    }
+
+    /** Abre el menú «Compartir» de Android con el texto (WhatsApp, etc.). */
+    private fun shareText(text: String): Boolean {
+        if (text.isBlank()) return false
+        return try {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            val chooser = Intent.createChooser(send, "Compartir canción")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**

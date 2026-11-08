@@ -98,6 +98,10 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       result(false)
     case "setTapGestures":
       result(true)
+    case "seek":
+      result(seek(args))
+    case "shareText":
+      result(share(args["text"] as? String ?? ""))
     case "hasMusicAccess":
       result(MPMediaLibrary.authorizationStatus() == .authorized)
     case "requestMusicAccess":
@@ -131,6 +135,36 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
     case "previous": player.skipToPreviousItem()
     default: return false // volumen: iOS no lo permite
     }
+    return true
+  }
+
+  private func seek(_ args: [String: Any]) -> Bool {
+    guard player.nowPlayingItem != nil else { return false }
+    let current = player.currentPlaybackTime.isFinite ? player.currentPlaybackTime : 0
+    var target: TimeInterval
+    if let pos = args["positionMs"] as? NSNumber {
+      target = pos.doubleValue / 1000
+    } else {
+      target = current + ((args["deltaMs"] as? NSNumber)?.doubleValue ?? 0) / 1000
+    }
+    if let duration = player.nowPlayingItem?.playbackDuration, duration > 2 {
+      target = min(target, duration - 1)
+    }
+    player.currentPlaybackTime = max(0, target)
+    return true
+  }
+
+  /// Menú «Compartir» de iPhone (WhatsApp, Mensajes…).
+  private func share(_ text: String) -> Bool {
+    guard !text.isEmpty else { return false }
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+    let key = windows.first(where: { $0.isKeyWindow }) ?? windows.first
+    guard let presenter = key?.rootViewController else { return false }
+    let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    sheet.popoverPresentationController?.sourceView = presenter.view
+    presenter.present(sheet, animated: true)
     return true
   }
 
@@ -321,6 +355,11 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       result(headphonesConnected())
     case "speakerAvailable":
       result(false) // «Solo mi voz» usa el modelo de Vosk (solo Android por ahora)
+    case "setGrammar":
+      phrases = (args["grammar"] as? [String] ?? []).filter { !$0.hasPrefix("[") }
+      result(true)
+    case "setGrammarEnabled":
+      result(true) // el reconocedor de Apple siempre escucha libre
     default:
       result(FlutterMethodNotImplemented)
     }
