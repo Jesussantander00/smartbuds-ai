@@ -175,7 +175,9 @@
           if (pendingVideo) { player.loadVideoById(pendingVideo); pendingVideo = null; }
         },
         onStateChange: (e) => {
-          $('playBtn').textContent = e.data === YT.PlayerState.PLAYING ? '⏸' : '▶';
+          const isPlaying = e.data === YT.PlayerState.PLAYING;
+          $('playBtn').textContent = isPlaying ? '⏸' : '▶';
+          document.body.classList.toggle('is-playing', isPlaying); // ecualizador animado
           if (e.data === YT.PlayerState.ENDED) next(false);
         },
         onError: () => { status('Esa canción no se puede poner aquí. Paso a otra.'); next(false); },
@@ -559,6 +561,7 @@
 
   function renderMic() {
     $('mic').classList.toggle('listening', listening);
+    document.body.classList.toggle('is-listening', listening);
     $('micStatus').textContent = listening
       ? (continuous ? 'Escuchando… di «Cambia», «Pausa», «Busca …»' : 'Te escucho…')
       : 'Toca y di: «Cambia», «Pausa», «Sube», «Busca …»';

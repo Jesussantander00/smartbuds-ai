@@ -1,104 +1,194 @@
-/* Mismo estilo que la app de Android: oscuro, acentos cian. */
+/* SmartBuds AI — estilo futurista: espacio oscuro, vidrio y neón. */
 :root {
-  --bg: #111416;
-  --surface: #1b2125;
-  --surface2: #232b30;
-  --text: #e3eef2;
-  --muted: #9db3bd;
-  --accent: #7fd3ea;
-  --accent-strong: #00b4d8;
-  --now: #005f73;
-  --danger: #ff8a80;
+  --bg0: #04050d;
+  --bg1: #0a0f2a;
+  --glass: rgba(255, 255, 255, 0.055);
+  --glass-strong: rgba(255, 255, 255, 0.09);
+  --line: rgba(120, 220, 255, 0.18);
+  --text: #eaf6ff;
+  --muted: #8fa8c8;
+  --cyan: #00f0ff;
+  --violet: #8b5cff;
+  --pink: #ff2bd6;
+  --danger: #ff5c8a;
+  --grad: linear-gradient(135deg, var(--cyan), var(--violet) 55%, var(--pink));
+  --glow: 0 0 24px rgba(0, 240, 255, 0.35), 0 0 60px rgba(139, 92, 255, 0.18);
   color-scheme: dark;
 }
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--text);
-  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-main { max-width: 640px; margin: 0 auto; padding: 0 16px 16px; }
-.appbar { position: sticky; top: 0; z-index: 2; background: var(--bg);
-  padding: calc(14px + env(safe-area-inset-top)) 20px 10px; max-width: 640px; margin: 0 auto; }
-.appbar h1 { margin: 0; font-size: 1.45rem; font-weight: 400; }
-h2 { font-size: 1.05rem; margin: 18px 0 8px; }
+html, body { margin: 0; color: var(--text); background: var(--bg0);
+  font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { min-height: 100vh; padding-bottom: calc(96px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+main { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: 0 16px 16px; }
+
+/* ---------- Fondo animado ---------- */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% -10%, var(--bg1), var(--bg0) 60%); }
+.aurora { position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(80px); opacity: .35;
+  animation: drift 22s ease-in-out infinite alternate; }
+.a1 { background: var(--cyan); top: -35vmax; left: -25vmax; }
+.a2 { background: var(--violet); bottom: -40vmax; right: -30vmax; animation-duration: 28s; }
+.a3 { background: var(--pink); top: 30%; left: 55%; width: 40vmax; height: 40vmax; opacity: .18; animation-duration: 34s; }
+.grid { position: absolute; inset: -50% -50% 0; transform: perspective(500px) rotateX(60deg);
+  background-image: linear-gradient(rgba(0, 240, 255, .07) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0, 240, 255, .07) 1px, transparent 1px);
+  background-size: 48px 48px; mask-image: linear-gradient(to top, black, transparent 70%);
+  -webkit-mask-image: linear-gradient(to top, black, transparent 70%);
+  animation: gridmove 6s linear infinite; }
+@keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.15); } }
+@keyframes gridmove { to { background-position: 0 48px, 0 0; } }
+
+/* ---------- Barra superior ---------- */
+.appbar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between;
+  max-width: 640px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 20px 12px;
+  background: linear-gradient(to bottom, rgba(4, 5, 13, .9), rgba(4, 5, 13, 0));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 34px; height: 34px; border-radius: 10px; box-shadow: var(--glow); }
+.appbar h1 { margin: 0; font-family: Orbitron, sans-serif; font-size: 1.15rem; font-weight: 700; letter-spacing: .06em;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #3a4a66; box-shadow: 0 0 0 3px rgba(255,255,255,.05); }
+body.is-playing .status-dot { background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+body.is-listening .status-dot { background: var(--pink); box-shadow: 0 0 12px var(--pink); }
+
+/* ---------- Tipografía y utilidades ---------- */
+h2 { font-family: Orbitron, sans-serif; font-size: .9rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); margin: 22px 0 10px; }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .center { text-align: center; }
 .hidden { display: none !important; }
-.card { background: var(--surface); border-radius: 18px; padding: 16px; margin: 12px 0; }
-.hint { border: 1px solid var(--accent-strong); }
 .row { display: flex; gap: 10px; align-items: center; }
 .col { display: flex; flex-direction: column; gap: 10px; }
 .end { justify-content: flex-end; }
+
+/* ---------- Tarjetas de vidrio ---------- */
+.card { position: relative; background: var(--glass); border: 1px solid var(--line); border-radius: 22px; padding: 16px;
+  margin: 14px 0; backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.hint { border-color: rgba(0, 240, 255, .5); }
 #account { justify-content: space-between; }
 
-button { font: inherit; color: var(--text); background: var(--surface2); border: 0;
-  border-radius: 14px; padding: 12px 16px; cursor: pointer; }
-button:active { transform: scale(.97); }
-button:disabled { opacity: .5; }
-.primary { background: var(--accent); color: #003544; font-weight: 600; }
-.link { background: none; color: var(--accent); padding: 8px; }
+/* ---------- Botones ---------- */
+button { font: inherit; color: var(--text); background: var(--glass-strong); border: 1px solid var(--line);
+  border-radius: 16px; padding: 12px 16px; cursor: pointer; transition: transform .15s, box-shadow .2s, background .2s; }
+button:active { transform: scale(.96); }
+button:disabled { opacity: .45; }
+.primary { background: var(--grad); border: 0; color: #050616; font-weight: 600; box-shadow: var(--glow); }
+.link { background: none; border: 0; color: var(--cyan); padding: 8px; }
 .round { width: 52px; height: 52px; padding: 0; border-radius: 50%; flex: none; }
-.big { display: block; width: 100%; padding: 16px; margin: 10px 0 0; border-radius: 28px; font-size: 1rem; }
+.big { display: block; width: 100%; padding: 18px; margin: 12px 0 0; border-radius: 20px; font-size: 1.02rem;
+  font-weight: 600; letter-spacing: .02em; }
+.big:not(.primary) { background: var(--glass); position: relative; }
+.big:not(.primary)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: var(--grad); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
 
-input { flex: 1; min-width: 0; font-size: 1rem; padding: 15px 16px; border-radius: 6px;
-  border: 1px solid #5b6b72; background: transparent; color: var(--text); }
-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+input, select { flex: 1; min-width: 0; font: inherit; font-size: 1rem; padding: 15px 16px; border-radius: 16px;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, .35); color: var(--text); }
+input:focus, select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0, 240, 255, .15); }
 
-/* Sonando ahora */
-.now { background: var(--now); }
+/* ---------- Elegir app ---------- */
+.target { justify-content: space-between; padding: 10px 16px; }
+.target > span { white-space: nowrap; color: var(--muted); }
+.target select { flex: 0 1 auto; max-width: 62%; padding: 10px 12px; }
+
+/* ---------- Sonando ahora ---------- */
+.now { background: linear-gradient(160deg, rgba(0, 240, 255, .14), rgba(139, 92, 255, .12) 55%, rgba(255, 43, 214, .1)); }
 .now-head { display: flex; gap: 14px; align-items: center; }
-.wave { font-size: 1.4rem; letter-spacing: -4px; color: #e0f7fb; }
 .now-text { display: flex; flex-direction: column; min-width: 0; }
-.now-text small { color: #cfeef5; }
-.now-text strong { font-size: 1.25rem; font-weight: 400; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-.player-wrap { margin: 12px auto 0; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9;
-  background: #00000055; max-width: 360px; }
+.now-text small { color: var(--muted); font-size: .78rem; letter-spacing: .04em; }
+.now-text strong { font-size: 1.25rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.eq { display: inline-flex; align-items: flex-end; gap: 3px; height: 30px; flex: none; }
+.eq i { width: 4px; height: 6px; border-radius: 2px; background: var(--grad); box-shadow: 0 0 8px rgba(0, 240, 255, .6); }
+body.is-playing .eq i { animation: eq 1s ease-in-out infinite; }
+body.is-playing .eq i:nth-child(2) { animation-delay: -.2s; }
+body.is-playing .eq i:nth-child(3) { animation-delay: -.45s; }
+body.is-playing .eq i:nth-child(4) { animation-delay: -.7s; }
+body.is-playing .eq i:nth-child(5) { animation-delay: -.3s; }
+@keyframes eq { 0%, 100% { height: 6px; } 50% { height: 28px; } }
+
+.player-wrap { margin: 14px auto 0; border-radius: 16px; overflow: hidden; aspect-ratio: 16 / 9; max-width: 380px;
+  border: 1px solid var(--line); box-shadow: var(--glow); background: #000; }
 .player-wrap.empty { display: none; }
 .player-wrap iframe, #player { width: 100%; height: 100%; display: block; border: 0; }
-.controls { display: flex; justify-content: center; gap: 14px; margin-top: 14px; }
-.controls button { background: #ffffff22; min-width: 58px; font-size: 1.3rem; border-radius: 30px; }
-.controls .main { background: #e0f7fb; color: var(--now); min-width: 74px; }
-.small-row button { font-size: .95rem; padding: 10px 12px; min-width: 0; }
+.open-card { margin-top: 14px; text-align: center; }
+.open-btn { display: inline-block; background: var(--grad); color: #050616; font-weight: 600; text-decoration: none;
+  padding: 12px 22px; border-radius: 26px; box-shadow: var(--glow); }
 
-/* Micrófono */
-.mic-card { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.mic { width: 84px; height: 84px; border-radius: 50%; font-size: 2rem; background: var(--accent); }
-.mic.listening { background: var(--danger); animation: pulse 1.2s infinite; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 14px #ff8a8033; } }
+.controls { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px; }
+.controls button { width: 58px; height: 58px; padding: 0; border-radius: 50%; font-size: 1.25rem; background: rgba(255, 255, 255, .07); }
+.controls .main { width: 78px; height: 78px; font-size: 1.6rem; background: var(--grad); color: #050616; border: 0;
+  box-shadow: var(--glow), 0 0 0 6px rgba(0, 240, 255, .08); }
+.small-row { gap: 10px; flex-wrap: wrap; }
+.small-row button { width: auto; height: auto; border-radius: 14px; font-size: .92rem; padding: 10px 14px; }
+
+/* ---------- Micrófono (orbe) ---------- */
+.mic-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; }
+.mic-orb { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
+.mic { position: relative; z-index: 2; width: 96px; height: 96px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  color: #050616; background: radial-gradient(circle at 30% 30%, #b9fbff, var(--cyan) 40%, var(--violet) 100%);
+  box-shadow: var(--glow), inset 0 -6px 18px rgba(0, 0, 0, .25); }
+.mic.listening { background: radial-gradient(circle at 30% 30%, #ffd1f4, var(--pink) 45%, var(--violet)); }
+.ring { position: absolute; inset: 18px; border-radius: 50%; border: 2px solid rgba(0, 240, 255, .35); opacity: 0; }
+body.is-listening .ring { animation: ripple 2.1s ease-out infinite; border-color: rgba(255, 43, 214, .55); }
+body.is-listening .r2 { animation-delay: .7s; }
+body.is-listening .r3 { animation-delay: 1.4s; }
+.mic-orb::before { content: ""; position: absolute; inset: 4px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, rgba(0, 240, 255, .55), transparent 40%, rgba(255, 43, 214, .45), transparent 75%);
+  -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%);
+  animation: spin 6s linear infinite; opacity: .6; }
+body.is-listening .mic-orb::before { animation-duration: 1.6s; opacity: 1; }
+@keyframes ripple { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.75); opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 .mic-card p { margin: 4px 0 0; }
 
-/* Asistente */
+/* ---------- Asistente ---------- */
 .cmds { list-style: none; margin: 0; padding: 0; }
-.cmds li { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid #2b353a; }
+.cmds li { display: flex; flex-direction: column; padding: 11px 0; border-bottom: 1px solid rgba(120, 220, 255, .1); }
 .cmds li:last-child { border: 0; }
+.cmds b { color: var(--cyan); font-weight: 600; }
 .cmds span { color: var(--muted); font-size: .9rem; }
-.switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; }
-.switch input { flex: none; width: 46px; height: 26px; accent-color: var(--accent-strong); }
+.switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; }
+.switch input { flex: none; appearance: none; -webkit-appearance: none; width: 50px; height: 28px; padding: 0; border-radius: 20px;
+  background: rgba(255, 255, 255, .12); position: relative; cursor: pointer; transition: background .2s; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #cfe3f5; transition: transform .2s; }
+.switch input:checked { background: var(--grad); box-shadow: var(--glow); }
+.switch input:checked::after { transform: translateX(22px); background: #fff; }
 
-/* Mi música */
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-.stats div { background: var(--surface); border-radius: 14px; padding: 12px; text-align: center; }
-.stats strong { display: block; font-size: 1.4rem; }
-.stats small { color: var(--muted); }
-.list { padding-left: 22px; margin: 0; }
-.list li { padding: 10px 0; border-bottom: 1px solid #2b353a; cursor: pointer; }
+/* ---------- Mi música ---------- */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+.stats div { background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 14px 8px; text-align: center;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.stats strong { display: block; font-family: Orbitron, sans-serif; font-size: 1.5rem;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stats small { color: var(--muted); font-size: .78rem; }
+.list { list-style: none; counter-reset: n; padding: 0; margin: 0; }
+.list li { counter-increment: n; position: relative; padding: 12px 12px 12px 48px; margin: 8px 0; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--line); cursor: pointer; }
+.list li::before { content: counter(n); position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  font-family: Orbitron, sans-serif; font-size: .9rem; color: var(--cyan); }
 .list li small { display: block; color: var(--muted); }
 #authMsg.error { color: var(--danger); }
 
-/* Barra inferior, como la app */
-.tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around;
-  background: #1a2023; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); z-index: 3; }
-.tabbar button { background: none; display: flex; flex-direction: column; align-items: center;
-  gap: 2px; font-size: .8rem; padding: 4px 18px; color: var(--muted); }
-.tabbar button span { font-size: 1.2rem; padding: 3px 18px; border-radius: 16px; }
-.tabbar button.active { color: var(--text); font-weight: 600; }
-.tabbar button.active span { background: #2f4a53; }
+/* ---------- Barra inferior flotante ---------- */
+.tabbar { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom)); width: min(420px, calc(100% - 24px));
+  display: flex; justify-content: space-around; padding: 8px; border-radius: 26px;
+  background: rgba(10, 14, 36, .72); border: 1px solid var(--line);
+  backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5); }
+.tabbar button { flex: 1; background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: .76rem; padding: 6px 4px; color: var(--muted); border-radius: 18px; }
+.tabbar button span { font-size: 1.15rem; filter: grayscale(.6); }
+.tabbar button.active { color: var(--text); background: linear-gradient(135deg, rgba(0, 240, 255, .16), rgba(139, 92, 255, .16));
+  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, .35), 0 0 18px rgba(0, 240, 255, .2); }
+.tabbar button.active span { filter: none; }
 
-/* Elegir app de música */
-.target { justify-content: space-between; padding: 10px 16px; }
-.target select { font: inherit; color: var(--text); background: var(--surface2); border: 0;
-  border-radius: 10px; padding: 10px 12px; }
-.open-card { margin-top: 12px; text-align: center; }
-.open-btn { display: inline-block; background: #e0f7fb; color: var(--now); font-weight: 600;
-  text-decoration: none; padding: 12px 22px; border-radius: 26px; }
+/* Menos movimiento si el teléfono lo pide */
+@media (prefers-reduced-motion: reduce) {
+  .aurora, .grid, .mic-orb::before, body.is-playing .eq i, body.is-listening .ring { animation: none !important; }
+}

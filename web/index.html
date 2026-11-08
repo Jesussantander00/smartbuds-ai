@@ -14,10 +14,18 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="appbar"><h1 id="title">SmartBuds AI</h1></header>
+  <!-- Fondo animado: auroras de neón y una cuadrícula sutil -->
+  <div class="bg" aria-hidden="true"><i class="aurora a1"></i><i class="aurora a2"></i><i class="aurora a3"></i><i class="grid"></i></div>
+  <header class="appbar">
+    <div class="brand"><img src="icons/icon-192.png" alt="" class="logo"><h1 id="title">SmartBuds AI</h1></div>
+    <span class="status-dot" id="statusDot" title="Estado"></span>
+  </header>
 
   <main>
     <!-- ============================== INICIO ============================== -->
@@ -36,7 +44,7 @@
       <!-- Sonando ahora -->
       <div class="now card">
         <div class="now-head">
-          <span class="wave" aria-hidden="true">▮▮▮</span>
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
           <div class="now-text">
             <small id="nowSource">SmartBuds</small>
             <strong id="nowTitle">Nada sonando</strong>
@@ -61,7 +69,12 @@
 
       <!-- Micrófono -->
       <div class="card mic-card">
-        <button id="mic" class="mic" aria-label="Hablar">🎤</button>
+        <div class="mic-orb">
+          <span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>
+          <button id="mic" class="mic" aria-label="Hablar">
+            <svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V21h2v-3.1a7 7 0 0 0 6-6.9h-1.7Z"/></svg>
+          </button>
+        </div>
         <p id="micStatus" class="center">Toca y di: «Cambia», «Pausa», «Sube», «Busca …»</p>
         <p id="heard" class="muted small center"></p>
       </div>
