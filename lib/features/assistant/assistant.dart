@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import '../../connectors/deezer/similar_artists.dart';
 import '../../connectors/youtube/youtube_search.dart';
 import '../../core/models.dart';
 import '../../core/voice_engine/command_parser.dart';
@@ -12,13 +15,19 @@ class Assistant {
     required this.profile,
     this.voice,
     this.finder,
-  });
+    this.similar,
+    Random? random,
+  }) : _random = random ?? Random();
 
   final DetectedPlayerController controller;
   final MusicProfile profile;
 
   /// Búsqueda en YouTube (para descubrir canciones nuevas).
   final SongFinder? finder;
+
+  /// Artistas parecidos (para «Pon algo nuevo»).
+  final SimilarArtistsFinder? similar;
+  final Random _random;
   VoiceEngine? voice;
 
   Future<void> _say(String text) async => voice?.speak(text);
@@ -79,7 +88,7 @@ class Assistant {
         await handleCommand(command);
       case SearchIntent(:final request):
         await handleSearch(request);
-      case SearchPromptIntent() || ArtistPromptIntent():
+      case SearchPromptIntent() || ArtistPromptIntent() || WakeIntent():
         break; // lo resuelve el VoiceEngine (pregunta y escucha)
     }
   }
@@ -97,9 +106,11 @@ class Assistant {
     return true;
   }
 
-  /// «Pon algo nuevo»: una canción que no has escuchado de tus artistas
-  /// favoritos (o, si aún no hay perfil, algo popular).
+  /// «Pon algo nuevo»: primero, una canción de un artista PARECIDO a los que
+  /// más te gustan y que aún no escuchas; si no se puede, una canción que no
+  /// conoces de tus artistas favoritos; y si aún no hay perfil, algo popular.
   Future<bool> discover() async {
+    if (await _discoverSimilar()) return true;
     final f = finder;
     final artists = profile.topArtists(3).map((e) => e.$1).toList();
     if (f == null || artists.isEmpty) {
@@ -125,6 +136,32 @@ class Assistant {
     await _say('Ya conoces lo mejor de tus artistas. Te pongo algo popular.');
     await handleSearch(const SearchRequest('exitos del momento'));
     return false;
+  }
+
+  Future<bool> _discoverSimilar() async {
+    final s = similar;
+    final top = profile.topArtists(3).map((e) => e.$1).toList();
+    if (s == null || top.isEmpty) return false;
+    final knownArtists = {
+      for (final t in profile.tracks.values)
+        if (t.artist != null) t.artist!.toLowerCase(),
+    };
+    final seed = top[_random.nextInt(top.length)];
+    try {
+      final candidates = (await s.similarTo(seed))
+          .where((a) =>
+              a.topTracks.isNotEmpty &&
+              !knownArtists.any((k) => k.contains(a.name.toLowerCase())))
+          .toList();
+      if (candidates.isEmpty) return false;
+      final pick = candidates[_random.nextInt(candidates.length)];
+      final song = pick.topTracks[_random.nextInt(pick.topTracks.length)];
+      await _say('Te pongo ${pick.name}, se parece a $seed.');
+      await handleSearch(SearchRequest('$song ${pick.name}'));
+      return true;
+    } catch (_) {
+      return false; // sin internet o Deezer no respondió
+    }
   }
 
   /// «Reproduciendo «Vacío» en YouTube Music.» → «Reproduciendo Vacío».

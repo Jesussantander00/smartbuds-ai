@@ -38,6 +38,13 @@ class AndroidMediaSource
             'el reproductor activo.';
   }
 
+  /// Dos toques al audífono = siguiente, tres = anterior.
+  Future<void> setTapGestures(bool enabled) async {
+    try {
+      await _channel.invokeMethod('setTapGestures', {'enabled': enabled});
+    } catch (_) {}
+  }
+
   Future<void> openNotificationAccessSettings() =>
       _channel.invokeMethod('openNotificationAccessSettings');
 

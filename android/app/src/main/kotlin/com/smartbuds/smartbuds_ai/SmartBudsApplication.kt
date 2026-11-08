@@ -26,6 +26,8 @@ class SmartBudsApplication : Application() {
         private set
     var inAppPlayer: InAppPlayer? = null
         private set
+    var actions: ActionBridge? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +38,7 @@ class SmartBudsApplication : Application() {
         mediaConnector = MediaSessionConnector(this, messenger)
         voiceRecognizer = VoiceRecognizer(this, messenger)
         inAppPlayer = InAppPlayer(this, messenger)
+        actions = ActionBridge(messenger)
         engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
         FlutterEngineCache.getInstance().put(ENGINE_ID, engine)
     }

@@ -52,6 +52,9 @@ class MediaSessionConnector(
     private val eventChannel = EventChannel(messenger, "smartbuds/media/events")
     private var sink: EventChannel.EventSink? = null
 
+    /** Dos/tres toques en el botón de los audífonos. */
+    val taps = TapGestureDetector(context)
+
     /** Controladores observados, por playerId. */
     private val watched = mutableMapOf<String, Pair<MediaController, MediaController.Callback>>()
     private var sessionsListenerRegistered = false
@@ -118,6 +121,10 @@ class MediaSessionConnector(
                 "bringToFront" -> {
                     bringToFront(); result.success(null)
                 }
+                "setTapGestures" -> {
+                    taps.enabled = call.argument<Boolean>("enabled") != false
+                    result.success(true)
+                }
                 "adjustSystemVolume" -> result.success(
                     adjustVolume(call.argument<String>("direction") == "up")
                 )
@@ -171,6 +178,7 @@ class MediaSessionConnector(
 
     private fun sendCommand(id: String?, command: String?): Boolean {
         val c = findController(id) ?: return false
+        taps.suppress() // la orden de voz no cuenta como toque
         val t = c.transportControls
         val state = c.playbackState?.state
         when (command) {
@@ -196,6 +204,7 @@ class MediaSessionConnector(
      * - mode "auto": sesión si la declara; si no, intención.
      */
     private fun playFromSearch(packageName: String?, query: String, mode: String): Boolean {
+        taps.suppress(4000) // cambiar de canción por búsqueda no es un toque
         if (query.isBlank() || packageName.isNullOrBlank()) return false
         val session = activeControllers().firstOrNull { it.packageName == packageName }
         val declares = ((session?.playbackState?.actions ?: 0L) and
@@ -233,6 +242,7 @@ class MediaSessionConnector(
      * Dart verifica si la canción cambió.
      */
     private fun playUriInSession(packageName: String?, uri: String?, mediaId: String?): Boolean {
+        taps.suppress(4000) // cambiar de canción por búsqueda no es un toque
         val session = activeControllers().firstOrNull { it.packageName == packageName }
             ?: return false
         val controls = session.transportControls
@@ -243,6 +253,7 @@ class MediaSessionConnector(
 
     /** Abre un enlace (p. ej. music.youtube.com/watch?v=…) en la app indicada. */
     private fun openUri(uri: String?, packageName: String?): Boolean {
+        taps.suppress(4000) // cambiar de canción por búsqueda no es un toque
         if (uri.isNullOrBlank()) return false
         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).apply {
             if (!packageName.isNullOrBlank()) setPackage(packageName)
@@ -391,7 +402,10 @@ class MediaSessionConnector(
             val id = playerId(c)
             if (id in watched) return@forEach
             val cb = object : MediaController.Callback() {
-                override fun onPlaybackStateChanged(state: PlaybackState?) = emit()
+                override fun onPlaybackStateChanged(state: PlaybackState?) {
+                    taps.onState(c, state)
+                    emit()
+                }
                 override fun onMetadataChanged(metadata: MediaMetadata?) = emit()
                 override fun onSessionDestroyed() {
                     watched.remove(id)?.let { (ctrl, callback) ->

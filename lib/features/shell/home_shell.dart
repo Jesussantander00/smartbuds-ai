@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/settings/app_settings.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import '../account/supabase_auth.dart';
 import '../assistant/assistant.dart';
 import '../assistant/assistant_screen.dart';
 import '../devices/detected_player_controller.dart';
@@ -21,6 +22,8 @@ class HomeShell extends StatefulWidget {
     required this.settings,
     this.voice,
     this.sync,
+    this.auth,
+    this.onHeadphoneTapsChanged,
     this.onOpenNotificationAccess,
     this.platformNote,
   });
@@ -31,6 +34,8 @@ class HomeShell extends StatefulWidget {
   final AppSettings settings;
   final VoiceEngine? voice;
   final SupabaseSync? sync;
+  final SupabaseAuth? auth;
+  final ValueChanged<bool>? onHeadphoneTapsChanged;
   final Future<void> Function()? onOpenNotificationAccess;
   final String? platformNote;
 
@@ -45,8 +50,17 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final pages = [
       HomeScreen(controller: widget.controller, assistant: widget.assistant, voice: widget.voice),
-      AssistantScreen(settings: widget.settings, voice: widget.voice),
-      MyMusicScreen(profile: widget.profile, assistant: widget.assistant, sync: widget.sync),
+      AssistantScreen(
+        settings: widget.settings,
+        voice: widget.voice,
+        onHeadphoneTapsChanged: widget.onHeadphoneTapsChanged,
+      ),
+      MyMusicScreen(
+        profile: widget.profile,
+        assistant: widget.assistant,
+        sync: widget.sync,
+        auth: widget.auth,
+      ),
       // Diagnóstico de reproductores y capacidades (sin micrófono propio).
       DetectedPlayerScreen(
         controller: widget.controller,

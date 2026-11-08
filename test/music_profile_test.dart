@@ -257,4 +257,58 @@ void main() {
       expect(commands, [MusicCommand.next]);
     });
   });
+
+  group('Palabra de activación', () {
+    const p = CommandParser();
+
+    test('«Oye música» es la palabra; después se acepta frase libre', () {
+      expect(p.parseIntent('Oye música'), isA<WakeIntent>());
+      expect(p.parseFree('cambia'), isA<CommandIntent>());
+      final s = p.parseFree('busca ojalá de ryan castro') as SearchIntent;
+      expect(s.request.query, 'ojala de ryan castro');
+      // Cualquier otra cosa se toma como el nombre de la canción.
+      expect((p.parseFree('Ojalá Ryan Castro') as SearchIntent).request.query,
+          'Ojalá Ryan Castro');
+      expect(p.parseFree('oye musica'), isNull);
+    });
+
+    test('con «Solo con Oye música», «cambia» suelto no hace nada', () {
+      final commands = <MusicCommand>[];
+      final engine = VoiceEngine(onCommand: (c) async => commands.add(c))
+        ..requireWakeWord = true;
+      engine.handleEvent({'type': 'final', 'session': 1, 'texts': ['cambia']});
+      expect(commands, isEmpty);
+      engine.requireWakeWord = false;
+      engine.handleEvent({'type': 'final', 'session': 2, 'texts': ['cambia']});
+      expect(commands, [MusicCommand.next]);
+    });
+  });
+
+  group('Perfil en la nube', () {
+    test('unir canciones remotas se queda con el máximo y no duplica', () {
+      final profile = MusicProfile();
+      profile.mergeRemote([TrackStats(key: 'a|x', title: 'A', artist: 'X', likes: 2, plays: 5)]);
+      profile.mergeRemote([TrackStats(key: 'a|x', title: 'A', artist: 'X', likes: 1, plays: 9)]);
+      final t = profile.tracks['a|x']!;
+      expect(t.likes, 2);
+      expect(t.plays, 9);
+      expect(profile.tracks.length, 1);
+    });
+
+    test('AppSettings guarda la sesión y los nuevos ajustes', () async {
+      final store = MemoryJsonStore();
+      final a = AppSettings(store: store);
+      await a.load();
+      a.update(wakeWord: true, headphoneTaps: false);
+      a.setSession(email: 'j@x.co', userId: 'u1', accessToken: 't', refreshToken: 'r');
+      final b = AppSettings(store: store);
+      await b.load();
+      expect(b.wakeWord, isTrue);
+      expect(b.headphoneTaps, isFalse);
+      expect(b.signedIn, isTrue);
+      expect(b.authEmail, 'j@x.co');
+      b.setSession();
+      expect(b.signedIn, isFalse);
+    });
+  });
 }

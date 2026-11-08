@@ -1,6 +1,7 @@
 package com.smartbuds.smartbuds_ai
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +21,20 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SmartBudsApplication.instance?.voiceRecognizer?.activity = this
+        handleAction(intent)
+    }
+
+    /** Accesos rápidos del ícono o botón del widget con la app ya abierta. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAction(intent)
+    }
+
+    private fun handleAction(intent: Intent?) {
+        val action = intent?.getStringExtra(ActionBridge.EXTRA_ACTION) ?: return
+        intent.removeExtra(ActionBridge.EXTRA_ACTION) // que no se repita al girar
+        SmartBudsApplication.instance?.actions?.dispatch(action)
     }
 
     override fun onDestroy() {

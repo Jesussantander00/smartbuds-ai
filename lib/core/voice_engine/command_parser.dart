@@ -40,6 +40,12 @@ class ArtistPromptIntent extends VoiceIntent {
   const ArtistPromptIntent();
 }
 
+/// «Oye música»: SmartBuds responde «¿Sí?» y escucha una frase libre
+/// («busca Ojalá de Ryan Castro», «pon algo de Karol G», o solo el nombre).
+class WakeIntent extends VoiceIntent {
+  const WakeIntent();
+}
+
 /// «Me gusta» / «Me encanta».
 class LikeIntent extends VoiceIntent {
   const LikeIntent();
@@ -191,6 +197,9 @@ class CommandParser {
     'triste': ('triste', 'canciones tristes'),
   };
 
+  /// Palabra de activación. Debe existir en el vocabulario de Vosk en español.
+  static const wakePhrases = {'oye musica', 'hola musica'};
+
   static const _artistPrompts = {
     'pon algo de', 'pon musica de', 'pon canciones de', 'quiero escuchar a',
   };
@@ -201,9 +210,9 @@ class CommandParser {
   /// Los nombres de canciones y artistas se escuchan aparte, después de
   /// «¿Qué canción?» / «¿De quién?», con el reconocedor preciso.
   static const voskGrammar = [
-    'cambia', 'cámbiala', 'cambiar', 'siguiente', 'pasa', 'salta',
+    'cambia', 'cambiar', 'siguiente', 'pasa', 'salta',
     'otra canción', 'siguiente canción',
-    'devuelve', 'devuélvela', 'anterior', 'regresa', 'canción anterior',
+    'devuelve', 'anterior', 'regresa', 'canción anterior',
     'pausa', 'pausar', 'detente',
     'continúa', 'continuar', 'reanuda', 'reproduce',
     'sube', 'baja', 'más volumen', 'menos volumen',
@@ -214,13 +223,14 @@ class CommandParser {
     'no me gusta', 'no me gusta esta', 'no me gusta esta canción', 'quita esta',
     'pon algo que me guste', 'algo que me guste', 'pon mis favoritas',
     'mis favoritas', 'pon mi música',
-    'pon algo nuevo', 'algo nuevo', 'descubre algo', 'sorpréndeme',
+    'pon algo nuevo', 'algo nuevo', 'descubre algo',
     'pon algo diferente', 'quiero algo nuevo',
     'pon algo para entrenar', 'pon algo tranquilo', 'pon algo para relajarme',
     'pon algo de fiesta', 'pon algo para bailar', 'pon algo para dormir',
     'pon algo para estudiar', 'pon algo para trabajar', 'pon algo romántico',
     'pon algo alegre', 'pon algo triste',
     'pon algo de', 'pon música de',
+    'oye música', 'hola música',
     '[unk]',
   ];
 
@@ -234,6 +244,7 @@ class CommandParser {
   VoiceIntent? parseIntent(String heard) {
     final text = normalize(heard);
     if (text.isEmpty) return null;
+    if (wakePhrases.contains(text)) return const WakeIntent();
     if (_searchPrompts.contains(text)) return const SearchPromptIntent();
     if (_dislikes.contains(text)) return const DislikeIntent();
     if (_likes.contains(text)) return const LikeIntent();
@@ -256,6 +267,17 @@ class CommandParser {
     final cmd = parseExact(text);
     if (cmd != null) return CommandIntent(cmd);
     return null;
+  }
+
+  /// Frase libre dicha después de «Oye música»: una orden o pedido si lo es;
+  /// si no, se toma como el nombre de una canción para buscar.
+  VoiceIntent? parseFree(String heard) {
+    final text = normalize(heard);
+    if (text.isEmpty) return null;
+    final intent = parseIntent(text);
+    if (intent != null && intent is! WakeIntent) return intent;
+    if (wakePhrases.contains(text)) return null;
+    return SearchIntent(SearchRequest(heard.trim()));
   }
 
   /// Modo estricto para la voz: la frase completa debe ser una orden

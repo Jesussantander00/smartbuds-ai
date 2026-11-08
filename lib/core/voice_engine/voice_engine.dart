@@ -65,6 +65,9 @@ class VoiceEngine extends ChangeNotifier {
   /// SmartBuds está escuchando el nombre de una canción («¿Qué canción?»).
   bool askingForSong = false;
 
+  /// Solo obedece después de «Oye música» (menos activaciones por error).
+  bool requireWakeWord = false;
+
   /// «Solo mi voz».
   final SpeakerGuard guard = SpeakerGuard();
 
@@ -228,6 +231,8 @@ class VoiceEngine extends ChangeNotifier {
         if (lastRejectedVoice) break; // no es tu voz
         for (final t in texts) {
           final intent = parser.parseIntent(t);
+          // Con palabra de activación, solo «Oye música» abre la escucha.
+          if (requireWakeWord && intent is! WakeIntent) continue;
           if (intent != null) {
             _handledSession = session;
             _dispatch(intent);
@@ -257,6 +262,8 @@ class VoiceEngine extends ChangeNotifier {
         unawaited(_askForSong());
       case ArtistPromptIntent():
         unawaited(_askForArtist());
+      case WakeIntent():
+        unawaited(_listenAfterWake());
       case LikeIntent() ||
             DislikeIntent() ||
             FavoriteIntent() ||
@@ -302,6 +309,25 @@ class VoiceEngine extends ChangeNotifier {
     lastSearch = request;
     notifyListeners();
     await onSearch!(request);
+  }
+
+  /// «Oye música» → «¿Sí?» → una frase libre: orden, pedido o canción.
+  Future<void> _listenAfterWake() async {
+    askingForSong = true;
+    notifyListeners();
+    await speak('¿Sí?', force: true);
+    final heard = await listenOnce();
+    askingForSong = false;
+    if (heard == null || heard.trim().isEmpty) {
+      await speak('No te entendí.');
+      notifyListeners();
+      return;
+    }
+    lastHeard = heard;
+    notifyListeners();
+    final intent = parser.parseFree(heard);
+    if (intent == null || intent is WakeIntent) return;
+    _dispatch(intent);
   }
 
   /// «Pon algo de» → «¿De quién?» → escucha el artista con el reconocedor preciso.

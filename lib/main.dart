@@ -2,17 +2,21 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'connectors/android_media/android_media_connector.dart';
 import 'connectors/connector_interface.dart';
+import 'connectors/deezer/similar_artists.dart';
 import 'connectors/youtube/youtube_search.dart';
 import 'core/capability_manager/capability_manager.dart';
 import 'core/command_router/command_router.dart';
 import 'core/connector_manager.dart';
+import 'core/models.dart';
 import 'core/player_detector/active_player_detector.dart';
 import 'core/settings/app_settings.dart';
 import 'core/storage/json_store.dart';
 import 'core/voice_engine/voice_engine.dart';
+import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
 import 'features/devices/detected_player_controller.dart';
 import 'features/music_profile/music_profile.dart';
@@ -29,14 +33,28 @@ Future<void> main() async {
       store: isAndroid ? FileJsonStore('settings.json') : MemoryJsonStore());
   await settings.load();
 
-  final sync = SupabaseSync.fromEnvironment(settings.deviceId);
+  // Cuenta (opcional): solo si Supabase está configurado en secrets.json.
+  final auth = SupabaseSync.configured
+      ? SupabaseAuth(
+          url: SupabaseSync.envUrl, anonKey: SupabaseSync.envKey, settings: settings)
+      : null;
+  final sync = SupabaseSync.fromEnvironment(settings.deviceId, auth: auth);
   final profile = MusicProfile(
     store: isAndroid ? FileJsonStore('music_profile.json') : MemoryJsonStore(),
     onEvent: sync == null ? null : (e, t) => sync.push(e, t),
   );
   await profile.load();
 
-  runApp(SmartBudsApp(settings: settings, profile: profile, sync: sync));
+  // Al entrar a la cuenta: trae tus gustos de la nube y sube los de este teléfono.
+  auth?.onSignedIn = () async {
+    if (sync == null) return;
+    try {
+      profile.mergeRemote(await sync.pullScores());
+    } catch (_) {}
+    await sync.pushAll(profile);
+  };
+
+  runApp(SmartBudsApp(settings: settings, profile: profile, sync: sync, auth: auth));
 }
 
 class SmartBudsApp extends StatefulWidget {
@@ -45,11 +63,13 @@ class SmartBudsApp extends StatefulWidget {
     required this.settings,
     required this.profile,
     this.sync,
+    this.auth,
   });
 
   final AppSettings settings;
   final MusicProfile profile;
   final SupabaseSync? sync;
+  final SupabaseAuth? auth;
 
   @override
   State<SmartBudsApp> createState() => _SmartBudsAppState();
@@ -92,6 +112,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       controller: controller,
       profile: widget.profile,
       finder: finder,
+      similar: DeezerSimilarArtists(),
     );
 
     if (Platform.isAndroid) {
@@ -102,6 +123,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       )
         ..feedbackEnabled = widget.settings.voiceFeedback
         ..followHeadphones = widget.settings.followHeadphones
+        ..requireWakeWord = widget.settings.wakeWord
         ..attach(); // estado de audífonos desde el inicio
       v.guard
         ..voiceprint = widget.settings.voiceprint
@@ -109,9 +131,30 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..threshold = widget.settings.voiceThreshold;
       voice = v;
       assistant.voice = v;
+      unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
+      _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
       if (widget.settings.onboardingDone) unawaited(v.autoStart());
     }
+  }
+
+  /// Accesos rápidos del ícono (mantener presionado) y botones del widget.
+  void _listenForShortcuts() {
+    const channel = MethodChannel('smartbuds/actions');
+    channel.setMethodCallHandler((call) async {
+      if (call.method != 'action') return;
+      switch (call.arguments as String?) {
+        case 'listen':
+          if (voice?.enabled == false) await voice?.start();
+        case 'next':
+          await assistant.handleCommand(MusicCommand.next);
+        case 'favorite':
+          await assistant.playFavorite();
+        case 'discover':
+          await assistant.discover();
+      }
+    });
+    unawaited(channel.invokeMethod('ready').catchError((_) => null));
   }
 
   @override
@@ -150,6 +193,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
             settings: widget.settings,
             voice: voice,
             sync: widget.sync,
+            auth: widget.auth,
+            onHeadphoneTapsChanged: android?.setTapGestures,
             onOpenNotificationAccess: android?.openNotificationAccessSettings,
             platformNote: Platform.isIOS
                 ? 'iOS no permite detectar ni controlar reproductores de otras apps.'

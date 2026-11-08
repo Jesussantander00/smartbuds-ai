@@ -190,6 +190,36 @@ class MusicProfile extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Une canciones traídas de la nube (otra instalación u otro teléfono).
+  /// Para cada canción se queda con el número más alto de cada señal, así que
+  /// unir dos veces lo mismo no duplica nada.
+  void mergeRemote(Iterable<TrackStats> remote) {
+    var changed = false;
+    for (final r in remote) {
+      final local = tracks[r.key];
+      if (local == null) {
+        tracks[r.key] = r;
+        changed = true;
+        continue;
+      }
+      int hi(int a, int b) => a > b ? a : b;
+      final before = local.score(weights);
+      local
+        ..plays = hi(local.plays, r.plays)
+        ..completes = hi(local.completes, r.completes)
+        ..skips = hi(local.skips, r.skips)
+        ..repeats = hi(local.repeats, r.repeats)
+        ..likes = hi(local.likes, r.likes)
+        ..dislikes = hi(local.dislikes, r.dislikes);
+      final lp = local.lastPlayedAt, rp = r.lastPlayedAt;
+      if (rp != null && (lp == null || rp.isAfter(lp))) local.lastPlayedAt = rp;
+      if (local.score(weights) != before) changed = true;
+    }
+    if (!changed) return;
+    _scheduleSave();
+    notifyListeners();
+  }
+
   /// Avisa qué orden dio el usuario (para distinguir saltos y repeticiones).
   void noteCommand(MusicCommand command) {
     _lastCommand = command;
@@ -215,7 +245,8 @@ class MusicProfile extends ChangeNotifier {
       final listened = now.difference(_currentStart!);
       if (listened >= completeAfter) {
         prev.completes++;
-        _record(prev, ListenEventType.complete);
+        // Cuenta para el momento en que se escuchó, no cuando se cambió.
+        _record(prev, ListenEventType.complete, daypartAt: _currentStart);
       } else if (listened < skipBefore && _recentCommand(MusicCommand.next)) {
         prev.skips++;
         _record(prev, ListenEventType.skip);
@@ -327,12 +358,12 @@ class MusicProfile extends ChangeNotifier {
   static String keyFor(String title, String? artist) =>
       '${title.trim().toLowerCase()}|${(artist ?? '').trim().toLowerCase()}';
 
-  void _record(TrackStats stats, ListenEventType type) {
+  void _record(TrackStats stats, ListenEventType type, {DateTime? daypartAt}) {
     final ev = ListenEvent(_clock(), stats.key, type);
     if (type == ListenEventType.complete ||
         type == ListenEventType.repeat ||
         type == ListenEventType.like) {
-      final d = Daypart.of(ev.at);
+      final d = Daypart.of(daypartAt ?? ev.at);
       stats.positiveByDaypart[d] = (stats.positiveByDaypart[d] ?? 0) + 1;
     }
     history.add(ev);

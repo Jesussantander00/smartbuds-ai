@@ -53,7 +53,24 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Accesos rápidos al mantener presionado el ícono. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Widget de la pantalla de inicio. -->
+        <receiver
+            android:name=".SmartBudsWidget"
+            android:exported="false"
+            android:label="SmartBuds">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/smartbuds_widget_info" />
+        </receiver>
 
         <!-- Mantiene la escucha con la pantalla apagada. -->
         <service

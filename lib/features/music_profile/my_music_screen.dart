@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../account/account_card.dart';
+import '../account/supabase_auth.dart';
 import '../assistant/assistant.dart';
 import 'music_profile.dart';
 import 'supabase_sync.dart';
@@ -11,11 +13,13 @@ class MyMusicScreen extends StatelessWidget {
     required this.profile,
     required this.assistant,
     this.sync,
+    this.auth,
   });
 
   final MusicProfile profile;
   final Assistant assistant;
   final SupabaseSync? sync;
+  final SupabaseAuth? auth;
 
   static String _eventLabel(ListenEventType t) => switch (t) {
         ListenEventType.play => 'Sonó',
@@ -42,6 +46,10 @@ class MyMusicScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (auth != null) ...[
+                AccountCard(auth: auth!),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   _Stat(label: 'Canciones', value: '${profile.tracks.length}'),

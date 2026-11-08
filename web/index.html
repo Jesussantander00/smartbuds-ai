@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SmartBuds AI</title>
+  <meta name="description" content="Tus gustos musicales y tu música, a un toque.">
+  <meta name="theme-color" content="#0b1d2a">
+  <!-- iPhone: «Compartir → Agregar a inicio» la abre como app, sin barra de Safari. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SmartBuds">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <img src="icons/icon-192.png" alt="" class="logo">
+    <div>
+      <h1>SmartBuds AI</h1>
+      <p class="muted" id="who">Tu música, a un toque</p>
+    </div>
+    <button id="logout" class="link hidden" type="button">Salir</button>
+  </header>
+
+  <main>
+    <!-- Cómo instalar (solo se muestra en Safari si aún no está en inicio) -->
+    <section id="install" class="card hint hidden">
+      <strong>Ponla en tu pantalla de inicio</strong>
+      <p>Toca <span class="share">Compartir</span> abajo en Safari y luego <b>«Agregar a inicio»</b>.</p>
+    </section>
+
+    <section class="card">
+      <form id="search" class="row" autocomplete="off">
+        <input id="q" type="search" placeholder="Busca una canción" enterkeyhint="search">
+        <button id="mic" type="button" class="round" aria-label="Decir la canción">🎤</button>
+        <button type="submit" class="round primary" aria-label="Buscar">▶</button>
+      </form>
+      <p class="muted small" id="micHint">Toca 🎤 y di la canción. Se abre en YouTube Music.</p>
+    </section>
+
+    <section class="actions">
+      <button id="fav" class="big primary" type="button">❤ Pon algo que me guste</button>
+      <button id="new" class="big" type="button">✨ Algo nuevo</button>
+    </section>
+    <p id="status" class="muted center" role="status"></p>
+
+    <!-- Cuenta -->
+    <section id="auth" class="card">
+      <h2>Tu cuenta</h2>
+      <p class="muted">La misma de la app SmartBuds en Android. Así ves tus gustos aquí.</p>
+      <form id="login" class="col">
+        <input id="email" type="email" placeholder="Correo" autocomplete="email" required>
+        <input id="password" type="password" placeholder="Contraseña (mínimo 6)" autocomplete="current-password" minlength="6" required>
+        <div class="row end">
+          <button id="signup" class="link" type="button">Crear cuenta</button>
+          <button class="primary" type="submit">Entrar</button>
+        </div>
+      </form>
+      <p id="authMsg" class="small"></p>
+    </section>
+
+    <section id="mine" class="hidden">
+      <h2>Tus canciones top</h2>
+      <ol id="top" class="list"></ol>
+      <h2>Tus artistas</h2>
+      <p id="artists" class="muted"></p>
+    </section>
+  </main>
+
+  <footer class="muted small center">
+    En iPhone, SmartBuds no puede escuchar con la pantalla apagada ni cambiar canciones
+    de otras apps (Apple no lo permite). Para eso está la app de Android.
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

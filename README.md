@@ -17,9 +17,9 @@ lanzan con botones, que pueden simular que vienen de la voz para probar las pol�
 | Detectar el reproductor activo | YouTube Music, Apple Music, Amazon Music… (Acceso a notificaciones) |
 | Control por voz sin internet | Vosk: «Cambia», «Devuelve», «Pausa», «Continúa», «Sube», «Baja» |
 | Pantalla apagada | Servicio en primer plano con notificación «SmartBuds está escuchando» |
-| Buscar y reproducir | «Busca Vacío de Hamilton» → suena en YouTube Music sin abrirla (API de YouTube) |
-| Elegir reproductor | «Busca … en Apple Music / Amazon Music / Deezer» |
-| Mejor reconocimiento de nombres | «Busca» solo → «¿Qué canción?» → reconocedor preciso del sistema |
+| Buscar y reproducir | «Busca» → «¿Qué canción?» → suena en YouTube Music sin abrirla (API de YouTube) |
+| Palabra de activación | «Oye música» → «¿Sí?» → frase libre: «busca Vacío de Hamilton en Apple Music» |
+| Órdenes con música de fondo | Vosk solo elige entre las órdenes (gramática); lo demás se ignora |
 | Inteligencia musical | Aprende de lo que escuchas: completa +2, repetida +3, «Me gusta» +5, saltada −2, «No me gusta» −5 |
 | «Pon algo que me guste» | Elige una de tus mejores canciones que no haya sonado hace poco |
 | Respuesta por voz | «Reproduciendo Vacío», «Guardada en tus favoritas» (se puede apagar) |
@@ -27,11 +27,15 @@ lanzan con botones, que pueden simular que vienen de la voz para probar las pol�
 | Sincronización | Perfil en el teléfono y, opcionalmente, en Supabase |
 | App cerrada | El motor vive en la aplicación: sigue escuchando hasta tocar «Detener» en la notificación |
 | Momentos del día | «Pon algo que me guste» prioriza lo que disfrutas a esa hora |
-| Descubrir | «Pon algo nuevo»: canciones que no conoces de tus artistas favoritos |
-| Pedidos naturales | «Pon algo de Ryan Castro», «Pon algo para entrenar / tranquilo / de fiesta» |
+| Descubrir | «Pon algo nuevo»: artistas parecidos a tus favoritos (API pública de Deezer, sin clave) |
+| Pedidos naturales | «Pon algo de» → «¿De quién?», «Pon algo para entrenar / tranquilo / de fiesta» |
+| Toques en los audífonos | Dos toques: siguiente. Tres: anterior (sin permisos extra) |
+| Cuenta | Correo y contraseña (Supabase Auth); tus gustos te siguen a otro teléfono |
 | Solo mi voz | Entrena tu voz (3 veces «Cambia») y SmartBuds ignora a otras personas |
 
-Documentos: `docs/politica-de-privacidad.md` y `docs/publicacion-play-store.md`.
+Documentos: `docs/politica-de-privacidad.md`, `docs/publicacion-play-store.md` y `docs/ficha-play-store.md` (textos, ícono y gráfico para la tienda).
+
+Base de datos: `supabase/schema.sql` y luego `supabase/cuentas.sql`.
 
 Pantallas: bienvenida con permisos paso a paso, **Inicio**, **Asistente**, **Mi música** y **Dispositivos** (diagnóstico).
 

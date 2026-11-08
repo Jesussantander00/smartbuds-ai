@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accesos rápidos: mantén presionado el ícono de SmartBuds. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_favorite"
+        android:shortcutId="favorite"
+        android:shortcutShortLabel="@string/shortcut_favorite">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.smartbuds.smartbuds_ai.MainActivity"
+            android:targetPackage="com.smartbuds.smartbuds_ai">
+            <extra android:name="smartbuds_action" android:value="favorite" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_discover"
+        android:shortcutId="discover"
+        android:shortcutShortLabel="@string/shortcut_discover">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.smartbuds.smartbuds_ai.MainActivity"
+            android:targetPackage="com.smartbuds.smartbuds_ai">
+            <extra android:name="smartbuds_action" android:value="discover" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_mic"
+        android:shortcutId="listen"
+        android:shortcutShortLabel="@string/shortcut_listen">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.smartbuds.smartbuds_ai.MainActivity"
+            android:targetPackage="com.smartbuds.smartbuds_ai">
+            <extra android:name="smartbuds_action" android:value="listen" />
+        </intent>
+    </shortcut>
+</shortcuts>

@@ -25,6 +25,21 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   bool onlyMyVoice = false;
   double voiceThreshold = 0.5;
 
+  /// Solo obedecer después de «Oye música».
+  bool wakeWord = false;
+
+  /// Dos toques al audífono = siguiente, tres = anterior.
+  bool headphoneTaps = true;
+
+  /// Sesión de la cuenta (Supabase Auth). Vacía = sin cuenta.
+  String? authEmail;
+  String? authUserId;
+  String? authAccessToken;
+  String? authRefreshToken;
+  DateTime? authExpiresAt;
+
+  bool get signedIn => authUserId != null && authRefreshToken != null;
+
   /// Identificador anónimo del dispositivo (para sincronizar el perfil).
   String deviceId = '';
 
@@ -49,6 +64,14 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     voiceprint = (d['voiceprint'] as List?)?.map((e) => (e as num).toDouble()).toList();
     onlyMyVoice = d['onlyMyVoice'] == true;
     voiceThreshold = (d['voiceThreshold'] as num?)?.toDouble() ?? 0.5;
+    wakeWord = d['wakeWord'] == true;
+    headphoneTaps = d['headphoneTaps'] != false;
+    authEmail = d['authEmail'] as String?;
+    authUserId = d['authUserId'] as String?;
+    authAccessToken = d['authAccessToken'] as String?;
+    authRefreshToken = d['authRefreshToken'] as String?;
+    final exp = d['authExpiresAt'] as String?;
+    authExpiresAt = exp == null ? null : DateTime.tryParse(exp);
     deviceId = (d['deviceId'] as String?) ?? _newId();
     if (d['deviceId'] == null) await _persist();
     notifyListeners();
@@ -62,7 +85,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool clearVoiceprint = false,
     bool? onlyMyVoice,
     double? voiceThreshold,
+    bool? wakeWord,
+    bool? headphoneTaps,
   }) {
+    if (wakeWord != null) this.wakeWord = wakeWord;
+    if (headphoneTaps != null) this.headphoneTaps = headphoneTaps;
     if (voiceprint != null) this.voiceprint = voiceprint;
     if (clearVoiceprint) this.voiceprint = null;
     if (onlyMyVoice != null) this.onlyMyVoice = onlyMyVoice;
@@ -70,6 +97,23 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (onboardingDone != null) this.onboardingDone = onboardingDone;
     if (voiceFeedback != null) this.voiceFeedback = voiceFeedback;
     if (followHeadphones != null) this.followHeadphones = followHeadphones;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Guarda o borra (null) la sesión de la cuenta.
+  void setSession({
+    String? email,
+    String? userId,
+    String? accessToken,
+    String? refreshToken,
+    DateTime? expiresAt,
+  }) {
+    authEmail = email;
+    authUserId = userId;
+    authAccessToken = accessToken;
+    authRefreshToken = refreshToken;
+    authExpiresAt = expiresAt;
     _persist();
     notifyListeners();
   }
@@ -83,6 +127,13 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'voiceprint': voiceprint,
         'onlyMyVoice': onlyMyVoice,
         'voiceThreshold': voiceThreshold,
+        'wakeWord': wakeWord,
+        'headphoneTaps': headphoneTaps,
+        'authEmail': authEmail,
+        'authUserId': authUserId,
+        'authAccessToken': authAccessToken,
+        'authRefreshToken': authRefreshToken,
+        'authExpiresAt': authExpiresAt?.toIso8601String(),
       });
 
   static String _newId() {

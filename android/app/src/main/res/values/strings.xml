@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_favorite">Algo que me guste</string>
+    <string name="shortcut_discover">Algo nuevo</string>
+    <string name="shortcut_listen">Escuchar</string>
+    <string name="widget_listen">Escuchar</string>
+    <string name="widget_next">Cambiar</string>
+    <string name="widget_favorite">Favoritas</string>
+    <string name="widget_description">Controla tu música con un toque</string>
+</resources>

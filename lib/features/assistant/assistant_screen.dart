@@ -5,10 +5,18 @@ import '../../core/voice_engine/voice_engine.dart';
 
 /// Asistente: qué puedes decir y cómo responde SmartBuds.
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key, required this.settings, this.voice});
+  const AssistantScreen({
+    super.key,
+    required this.settings,
+    this.voice,
+    this.onHeadphoneTapsChanged,
+  });
 
   final AppSettings settings;
   final VoiceEngine? voice;
+
+  /// Avisa al lado nativo (Android) de que se activaron/desactivaron los toques.
+  final ValueChanged<bool>? onHeadphoneTapsChanged;
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -32,14 +40,13 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Devuelve»', 'Canción anterior'),
     ('«Pausa» / «Continúa»', 'Pausar o seguir'),
     ('«Sube» / «Baja»', 'Volumen'),
-    ('«Busca» + canción', 'La busca y la reproduce'),
-    ('«Busca … en Apple Music»', 'Elige el reproductor'),
-    ('«Busca»', 'Te pregunta «¿Qué canción?»'),
+    ('«Busca»', 'Te pregunta «¿Qué canción?» y la reproduce'),
+    ('«Oye música»', 'Responde «¿Sí?»: di lo que quieras, p. ej. «busca Ojalá de Ryan Castro»'),
     ('«Me gusta»', 'Guarda la canción en tus favoritas'),
     ('«No me gusta»', 'La baja en tu perfil y la cambia'),
     ('«Pon algo que me guste»', 'Elige una de tus favoritas según la hora'),
     ('«Pon algo nuevo»', 'Canciones que no conoces de tus artistas'),
-    ('«Pon algo de Ryan Castro»', 'Música de un artista'),
+    ('«Pon algo de»', 'Te pregunta «¿De quién?» y pone música de ese artista'),
     ('«Pon algo para entrenar»', 'También: tranquilo, de fiesta, para dormir, para estudiar'),
   ];
 
@@ -84,6 +91,26 @@ class _AssistantScreenState extends State<AssistantScreen> {
               onChanged: (v) {
                 settings.update(followHeadphones: v);
                 voice?.followHeadphones = v;
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Solo con «Oye música»'),
+              subtitle: const Text('SmartBuds solo obedece después de que digas «Oye música». '
+                  'Casi nunca se activa por error.'),
+              value: settings.wakeWord,
+              onChanged: (v) {
+                settings.update(wakeWord: v);
+                voice?.requireWakeWord = v;
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Toques en los audífonos'),
+              subtitle: const Text('Dos toques: siguiente canción. Tres toques: la anterior. '
+                  'Funciona con cualquier audífono con botón.'),
+              value: settings.headphoneTaps,
+              onChanged: (v) {
+                settings.update(headphoneTaps: v);
+                widget.onHeadphoneTapsChanged?.call(v);
               },
             ),
             if (voice != null)
