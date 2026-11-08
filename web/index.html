@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SmartBuds AI</title>
-  <meta name="description" content="Tus gustos musicales y tu música, a un toque.">
+  <meta name="description" content="Tu música por voz, con tus gustos.">
   <meta name="theme-color" content="#0b1d2a">
   <!-- iPhone: «Compartir → Agregar a inicio» la abre como app, sin barra de Safari. -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -17,53 +17,113 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top">
-    <img src="icons/icon-192.png" alt="" class="logo">
-    <div>
-      <h1>SmartBuds AI</h1>
-      <p class="muted" id="who">Tu música, a un toque</p>
-    </div>
-    <button id="logout" class="link hidden" type="button">Salir</button>
-  </header>
+  <header class="appbar"><h1 id="title">SmartBuds AI</h1></header>
 
   <main>
-    <!-- Cómo instalar (solo se muestra en Safari si aún no está en inicio) -->
-    <section id="install" class="card hint hidden">
-      <strong>Ponla en tu pantalla de inicio</strong>
-      <p>Toca <span class="share">Compartir</span> abajo en Safari y luego <b>«Agregar a inicio»</b>.</p>
-    </section>
+    <!-- ============================== INICIO ============================== -->
+    <section class="tab" id="tab-home">
+      <div id="install" class="card hint hidden">
+        <strong>Ponla en tu pantalla de inicio</strong>
+        <p>En Safari toca <b>Compartir</b> y luego <b>«Agregar a inicio»</b>.</p>
+      </div>
 
-    <section class="card">
-      <form id="search" class="row" autocomplete="off">
-        <input id="q" type="search" placeholder="Busca una canción" enterkeyhint="search">
-        <button id="mic" type="button" class="round" aria-label="Decir la canción">🎤</button>
-        <button type="submit" class="round primary" aria-label="Buscar">▶</button>
-      </form>
-      <p class="muted small" id="micHint">Toca 🎤 y di la canción. Se abre en YouTube Music.</p>
-    </section>
-
-    <section class="actions">
-      <button id="fav" class="big primary" type="button">❤ Pon algo que me guste</button>
-      <button id="new" class="big" type="button">✨ Algo nuevo</button>
-    </section>
-    <p id="status" class="muted center" role="status"></p>
-
-    <!-- Cuenta -->
-    <section id="auth" class="card">
-      <h2>Tu cuenta</h2>
-      <p class="muted">La misma de la app SmartBuds en Android. Así ves tus gustos aquí.</p>
-      <form id="login" class="col">
-        <input id="email" type="email" placeholder="Correo" autocomplete="email" required>
-        <input id="password" type="password" placeholder="Contraseña (mínimo 6)" autocomplete="current-password" minlength="6" required>
-        <div class="row end">
-          <button id="signup" class="link" type="button">Crear cuenta</button>
-          <button class="primary" type="submit">Entrar</button>
+      <!-- Sonando ahora -->
+      <div class="now card">
+        <div class="now-head">
+          <span class="wave" aria-hidden="true">▮▮▮</span>
+          <div class="now-text">
+            <small id="nowSource">SmartBuds</small>
+            <strong id="nowTitle">Nada sonando</strong>
+          </div>
         </div>
+        <div class="player-wrap" id="playerWrap"><div id="player"></div></div>
+        <div class="controls">
+          <button data-cmd="previous" aria-label="Devuelve">⏮</button>
+          <button data-cmd="toggle" id="playBtn" class="main" aria-label="Pausa o continúa">▶</button>
+          <button data-cmd="next" aria-label="Cambia">⏭</button>
+        </div>
+        <div class="controls small-row">
+          <button data-cmd="volumeDown" aria-label="Baja">🔉 Baja</button>
+          <button data-cmd="dislike" aria-label="No me gusta">👎</button>
+          <button data-cmd="like" aria-label="Me gusta">❤</button>
+          <button data-cmd="volumeUp" aria-label="Sube">🔊 Sube</button>
+        </div>
+      </div>
+
+      <!-- Micrófono -->
+      <div class="card mic-card">
+        <button id="mic" class="mic" aria-label="Hablar">🎤</button>
+        <p id="micStatus" class="center">Toca y di: «Cambia», «Pausa», «Sube», «Busca …»</p>
+        <p id="heard" class="muted small center"></p>
+      </div>
+
+      <form id="search" class="row" autocomplete="off">
+        <input id="q" type="search" placeholder="Buscar una canción" enterkeyhint="search">
+        <button type="submit" class="round primary" aria-label="Buscar">🔍</button>
       </form>
-      <p id="authMsg" class="small"></p>
+
+      <button id="fav" class="big primary">❤ Pon algo que me guste</button>
+      <button id="new" class="big">✨ Algo nuevo</button>
+      <p id="status" class="muted center small" role="status"></p>
     </section>
 
-    <section id="mine" class="hidden">
+    <!-- ============================= ASISTENTE ============================ -->
+    <section class="tab hidden" id="tab-assistant">
+      <h2>Lo que puedes decir</h2>
+      <p class="muted">Toca el micrófono y di la orden.</p>
+      <div class="card">
+        <ul class="cmds">
+          <li><b>«Cambia»</b><span>Siguiente canción</span></li>
+          <li><b>«Devuelve»</b><span>Canción anterior</span></li>
+          <li><b>«Pausa» / «Continúa»</b><span>Pausar o seguir</span></li>
+          <li><b>«Sube» / «Baja»</b><span>Volumen</span></li>
+          <li><b>«Busca …»</b><span>La busca y la pone aquí mismo</span></li>
+          <li><b>«Me gusta» / «No me gusta»</b><span>SmartBuds aprende</span></li>
+          <li><b>«Pon algo que me guste»</b><span>De tus favoritas</span></li>
+          <li><b>«Pon algo nuevo»</b><span>Artistas parecidos a los tuyos</span></li>
+          <li><b>«Pon algo de …»</b><span>Música de un artista</span></li>
+          <li><b>«Pon algo para entrenar»</b><span>También: tranquilo, de fiesta, para dormir</span></li>
+        </ul>
+      </div>
+      <h2>Ajustes</h2>
+      <div class="card">
+        <label class="switch">
+          <span><b>Escucha continua</b><br><small class="muted">Sin tocar el micrófono cada vez. Úsala con audífonos.</small></span>
+          <input type="checkbox" id="continuous">
+        </label>
+        <label class="switch">
+          <span><b>Respuesta por voz</b><br><small class="muted">SmartBuds te confirma al oído.</small></span>
+          <input type="checkbox" id="speakBack" checked>
+        </label>
+      </div>
+      <p class="muted small" id="iosNote"></p>
+    </section>
+
+    <!-- ============================= MI MÚSICA ============================ -->
+    <section class="tab hidden" id="tab-music">
+      <div id="auth" class="card">
+        <h2>Tu cuenta</h2>
+        <p class="muted">La misma de la app SmartBuds. Tus gustos se guardan y se ven en todos tus equipos.</p>
+        <form id="login" class="col">
+          <input id="email" type="email" placeholder="Correo" autocomplete="email" required>
+          <input id="password" type="password" placeholder="Contraseña (mínimo 6)" autocomplete="current-password" minlength="6" required>
+          <div class="row end">
+            <button id="signup" class="link" type="button">Crear cuenta</button>
+            <button class="primary" type="submit">Entrar</button>
+          </div>
+        </form>
+        <p id="authMsg" class="small"></p>
+      </div>
+      <div id="account" class="card row hidden">
+        <span>✅ <span id="who"></span></span>
+        <button id="logout" class="link" type="button">Salir</button>
+      </div>
+
+      <div class="stats">
+        <div><strong id="stSongs">0</strong><small>Canciones</small></div>
+        <div><strong id="stPlays">0</strong><small>Reproducciones</small></div>
+        <div><strong id="stFavs">0</strong><small>Favoritas</small></div>
+      </div>
       <h2>Tus canciones top</h2>
       <ol id="top" class="list"></ol>
       <h2>Tus artistas</h2>
@@ -71,10 +131,11 @@
     </section>
   </main>
 
-  <footer class="muted small center">
-    En iPhone, SmartBuds no puede escuchar con la pantalla apagada ni cambiar canciones
-    de otras apps (Apple no lo permite). Para eso está la app de Android.
-  </footer>
+  <nav class="tabbar">
+    <button data-tab="home" class="active"><span>🏠</span>Inicio</button>
+    <button data-tab="assistant"><span>🎤</span>Asistente</button>
+    <button data-tab="music"><span>❤</span>Mi música</button>
+  </nav>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

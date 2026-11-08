@@ -1,5 +1,5 @@
 // Guarda la página para que abra rápido y sin internet (los datos sí necesitan conexión).
-const CACHE = 'smartbuds-v1';
+const CACHE = 'smartbuds-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -17,6 +17,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return; // búsquedas: siempre a la red
   e.respondWith(
     fetch(e.request)
       .then((res) => {
