@@ -15,7 +15,7 @@ perfil musical, búsqueda y cuenta son iguales en las dos plataformas.
 | «Busca …» | Sí (YouTube Music invisible, u otras apps) | Sí, en Apple Music (con suscripción) |
 | YouTube Music, Spotify, Amazon… | Sí | No: iOS no deja controlar otras apps |
 | Volumen por voz | Sí | No: iOS no lo permite (botones del teléfono) |
-| Pantalla apagada | Sí | Sí con Apple Music (suena en la app Música); la escucha sigue con el modo «audio en segundo plano» |
+| Pantalla apagada | Sí | La música de Apple Music sigue (suena en la app Música). La escucha de voz con el iPhone bloqueado **no está garantizada**: hay que probarla en un iPhone real |
 | Reconocimiento de voz | Vosk, sin internet | El de Apple; dentro del teléfono si el modelo de español está descargado |
 | «Solo mi voz» | Sí | Todavía no |
 | Accesos rápidos y widget | Sí | Todavía no |
@@ -44,3 +44,16 @@ perfil musical, búsqueda y cuenta son iguales en las dos plataformas.
   subir la app sin Mac.
 - Alternativa sin pagar: con una Mac y Xcode se puede instalar en tu propio
   iPhone con un Apple ID gratis, pero caduca a los 7 días.
+
+## Pendiente de probar en un iPhone real
+
+Compilar no demuestra que funcione. Antes de darlo por bueno hay que probar:
+
+1. **Permiso de Apple Music**: aparece en la bienvenida y queda concedido.
+2. **«Busca …»**: la canción del catálogo empieza a sonar en Música. SmartBuds
+   solo dice que sonó si `prepareToPlay` no dio error (sin suscripción o con la
+   canción no disponible en el país, avisa que no pudo).
+3. **Pantalla bloqueada**: cuánto tiempo sigue entendiendo «Cambia». Declarar
+   «audio en segundo plano» no garantiza que el reconocimiento de voz siga
+   indefinidamente; iOS puede detenerlo.
+4. **Llamadas y Siri**: que la escucha se reanude sola al terminar.

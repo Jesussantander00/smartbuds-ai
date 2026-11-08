@@ -98,6 +98,12 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       result(false)
     case "setTapGestures":
       result(true)
+    case "hasMusicAccess":
+      result(MPMediaLibrary.authorizationStatus() == .authorized)
+    case "requestMusicAccess":
+      MPMediaLibrary.requestAuthorization { status in
+        DispatchQueue.main.async { result(status == .authorized) }
+      }
     case "filesDir":
       result(filesDir())
     default:
@@ -157,8 +163,15 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
         DispatchQueue.main.async {
           guard let id = storeId else { result(false); return }
           self.player.setQueue(with: [id])
-          self.player.play()
-          result(true)
+          // Preparar antes de reproducir: si falla (sin suscripción, canción no
+          // disponible en el país…), se avisa a Dart en vez de decir que sonó.
+          self.player.prepareToPlay { error in
+            DispatchQueue.main.async {
+              if error != nil { result(false); return }
+              self.player.play()
+              result(true)
+            }
+          }
         }
       }.resume()
     }

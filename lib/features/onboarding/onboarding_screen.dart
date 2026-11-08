@@ -11,11 +11,18 @@ class OnboardingScreen extends StatefulWidget {
     required this.onFinished,
     this.voice,
     this.onOpenNotificationAccess,
+    this.onRequestMusicAccess,
+    this.hasMusicAccess,
   });
 
   final DetectedPlayerController controller;
   final VoiceEngine? voice;
   final Future<void> Function()? onOpenNotificationAccess;
+
+  /// Solo iPhone: pedir y consultar el permiso de Apple Music. Si están, el
+  /// primer paso habla de Apple Music en vez del acceso a notificaciones.
+  final Future<bool> Function()? onRequestMusicAccess;
+  final Future<bool> Function()? hasMusicAccess;
   final VoidCallback onFinished;
 
   @override
@@ -24,6 +31,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBindingObserver {
   bool _micGranted = false;
+  bool _musicGranted = false;
 
   @override
   void initState() {
@@ -47,7 +55,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   Future<void> _check() async {
     await widget.controller.refresh();
     final mic = await widget.voice?.hasPermission() ?? true;
-    if (mounted) setState(() => _micGranted = mic);
+    final music = await widget.hasMusicAccess?.call() ?? false;
+    if (mounted) {
+      setState(() {
+        _micGranted = mic;
+        _musicGranted = music;
+      });
+    }
   }
 
   @override
@@ -74,19 +88,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                _Step(
-                  number: 1,
-                  title: 'Ver qué música suena',
-                  body: 'Activa «SmartBuds AI» en Acceso a notificaciones. '
-                      'Así SmartBuds detecta YouTube Music, Apple Music y otras apps.',
-                  done: notificationsOk,
-                  action: widget.onOpenNotificationAccess == null
-                      ? null
-                      : TextButton(
-                          onPressed: widget.onOpenNotificationAccess,
-                          child: const Text('Activar'),
-                        ),
-                ),
+                if (widget.onRequestMusicAccess != null)
+                  _Step(
+                    number: 1,
+                    title: 'Conectar Apple Music',
+                    body: 'En iPhone, SmartBuds controla la app Música con tu cuenta '
+                        '(hace falta suscripción a Apple Music).',
+                    done: _musicGranted,
+                    action: TextButton(
+                      onPressed: () async {
+                        final ok = await widget.onRequestMusicAccess!();
+                        if (mounted) setState(() => _musicGranted = ok);
+                      },
+                      child: const Text('Permitir'),
+                    ),
+                  )
+                else
+                  _Step(
+                    number: 1,
+                    title: 'Ver qué música suena',
+                    body: 'Activa «SmartBuds AI» en Acceso a notificaciones. '
+                        'Así SmartBuds detecta YouTube Music, Apple Music y otras apps.',
+                    done: notificationsOk,
+                    action: widget.onOpenNotificationAccess == null
+                        ? null
+                        : TextButton(
+                            onPressed: widget.onOpenNotificationAccess,
+                            child: const Text('Activar'),
+                          ),
+                  ),
                 _Step(
                   number: 2,
                   title: 'Escucharte',
@@ -107,7 +137,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                   number: 3,
                   title: 'Pruébalo',
                   body: voice == null
-                      ? 'La voz está disponible en Android.'
+                      ? 'La voz no está disponible en este dispositivo.'
                       : voice.enabled
                           ? (voice.lastHeard.isEmpty
                               ? 'Pon una canción y di «Cambia».'

@@ -139,7 +139,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
-      if (widget.settings.onboardingDone || Platform.isIOS) unawaited(v.autoStart());
+      if (widget.settings.onboardingDone) unawaited(v.autoStart());
     }
   }
 
@@ -183,11 +183,16 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       home: ListenableBuilder(
         listenable: widget.settings,
         builder: (context, _) {
-          if (!widget.settings.onboardingDone && Platform.isAndroid) {
+          // Bienvenida en las dos plataformas: la escucha solo arranca sola
+          // cuando ya se terminó (misma condición en Android e iPhone).
+          if (!widget.settings.onboardingDone && (Platform.isAndroid || Platform.isIOS)) {
             return OnboardingScreen(
               controller: controller,
               voice: voice,
-              onOpenNotificationAccess: android?.openNotificationAccessSettings,
+              onOpenNotificationAccess:
+                  Platform.isIOS ? null : android?.openNotificationAccessSettings,
+              onRequestMusicAccess: Platform.isIOS ? android?.requestMusicAccess : null,
+              hasMusicAccess: Platform.isIOS ? android?.hasMusicAccess : null,
               onFinished: () => widget.settings.update(onboardingDone: true),
             );
           }
