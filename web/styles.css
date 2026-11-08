@@ -91,7 +91,8 @@ input:focus, select:focus { outline: none; border-color: var(--cyan); box-shadow
 
 /* ---------- Elegir app ---------- */
 .target { justify-content: space-between; padding: 10px 16px; }
-.target select { flex: 0 1 auto; padding: 10px 12px; }
+.target > span { white-space: nowrap; color: var(--muted); }
+.target select { flex: 0 1 auto; max-width: 62%; padding: 10px 12px; }
 
 /* ---------- Sonando ahora ---------- */
 .now { background: linear-gradient(160deg, rgba(0, 240, 255, .14), rgba(139, 92, 255, .12) 55%, rgba(255, 43, 214, .1)); }
