@@ -214,7 +214,8 @@
     amazon: { name: 'Amazon Music' },
     deezer: { name: 'Deezer' },
   };
-  let target = loadJSON('smartbuds.target') || (IOS ? 'youtube' : 'here');
+  // Por defecto suena aquí mismo; abrir otra app es una opción.
+  let target = loadJSON('smartbuds.target2') || 'here';
   if (!APPS[target]) target = 'here';
 
   // Apple (iTunes) también exige JSONP para pedirle datos desde otra página.
@@ -297,9 +298,6 @@
         if (playerReady) player.loadVideoById(videoId); else pendingVideo = videoId;
       } else {
         $('playerWrap').classList.add('empty');
-  $('nowSource').textContent = IOS ? 'SmartBuds no puede ver lo que suena en otras apps del iPhone'
-                                   : 'SmartBuds';
-  $('nowTitle').textContent = 'Pide una canción';
         if (playerReady) player.pauseVideo();
       }
       $('nowSource').textContent = `Sonando en ${APPS[target].name}`;
@@ -669,7 +667,7 @@
     sel.appendChild(o);
   }
   sel.value = target;
-  sel.onchange = () => { target = sel.value; saveJSON('smartbuds.target', target); status(`Ahora la música se abre en ${APPS[target].name}.`); };
+  sel.onchange = () => { target = sel.value; saveJSON('smartbuds.target2', target); status(`Ahora la música se abre en ${APPS[target].name}.`); };
   $('continuous').checked = continuous;
   $('continuous').onchange = (e) => {
     continuous = e.target.checked;
@@ -685,6 +683,9 @@
     if (!STANDALONE) $('install').classList.remove('hidden');
   }
   $('playerWrap').classList.add('empty');
+  $('nowSource').textContent = IOS ? 'SmartBuds no puede ver lo que suena en otras apps del iPhone'
+                                   : 'SmartBuds';
+  $('nowTitle').textContent = 'Pide una canción';
   if (!SB || !KEY) authMsg('Falta configurar Supabase en config.js.', true);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   setupVoice();
