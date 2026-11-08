@@ -38,6 +38,23 @@ class AndroidMediaSource
             'el reproductor activo.';
   }
 
+  /// iPhone: permiso para controlar Apple Music (en Android no hace falta).
+  Future<bool> hasMusicAccess() async {
+    try {
+      return await _channel.invokeMethod<bool>('hasMusicAccess') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> requestMusicAccess() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestMusicAccess') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Dos toques al audífono = siguiente, tres = anterior.
   Future<void> setTapGestures(bool enabled) async {
     try {
