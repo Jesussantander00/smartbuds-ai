@@ -145,8 +145,11 @@ class VoiceEngine extends ChangeNotifier {
     error = null;
     final available = await _method.invokeMethod<bool>('isAvailable') ?? false;
     if (!available) {
-      error = 'Falta el modelo de voz. Ejecuta scripts/descargar-modelo-voz.ps1 '
-          'y vuelve a instalar la app.';
+      error = defaultTargetPlatform == TargetPlatform.iOS
+          ? 'El reconocimiento de voz del iPhone no está disponible ahora. '
+              'Revisa Ajustes → Siri y Buscar y que haya conexión.'
+          : 'Falta el modelo de voz. Ejecuta scripts/descargar-modelo-voz.ps1 '
+              'y vuelve a instalar la app.';
       notifyListeners();
       return;
     }

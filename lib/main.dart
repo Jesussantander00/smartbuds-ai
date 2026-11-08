@@ -26,11 +26,12 @@ import 'features/shell/home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final isAndroid = Platform.isAndroid;
+  // Android e iPhone guardan en un archivo propio de la app (sobrevive al cierre).
+  final isNative = Platform.isAndroid || Platform.isIOS;
 
   // Ajustes y perfil musical guardados en el teléfono.
   final settings = AppSettings(
-      store: isAndroid ? FileJsonStore('settings.json') : MemoryJsonStore());
+      store: isNative ? FileJsonStore('settings.json') : MemoryJsonStore());
   await settings.load();
 
   // Cuenta (opcional): solo si Supabase está configurado en secrets.json.
@@ -40,7 +41,7 @@ Future<void> main() async {
       : null;
   final sync = SupabaseSync.fromEnvironment(settings.deviceId, auth: auth);
   final profile = MusicProfile(
-    store: isAndroid ? FileJsonStore('music_profile.json') : MemoryJsonStore(),
+    store: isNative ? FileJsonStore('music_profile.json') : MemoryJsonStore(),
     onEvent: sync == null ? null : (e, t) => sync.push(e, t),
   );
   await profile.load();
@@ -84,7 +85,9 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   @override
   void initState() {
     super.initState();
-    android = Platform.isAndroid ? AndroidMediaSource() : null;
+    // Mismo canal nativo en las dos plataformas: Android (MediaSession) e
+    // iPhone (Apple Music, ver ios/Runner/AppDelegate.swift).
+    android = (Platform.isAndroid || Platform.isIOS) ? AndroidMediaSource() : null;
     final sources = <PlayerSource>[if (android != null) android!];
 
     final finder = YouTubeSearch.fromEnvironment();
@@ -100,6 +103,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       volume: android,
       search: android,
       songFinder: finder,
+      searchPackage: Platform.isIOS ? 'com.apple.Music' : CommandRouter.defaultSearchPackage,
+      searchAppName: Platform.isIOS ? 'Apple Music' : 'YouTube Music',
     );
     controller = DetectedPlayerController(
       connectors: connectors,
@@ -115,7 +120,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       similar: DeezerSimilarArtists(),
     );
 
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isIOS) {
       final v = VoiceEngine(
         onCommand: assistant.handleCommand,
         onSearch: assistant.handleSearch,
@@ -134,7 +139,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
-      if (widget.settings.onboardingDone) unawaited(v.autoStart());
+      if (widget.settings.onboardingDone || Platform.isIOS) unawaited(v.autoStart());
     }
   }
 
@@ -197,7 +202,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
             onHeadphoneTapsChanged: android?.setTapGestures,
             onOpenNotificationAccess: android?.openNotificationAccessSettings,
             platformNote: Platform.isIOS
-                ? 'iOS no permite detectar ni controlar reproductores de otras apps.'
+                ? 'En iPhone, SmartBuds controla Apple Music. iOS no deja controlar '
+                    'otras apps (YouTube Music, Spotify…).'
                 : null,
           );
         },
