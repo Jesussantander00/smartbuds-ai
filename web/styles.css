@@ -192,3 +192,12 @@ body.is-listening .mic-orb::before { animation-duration: 1.6s; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .aurora, .grid, .mic-orb::before, body.is-playing .eq i, body.is-listening .ring { animation: none !important; }
 }
+
+/* Resultados de búsqueda para elegir */
+.results { display: grid; gap: 8px; margin: 10px 0; }
+.result { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px; border-radius: 14px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(0,229,255,.18); color: inherit; min-height: 56px; }
+.result img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; }
+.result span { display: flex; flex-direction: column; min-width: 0; }
+.result b, .result small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result small { opacity: .7; }
