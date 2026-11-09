@@ -236,6 +236,10 @@ class Assistant extends ChangeNotifier {
         await playForgotten();
       case ShareWeekIntent():
         await shareSummary(days: 7);
+      case SimilarIntent():
+        await playSimilar();
+      case WhyIntent():
+        await explainCurrent();
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);
@@ -243,6 +247,48 @@ class Assistant extends ChangeNotifier {
       case SearchPromptIntent() || ArtistPromptIntent() || WakeIntent():
         break; // lo resuelve el VoiceEngine (pregunta y escucha)
     }
+  }
+
+  // ---------------------------------------- Parecidas y «¿por qué esta?»
+
+  /// Canciones parecidas a la que suena: artistas similares (Deezer) y su
+  /// canción más popular. Sin datos de audio: el parecido es por artista.
+  Future<List<({String artist, String title, String? picture})>> similarToCurrent() async {
+    final a = active?.artist;
+    final s = similar;
+    if (a == null || a.isEmpty || s == null) return const [];
+    try {
+      final list = await s.similarTo(a, max: 8);
+      return [
+        for (final x in list)
+          if (x.topTracks.isNotEmpty && !(settings?.isBlocked(null, x.name) ?? false))
+            (artist: x.name, title: x.topTracks.first, picture: x.picture),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> playSimilar() async {
+    final list = await similarToCurrent();
+    if (list.isEmpty) {
+      await _say('No encontré algo parecido. Prueba con «pon algo nuevo».');
+      return;
+    }
+    final pick = list[_random.nextInt(min(4, list.length))];
+    await _say('Te pongo ${pick.title}, de ${pick.artist}.');
+    await handleSearch(SearchRequest('${pick.title} ${pick.artist}'));
+  }
+
+  Future<void> explainCurrent() async {
+    final a = active;
+    final title = a?.title;
+    if (a == null || title == null || title.isEmpty) {
+      await _say('No hay música sonando.');
+      return;
+    }
+    final reasons = profile.whyYouLike(MusicProfile.keyFor(title, a.artist));
+    await _say(reasons.take(2).join(' '));
   }
 
   // --------------------------------------------------- Volumen exacto
@@ -496,6 +542,7 @@ class Assistant extends ChangeNotifier {
   // --------------------------------------------- Radio, anuncios, aburrimiento
 
   Future<void> setRadio(bool on) async {
+    if (on) radioSongs = 0;
     settings?.update(radioMode: on);
     if (on) {
       await voice?.speak('Radio activada. Pongo música sin parar.', force: true);
@@ -506,8 +553,19 @@ class Assistant extends ChangeNotifier {
   }
 
   /// Siguiente canción de la radio: 70 % favoritas, 30 % descubrimientos.
+  /// Canciones puestas por la radio en esta sesión (para el descubrimiento gradual).
+  int radioSongs = 0;
+
+  /// Proporción de canciones nuevas: fija 30 %, o gradual de 10 % a 50 %.
+  double get noveltyRatio {
+    if (!(settings?.gradualDiscovery ?? true)) return 0.3;
+    return (0.1 + 0.1 * (radioSongs ~/ 3)).clamp(0.1, 0.5).toDouble();
+  }
+
   Future<void> nextRadioSong() async {
-    if (_random.nextDouble() < 0.7 && profile.pickFavorite() != null) {
+    final novelty = noveltyRatio;
+    radioSongs++;
+    if (_random.nextDouble() >= novelty && profile.pickFavorite() != null) {
       await playFavorite();
     } else {
       await discover();

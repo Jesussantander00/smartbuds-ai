@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/command_parser.dart';
+import '../music_profile/insights.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../../core/ui/futuristic.dart';
 import '../assistant/assistant.dart';
@@ -417,6 +418,16 @@ class _NowPlayingState extends State<_NowPlaying> {
                   tooltip: 'Nunca más esta',
                   icon: const Icon(Icons.block_rounded),
                   onPressed: () => widget.assistant.blockCurrent(),
+                ),
+                IconButton(
+                  tooltip: 'Parecidas a esta',
+                  icon: const Icon(Icons.auto_awesome_motion_rounded),
+                  onPressed: () => showSimilarSheet(context, widget.assistant),
+                ),
+                IconButton(
+                  tooltip: '¿Por qué esta?',
+                  icon: const Icon(Icons.insights_rounded),
+                  onPressed: () => showWhySheet(context, widget.assistant),
                 ),
                 IconButton(
                   tooltip: 'Compartir',

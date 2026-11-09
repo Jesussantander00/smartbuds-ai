@@ -167,6 +167,8 @@ class VoiceEngine extends ChangeNotifier {
         MultiIntent(:final parts) => parts.map(describe).join(' + '),
         ForgottenIntent() => 'Favoritas olvidadas',
         ShareWeekIntent() => 'Compartir mi semana',
+        SimilarIntent() => 'Algo parecido',
+        WhyIntent() => '¿Por qué esta?',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -398,6 +400,8 @@ class VoiceEngine extends ChangeNotifier {
             BlockIntent() ||
             ForgottenIntent() ||
             ShareWeekIntent() ||
+            SimilarIntent() ||
+            WhyIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

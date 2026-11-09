@@ -163,6 +163,16 @@ class ShareWeekIntent extends VoiceIntent {
   const ShareWeekIntent();
 }
 
+/// «Pon algo parecido»: una canción de un artista parecido al que suena.
+class SimilarIntent extends VoiceIntent {
+  const SimilarIntent();
+}
+
+/// «¿Por qué me gusta esta?»: SmartBuds explica lo que sabe de ella.
+class WhyIntent extends VoiceIntent {
+  const WhyIntent();
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -317,6 +327,14 @@ class CommandParser {
     'pon favoritas olvidadas', 'favoritas olvidadas', 'mis favoritas olvidadas',
     'algo que no escucho hace rato', 'pon algo que no escucho hace rato',
   };
+  static const _similar = {
+    'pon algo parecido', 'algo parecido', 'pon una parecida', 'algo parecido a esta',
+    'pon algo parecido a esta', 'parecidas a esta',
+  };
+  static const _why = {
+    'por que esta', 'por que me gusta esta', 'por que me gusta', 'por que pusiste esta',
+    'por que me gusta esta cancion',
+  };
   static const _shareWeek = {'comparte mi semana', 'comparte mi resumen'};
 
   /// Números dichos en palabras para el volumen exacto.
@@ -371,6 +389,8 @@ class CommandParser {
     'nunca más este artista', 'bloquea este artista',
     'pon favoritas olvidadas', 'mis favoritas olvidadas', 'algo que no escucho hace rato',
     'comparte mi semana',
+    'pon algo parecido', 'algo parecido a esta', 'pon una parecida',
+    'por qué esta', 'por qué me gusta esta', 'por qué pusiste esta',
     'volumen al máximo', 'volumen al mínimo', 'volumen a la mitad',
     'volumen al diez', 'volumen al veinte', 'volumen al treinta', 'volumen al cuarenta',
     'volumen al cincuenta', 'volumen al sesenta', 'volumen al setenta',
@@ -408,6 +428,8 @@ class CommandParser {
     if (_blockArtist.contains(text)) return const BlockIntent(artist: true);
     if (_forgotten.contains(text)) return const ForgottenIntent();
     if (_shareWeek.contains(text)) return const ShareWeekIntent();
+    if (_similar.contains(text)) return const SimilarIntent();
+    if (_why.contains(text)) return const WhyIntent();
     for (final p in const ['despues pon ', 'luego pon ', 'en cola pon ', 'pon despues ']) {
       if (text.startsWith(p) && text.length > p.length + 2) {
         return QueueIntent(text.substring(p.length).trim());

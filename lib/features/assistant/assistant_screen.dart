@@ -72,6 +72,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Nunca más esta»', 'No vuelve a sonar. «Nunca más este artista» bloquea al artista'),
     ('«Pon favoritas olvidadas»', 'Lo que te encantaba y hace rato no suena'),
     ('«Comparte mi semana»', 'Tu resumen musical para WhatsApp'),
+    ('«Pon algo parecido»', 'Una canción de un artista parecido al que suena'),
+    ('«¿Por qué esta?»', 'Te dice qué sabe SmartBuds de la canción que suena'),
   ];
 
   Future<void> _editWake(BuildContext context) async {
@@ -225,6 +227,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   settings.radioMode, (v) => settings.update(radioMode: v)),
               _switch('Anunciar cada canción', 'Dice suavemente el nombre de la canción nueva.',
                   settings.announceSongs, (v) => settings.update(announceSongs: v)),
+              _switch('Descubrimiento gradual',
+                  'La radio empieza con tus conocidas y va metiendo más canciones nuevas.',
+                  settings.gradualDiscovery, (v) => settings.update(gradualDiscovery: v)),
               if (_match('Nivel de descubrimiento', 'joyas ocultas conocidos'))
                 ListTile(
                   title: const Text('Nivel de descubrimiento'),
