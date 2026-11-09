@@ -48,7 +48,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
 
   /// Apariencia: 'system' | 'light' | 'dark', y color principal (ARGB).
   String themeMode = 'light';
-  int seedColor = 0xFF2F8F83;
+  int seedColor = 0xFFE8833A;
 
   /// Respuestas habladas cortas (solo la primera frase).
   bool shortReplies = false;
@@ -71,6 +71,31 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
 
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
+
+  /// Audífonos preferidos: si hay, SmartBuds solo reacciona (volumen, retomar) con ellos.
+  String? preferredHeadphone;
+
+  void setPreferredHeadphone(String? name) {
+    preferredHeadphone = name;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Historial de conexiones de audífonos (más reciente primero, máx. 60).
+  List<HeadphoneEvent> connectionLog = [];
+
+  void logConnection(bool connected, String? name, DateTime at) {
+    connectionLog = [HeadphoneEvent(at, connected, name), ...connectionLog].take(60).toList();
+    _persist();
+    notifyListeners();
+  }
+
+  /// Conexión inestable: 3 o más desconexiones en los últimos 15 minutos.
+  bool unstableConnection(DateTime now) =>
+      connectionLog
+          .where((e) => !e.connected && now.difference(e.at) < const Duration(minutes: 15))
+          .length >=
+      3;
 
   /// Últimos audífonos usados (nombre).
   String? lastHeadphone;
@@ -162,16 +187,22 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     resumeOnHeadphones = d['resumeOnHeadphones'] != false;
     errorReports = d['errorReports'] != false;
     themeMode = (d['themeMode'] as String?) ?? 'light';
-    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF2F8F83;
-    // Identidad visual nueva (clara, verde petróleo): se aplica una vez.
-    if ((d['designVersion'] as num?) != 3) {
+    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFFE8833A;
+    // Identidad visual nueva (vidrio cálido): se aplica una vez.
+    if ((d['designVersion'] as num?) != 4) {
       themeMode = 'light';
-      seedColor = 0xFF2F8F83;
+      seedColor = 0xFFE8833A;
     }
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
     gradualDiscovery = d['gradualDiscovery'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
+    preferredHeadphone = d['preferredHeadphone'] as String?;
+    connectionLog = [
+      for (final e in (d['connectionLog'] as List?) ?? const [])
+        if (e is Map && e['at'] is String)
+          HeadphoneEvent(DateTime.parse(e['at'] as String), e['c'] == true, e['n'] as String?),
+    ];
     discoveryLevel = (d['discoveryLevel'] as num?)?.toInt() ?? 1;
     pauseOnUnplug = d['pauseOnUnplug'] != false;
     pauseOnCalls = d['pauseOnCalls'] != false;
@@ -281,10 +312,14 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'errorReports': errorReports,
         'themeMode': themeMode,
         'seedColor': seedColor,
-        'designVersion': 3,
+        'designVersion': 4,
         'shortReplies': shortReplies,
         'gradualDiscovery': gradualDiscovery,
         'lastHeadphone': lastHeadphone,
+        'preferredHeadphone': preferredHeadphone,
+        'connectionLog': [
+          for (final e in connectionLog) {'at': e.at.toIso8601String(), 'c': e.connected, 'n': e.name},
+        ],
         'discoveryLevel': discoveryLevel,
         'pauseOnUnplug': pauseOnUnplug,
         'pauseOnCalls': pauseOnCalls,
@@ -305,4 +340,12 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'))
         .join();
   }
+}
+
+/// Una conexión o desconexión de audífonos.
+class HeadphoneEvent {
+  const HeadphoneEvent(this.at, this.connected, this.name);
+  final DateTime at;
+  final bool connected;
+  final String? name;
 }

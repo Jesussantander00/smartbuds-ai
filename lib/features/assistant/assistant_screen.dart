@@ -167,7 +167,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
       body: ListenableBuilder(
         listenable: Listenable.merge([settings, if (voice != null) voice!]),
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 120),
           children: [
             if (voice != null && _filter.isEmpty) _hero(context, voice!),
             if (widget.assistant != null && _filter.isEmpty) _quick(context),
@@ -338,7 +338,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       Wrap(
                         spacing: 12,
                         children: [
-                          for (final c in const [0xFF2F8F83, 0xFF3D6FB6, 0xFF7A5AC8, 0xFFC0567A, 0xFFE6A85C])
+                          for (final c in const [0xFFE8833A, 0xFF2F6FE4, 0xFF7C4DFF, 0xFFE5484D, 0xFF1FA889])
                             GestureDetector(
                               onTap: () => settings.update(seedColor: c),
                               child: CircleAvatar(

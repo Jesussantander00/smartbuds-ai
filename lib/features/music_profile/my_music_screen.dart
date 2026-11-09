@@ -49,7 +49,7 @@ class MyMusicScreen extends StatelessWidget {
           final likes = profile.tracks.values.where((t) => t.likes > 0).length;
           final recent = profile.history.reversed.take(20).toList();
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
             children: [
               if (auth != null) ...[
                 AccountCard(auth: auth!),
