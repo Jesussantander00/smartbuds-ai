@@ -113,6 +113,7 @@ class Assistant extends ChangeNotifier {
 
   Future<void> refreshHeadphone() async {
     final name = await media?.outputDevice();
+    if (name != null) settings?.setLastHeadphone(name);
     if (name != headphoneName) {
       headphoneName = name;
       notifyListeners();
@@ -273,6 +274,12 @@ class Assistant extends ChangeNotifier {
   void removeFromQueue(int index) {
     if (index < 0 || index >= queue.length) return;
     queue.removeAt(index);
+    notifyListeners();
+  }
+
+  void moveInQueue(int from, int to) {
+    if (from < 0 || from >= queue.length || to < 0 || to >= queue.length) return;
+    queue.insert(to, queue.removeAt(from));
     notifyListeners();
   }
 

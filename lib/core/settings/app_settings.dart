@@ -48,7 +48,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
 
   /// Apariencia: 'system' | 'light' | 'dark', y color principal (ARGB).
   String themeMode = 'dark';
-  int seedColor = 0xFF00B4D8;
+  int seedColor = 0xFF20DDF2;
 
   /// Respuestas habladas cortas (solo la primera frase).
   bool shortReplies = false;
@@ -67,6 +67,16 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
 
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
+
+  /// Últimos audífonos usados (nombre).
+  String? lastHeadphone;
+
+  void setLastHeadphone(String name) {
+    if (name == lastHeadphone) return;
+    lastHeadphone = name;
+    _persist();
+    notifyListeners();
+  }
 
   /// Volumen preferido por audífono (nombre → %).
   Map<String, int> headphoneVolumes = {};
@@ -148,9 +158,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     resumeOnHeadphones = d['resumeOnHeadphones'] != false;
     errorReports = d['errorReports'] != false;
     themeMode = (d['themeMode'] as String?) ?? 'dark';
-    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF00B4D8;
+    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF20DDF2;
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
+    lastHeadphone = d['lastHeadphone'] as String?;
     discoveryLevel = (d['discoveryLevel'] as num?)?.toInt() ?? 1;
     pauseOnUnplug = d['pauseOnUnplug'] != false;
     pauseOnCalls = d['pauseOnCalls'] != false;
@@ -259,6 +270,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'themeMode': themeMode,
         'seedColor': seedColor,
         'shortReplies': shortReplies,
+        'lastHeadphone': lastHeadphone,
         'discoveryLevel': discoveryLevel,
         'pauseOnUnplug': pauseOnUnplug,
         'pauseOnCalls': pauseOnCalls,
