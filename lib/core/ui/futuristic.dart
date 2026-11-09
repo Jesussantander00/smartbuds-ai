@@ -2,17 +2,39 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// SmartBuds 2.0: reproductor premium. Fondo espacio uniforme, superficies
-/// sobrias, cian y violeta como acentos; el rosa solo indica «escuchando».
-/// Los degradados se reservan para las acciones importantes.
+/// Identidad visual de SmartBuds: producto musical premium, claro y limpio.
+///
+/// Fondo #F4F6F8, tarjetas blancas, texto #17212B, verde petróleo #2F8F83
+/// para acciones, menta #E3F3EF para superficies secundarias y naranja suave
+/// #E6A85C solo para avisos y detalles (p. ej. «escuchando»).
+///
+/// Los nombres antiguos (`Neon.cyan`, `NeonCard`…) se mantienen para no
+/// romper el resto de la app, pero ya no hay neón.
 class Neon {
-  static const cyan = Color(0xFF20DDF2);
-  static const violet = Color(0xFF9567FF);
-  static const pink = Color(0xFFFF4FD8);
-  static const space0 = Color(0xFF070B16);
-  static const space1 = Color(0xFF0C1324);
-  static const surface = Color(0xFF101A2B);
-  static const surfaceHigh = Color(0xFF16233A);
+  /// Verde petróleo: color principal (botones, acciones, progreso).
+  static const cyan = Color(0xFF2F8F83);
+
+  /// Verde petróleo profundo (degradados de acciones importantes).
+  static const violet = Color(0xFF1F6F66);
+
+  /// Naranja suave: avisos y detalles («escuchando», batería baja).
+  static const pink = Color(0xFFE6A85C);
+
+  /// Texto principal.
+  static const ink = Color(0xFF17212B);
+
+  /// Fondo de la app.
+  static const space0 = Color(0xFFF4F6F8);
+  static const space1 = Color(0xFFFFFFFF);
+
+  /// Tarjetas y superficies secundarias.
+  static const surface = Color(0xFFFFFFFF);
+  static const surfaceHigh = Color(0xFFE3F3EF);
+
+  /// Modo oscuro opcional, misma identidad.
+  static const darkBg = Color(0xFF0F1518);
+  static const darkCard = Color(0xFF172026);
+  static const darkPrimary = Color(0xFF4DB6A9);
 
   static const gradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -20,191 +42,145 @@ class Neon {
     colors: [cyan, violet],
   );
 
-  static List<BoxShadow> glow([Color color = cyan, double strength = 1]) => [
-        BoxShadow(color: color.withValues(alpha: .35 * strength), blurRadius: 24),
-        BoxShadow(color: violet.withValues(alpha: .18 * strength), blurRadius: 60),
+  /// Sombra suave de tarjeta.
+  static List<BoxShadow> glow([Color color = ink, double strength = 1]) => [
+        BoxShadow(
+          color: color.withValues(alpha: .06 * strength),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
+        ),
       ];
 }
 
-/// Tema: en modo oscuro, fondo transparente (se ve el espacio animado),
-/// tarjetas de vidrio con borde de neón y barra inferior translúcida.
 ThemeData smartBudsTheme(Brightness brightness, Color seed) {
   final dark = brightness == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+  final primary = dark ? Neon.darkPrimary : Neon.cyan;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: brightness,
+    primary: seed == Neon.cyan ? primary : null,
+    surface: dark ? Neon.darkCard : Neon.surface,
+    onSurface: dark ? const Color(0xFFE7ECEF) : Neon.ink,
+    secondaryContainer: dark ? const Color(0xFF1E3A36) : Neon.surfaceHigh,
+    tertiary: Neon.pink,
+  );
   final base = ThemeData(colorScheme: scheme, useMaterial3: true, brightness: brightness);
-  if (!dark) return base;
-  final line = Colors.white.withValues(alpha: .08);
+  final bg = dark ? Neon.darkBg : Neon.space0;
+  final line = dark ? Colors.white.withValues(alpha: .08) : const Color(0xFFE3E8EC);
+  final text = base.textTheme.apply(
+    bodyColor: scheme.onSurface,
+    displayColor: scheme.onSurface,
+  );
   return base.copyWith(
-    scaffoldBackgroundColor: Colors.transparent,
-    canvasColor: Neon.space1,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+    scaffoldBackgroundColor: bg,
+    canvasColor: bg,
+    textTheme: text.copyWith(
+      headlineSmall: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.3),
+      titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+      titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: bg,
       surfaceTintColor: Colors.transparent,
+      foregroundColor: scheme.onSurface,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        letterSpacing: 1.6,
-        color: Colors.white,
+        color: scheme.onSurface,
       ),
     ),
     cardTheme: CardThemeData(
-      color: Neon.surface.withValues(alpha: .82),
+      color: scheme.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: line),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: Neon.space0.withValues(alpha: .92),
-      height: 68,
+      backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: Neon.cyan.withValues(alpha: .16),
-      labelTextStyle: WidgetStatePropertyAll(
-        TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: .85)),
+      indicatorColor: scheme.secondaryContainer,
+      elevation: 0,
+      height: 68,
+      iconTheme: WidgetStateProperty.resolveWith(
+        (s) => IconThemeData(color: s.contains(WidgetState.selected) ? primary : scheme.onSurfaceVariant),
+      ),
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (s) => TextStyle(
+          fontSize: 12,
+          fontWeight: s.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+          color: s.contains(WidgetState.selected) ? primary : scheme.onSurfaceVariant,
+        ),
       ),
     ),
     chipTheme: base.chipTheme.copyWith(
-      backgroundColor: Colors.white.withValues(alpha: .06),
+      backgroundColor: scheme.surface,
       side: BorderSide(color: line),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     dividerColor: line,
+    dividerTheme: DividerThemeData(color: line),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(48, 52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 52),
+        side: BorderSide(color: line),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     ),
     sliderTheme: base.sliderTheme.copyWith(
-      activeTrackColor: Neon.cyan,
-      inactiveTrackColor: Colors.white.withValues(alpha: .12),
-      thumbColor: Colors.white,
+      activeTrackColor: primary,
+      inactiveTrackColor: primary.withValues(alpha: .15),
+      thumbColor: primary,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.black.withValues(alpha: .35),
+      fillColor: scheme.surface,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: line),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: line),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Neon.cyan),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: primary, width: 1.5),
       ),
     ),
   );
 }
 
-/// Fondo espacial con auroras de neón que se mueven despacio.
-/// En modo claro es un degradado suave, sin animación.
-class SpaceBackground extends StatefulWidget {
+/// Fondo de la app: color liso, sin auroras (se mantiene por compatibilidad).
+class SpaceBackground extends StatelessWidget {
   const SpaceBackground({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<SpaceBackground> createState() => _SpaceBackgroundState();
+  Widget build(BuildContext context) =>
+      ColoredBox(color: Theme.of(context).scaffoldBackgroundColor, child: child);
 }
 
-class _SpaceBackgroundState extends State<SpaceBackground> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 24))..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    if (!dark) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Theme.of(context).colorScheme.surface, Theme.of(context).colorScheme.surfaceContainer],
-          ),
-        ),
-        child: widget.child,
-      );
-    }
-    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (reduce) _c.stop();
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0, -1.1),
-              radius: 1.4,
-              colors: [Neon.space1, Neon.space0],
-            ),
-          ),
-        ),
-        AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) {
-            final t = Curves.easeInOut.transform(_c.value);
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                _Blob(color: Neon.cyan, alignment: Alignment(-1.2 + t * .5, -1.1 + t * .3), size: 420, opacity: .14),
-                _Blob(color: Neon.violet, alignment: Alignment(1.3 - t * .4, 1.2 - t * .3), size: 480, opacity: .12),
-                              ],
-            );
-          },
-        ),
-        widget.child,
-      ],
-    );
-  }
-}
-
-class _Blob extends StatelessWidget {
-  const _Blob({required this.color, required this.alignment, required this.size, required this.opacity});
-
-  final Color color;
-  final Alignment alignment;
-  final double size;
-  final double opacity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: IgnorePointer(
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color.withValues(alpha: opacity), color.withValues(alpha: 0)],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Ecualizador de neón: las barras se mueven mientras suena música.
+/// Ecualizador discreto: barras que se mueven mientras suena música.
 class NeonEqualizer extends StatefulWidget {
-  const NeonEqualizer({super.key, required this.playing, this.height = 34});
+  const NeonEqualizer({super.key, required this.playing, this.height = 34, this.color});
 
   final bool playing;
   final double height;
+  final Color? color;
 
   @override
   State<NeonEqualizer> createState() => _NeonEqualizerState();
@@ -236,6 +212,9 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     const phases = [0.0, .2, .45, .7, .3];
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final w = (widget.height / 7).clamp(2.0, 6.0).toDouble();
     return SizedBox(
       height: widget.height,
       child: AnimatedBuilder(
@@ -246,19 +225,14 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
           children: [
             for (final p in phases)
               Container(
-                width: 5,
-                margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                height: widget.playing
-                    ? 6 + (widget.height - 6) * (.5 + .5 * math.sin((_c.value + p) * 2 * math.pi)).abs()
-                    : 6,
+                width: w,
+                margin: EdgeInsets.symmetric(horizontal: w * .3),
+                height: widget.playing && !reduce
+                    ? w + (widget.height - w) * (.5 + .5 * math.sin((_c.value + p) * 2 * math.pi)).abs()
+                    : (widget.playing ? widget.height * .6 : w),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
-                  gradient: const LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Neon.cyan, Neon.violet],
-                  ),
-                  boxShadow: [BoxShadow(color: Neon.cyan.withValues(alpha: .5), blurRadius: 8)],
+                  borderRadius: BorderRadius.circular(w / 2),
+                  color: color,
                 ),
               ),
           ],
@@ -268,7 +242,8 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
   }
 }
 
-/// Orbe del micrófono: anillo que gira y ondas mientras escucha.
+/// Botón del micrófono: círculo verde petróleo; mientras escucha, ondas
+/// suaves en naranja. Apagado: gris claro.
 class MicOrb extends StatefulWidget {
   const MicOrb({
     super.key,
@@ -279,7 +254,6 @@ class MicOrb extends StatefulWidget {
     this.size = 150,
   });
 
-  /// Tamaño total (el diseño se escala desde 150).
   final double size;
   final bool on;
   final bool listening;
@@ -292,7 +266,7 @@ class MicOrb extends StatefulWidget {
 
 class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
 
   @override
   void dispose() {
@@ -302,86 +276,65 @@ class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final active = widget.on && widget.listening;
-    final core = active ? Neon.pink : Neon.cyan;
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final core = widget.size * .62;
     return SizedBox(
       width: widget.size,
       height: widget.size,
-      child: FittedBox(
-        child: SizedBox(
-          width: 150,
-          height: 150,
-          child: AnimatedBuilder(
+      child: AnimatedBuilder(
         animation: _c,
         builder: (context, _) => Stack(
           alignment: Alignment.center,
           children: [
-            // Ondas cuando escucha.
-            if (active)
-              for (final d in const [0.0, .33, .66])
+            if (active && !reduce)
+              for (final d in const [0.0, .5])
                 Opacity(
-                  opacity: math.max(0.0, math.min(1.0, 1 - ((_c.value + d) % 1))) * .8,
+                  opacity: (1 - ((_c.value + d) % 1)) * .55,
                   child: Container(
-                    width: 100 + 50 * ((_c.value + d) % 1),
-                    height: 100 + 50 * ((_c.value + d) % 1),
+                    width: core + (widget.size - core) * ((_c.value + d) % 1),
+                    height: core + (widget.size - core) * ((_c.value + d) % 1),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Neon.pink.withValues(alpha: .6), width: 2),
+                      color: Neon.pink.withValues(alpha: .35),
                     ),
                   ),
                 ),
-            // Anillo giratorio.
-            Transform.rotate(
-              angle: _c.value * 2 * math.pi * (active ? 2 : .5),
-              child: Container(
-                width: 132,
-                height: 132,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: SweepGradient(
-                    colors: [Colors.transparent, Neon.cyan, Colors.transparent, Neon.pink, Colors.transparent],
-                    stops: [0, .2, .45, .7, 1],
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              elevation: widget.on ? 6 : 1,
+              shadowColor: Neon.cyan.withValues(alpha: .4),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: widget.onTap,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: core,
+                  height: core,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: widget.on ? Neon.gradient : null,
+                    color: widget.on ? null : scheme.surfaceContainerHighest,
+                    border: active ? Border.all(color: Neon.pink, width: 3) : null,
+                  ),
+                  child: Icon(
+                    widget.icon ?? Icons.mic,
+                    size: core * .42,
+                    color: widget.on ? Colors.white : scheme.onSurfaceVariant,
                   ),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Neon.space1),
-                  ),
-                ),
-              ),
-            ),
-            // Núcleo.
-            GestureDetector(
-              onTap: widget.onTap,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    center: const Alignment(-.35, -.35),
-                    colors: widget.on
-                        ? [Colors.white.withValues(alpha: .85), core, Neon.violet]
-                        : [const Color(0xFF6B7A99), const Color(0xFF2A3350)],
-                    stops: const [0, .45, 1],
-                  ),
-                  boxShadow: widget.on ? Neon.glow(core) : null,
-                ),
-                child: Icon(widget.icon ?? Icons.mic, size: 44, color: const Color(0xFF050616)),
               ),
             ),
           ],
-        ),
-      ),
         ),
       ),
     );
   }
 }
 
-/// Tarjeta con degradado de neón (para «Sonando ahora»).
+/// Tarjeta principal: blanca, bordes suaves y sombra discreta.
 class NeonCard extends StatelessWidget {
   const NeonCard({super.key, required this.child, this.padding = const EdgeInsets.all(20)});
 
@@ -390,26 +343,16 @@ class NeonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       padding: padding,
       decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: dark
-              ? [Neon.surfaceHigh, Neon.surface]
-              : [
-                  Theme.of(context).colorScheme.primaryContainer,
-                  Theme.of(context).colorScheme.tertiaryContainer,
-                ],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: dark ? .08 : .15)),
-        boxShadow: dark
-            ? [BoxShadow(color: Colors.black.withValues(alpha: .35), blurRadius: 30, offset: const Offset(0, 12))]
-            : null,
+        border: Border.all(color: theme.dividerColor),
+        boxShadow: dark ? null : Neon.glow(),
       ),
       child: child,
     );

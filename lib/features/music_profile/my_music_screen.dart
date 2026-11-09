@@ -463,9 +463,9 @@ class _IdentityCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Neon.cyan.withValues(alpha: .22), Neon.violet.withValues(alpha: .28)],
+          colors: [theme.colorScheme.secondaryContainer, theme.colorScheme.surface],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
@@ -473,7 +473,7 @@ class _IdentityCard extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Neon.gradient),
-            child: Icon(icon, size: 34, color: Neon.space0),
+            child: Icon(icon, size: 34, color: Colors.white),
           ),
           const SizedBox(width: 16),
           Expanded(

@@ -262,7 +262,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                 tooltip: label,
                 iconSize: 40,
                 padding: const EdgeInsets.all(14),
-                color: Neon.space0,
+                color: Colors.white,
                 onPressed: s == null || busy ? null : () => widget.controller.send(cmd),
                 icon: Icon(icon),
               ),
@@ -295,7 +295,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withValues(alpha: .45),
+                          color: Colors.black.withValues(alpha: .12),
                           blurRadius: 36,
                           offset: const Offset(0, 16)),
                     ],
@@ -304,8 +304,8 @@ class _NowPlayingState extends State<_NowPlaying> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              Neon.cyan.withValues(alpha: .25),
-                              Neon.violet.withValues(alpha: .3),
+                              Neon.cyan.withValues(alpha: .85),
+                              Neon.violet,
                             ],
                           )
                         : null,
@@ -318,7 +318,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                           child: playing
                               ? const NeonEqualizer(playing: true, height: 64)
                               : Icon(Icons.music_note_rounded,
-                                  size: 96, color: Colors.white.withValues(alpha: .5)),
+                                  size: 96, color: Colors.white.withValues(alpha: .9)),
                         ),
                 ),
               );
@@ -440,16 +440,16 @@ class _MicStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (IconData icon, Color color, String text) = !voice.enabled
-        ? (Icons.mic_off_rounded, Colors.white54, 'Micrófono apagado · toca el botón para hablar')
+        ? (Icons.mic_off_rounded, theme.colorScheme.onSurfaceVariant, 'Micrófono apagado · toca el botón para hablar')
         : voice.error != null
             ? (Icons.error_outline, theme.colorScheme.error, voice.error!)
             : voice.askingForSong
-                ? (Icons.hearing, Neon.pink, 'Dime la canción…')
+                ? (Icons.hearing, const Color(0xFFB9762A), 'Dime la canción…')
                 : voice.paused
                     ? (Icons.headset_off, Colors.orangeAccent, 'En pausa: conecta tus audífonos')
                     : voice.listening
-                        ? (Icons.graphic_eq, Neon.pink, 'Escuchando')
-                        : (Icons.hourglass_top, Colors.white70, 'Preparando el micrófono…');
+                        ? (Icons.graphic_eq, const Color(0xFFB9762A), 'Escuchando')
+                        : (Icons.hourglass_top, theme.colorScheme.onSurfaceVariant, 'Preparando el micrófono…');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -491,7 +491,7 @@ class _ConnectionPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Colors.white.withValues(alpha: .06),
+          color: Theme.of(context).colorScheme.secondaryContainer,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -501,8 +501,8 @@ class _ConnectionPill extends StatelessWidget {
               height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: ok ? Neon.cyan : Colors.white30,
-                boxShadow: ok ? [const BoxShadow(color: Neon.cyan, blurRadius: 8)] : null,
+                color: ok ? Neon.cyan : Theme.of(context).colorScheme.outline,
+                boxShadow: null,
               ),
             ),
             const SizedBox(width: 6),

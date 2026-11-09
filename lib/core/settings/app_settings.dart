@@ -47,8 +47,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   bool errorReports = true;
 
   /// Apariencia: 'system' | 'light' | 'dark', y color principal (ARGB).
-  String themeMode = 'dark';
-  int seedColor = 0xFF20DDF2;
+  String themeMode = 'light';
+  int seedColor = 0xFF2F8F83;
 
   /// Respuestas habladas cortas (solo la primera frase).
   bool shortReplies = false;
@@ -157,8 +157,13 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     announceSongs = d['announceSongs'] == true;
     resumeOnHeadphones = d['resumeOnHeadphones'] != false;
     errorReports = d['errorReports'] != false;
-    themeMode = (d['themeMode'] as String?) ?? 'dark';
-    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF20DDF2;
+    themeMode = (d['themeMode'] as String?) ?? 'light';
+    seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF2F8F83;
+    // Identidad visual nueva (clara, verde petróleo): se aplica una vez.
+    if ((d['designVersion'] as num?) != 3) {
+      themeMode = 'light';
+      seedColor = 0xFF2F8F83;
+    }
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
     lastHeadphone = d['lastHeadphone'] as String?;
@@ -269,6 +274,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'errorReports': errorReports,
         'themeMode': themeMode,
         'seedColor': seedColor,
+        'designVersion': 3,
         'shortReplies': shortReplies,
         'lastHeadphone': lastHeadphone,
         'discoveryLevel': discoveryLevel,
