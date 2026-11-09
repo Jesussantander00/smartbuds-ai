@@ -2,20 +2,22 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Estilo futurista de SmartBuds: espacio oscuro, vidrio y neón.
-/// Los mismos colores que la página web (cian → violeta → rosa).
+/// SmartBuds 2.0: reproductor premium. Fondo espacio uniforme, superficies
+/// sobrias, cian y violeta como acentos; el rosa solo indica «escuchando».
+/// Los degradados se reservan para las acciones importantes.
 class Neon {
-  static const cyan = Color(0xFF00F0FF);
-  static const violet = Color(0xFF8B5CFF);
-  static const pink = Color(0xFFFF2BD6);
-  static const space0 = Color(0xFF04050D);
-  static const space1 = Color(0xFF0A0F2A);
+  static const cyan = Color(0xFF20DDF2);
+  static const violet = Color(0xFF9567FF);
+  static const pink = Color(0xFFFF4FD8);
+  static const space0 = Color(0xFF070B16);
+  static const space1 = Color(0xFF0C1324);
+  static const surface = Color(0xFF101A2B);
+  static const surfaceHigh = Color(0xFF16233A);
 
   static const gradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [cyan, violet, pink],
-    stops: [0, .55, 1],
+    colors: [cyan, violet],
   );
 
   static List<BoxShadow> glow([Color color = cyan, double strength = 1]) => [
@@ -31,7 +33,7 @@ ThemeData smartBudsTheme(Brightness brightness, Color seed) {
   final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
   final base = ThemeData(colorScheme: scheme, useMaterial3: true, brightness: brightness);
   if (!dark) return base;
-  final line = Neon.cyan.withValues(alpha: .18);
+  final line = Colors.white.withValues(alpha: .08);
   return base.copyWith(
     scaffoldBackgroundColor: Colors.transparent,
     canvasColor: Neon.space1,
@@ -48,7 +50,7 @@ ThemeData smartBudsTheme(Brightness brightness, Color seed) {
       ),
     ),
     cardTheme: CardThemeData(
-      color: Colors.white.withValues(alpha: .055),
+      color: Neon.surface.withValues(alpha: .82),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -57,9 +59,10 @@ ThemeData smartBudsTheme(Brightness brightness, Color seed) {
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: const Color(0xCC0A0E24),
+      backgroundColor: Neon.space0.withValues(alpha: .92),
+      height: 68,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: Neon.cyan.withValues(alpha: .18),
+      indicatorColor: Neon.cyan.withValues(alpha: .16),
       labelTextStyle: WidgetStatePropertyAll(
         TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: .85)),
       ),
@@ -69,6 +72,17 @@ ThemeData smartBudsTheme(Brightness brightness, Color seed) {
       side: BorderSide(color: line),
     ),
     dividerColor: line,
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(48, 52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    sliderTheme: base.sliderTheme.copyWith(
+      activeTrackColor: Neon.cyan,
+      inactiveTrackColor: Colors.white.withValues(alpha: .12),
+      thumbColor: Colors.white,
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.black.withValues(alpha: .35),
@@ -145,10 +159,9 @@ class _SpaceBackgroundState extends State<SpaceBackground> with SingleTickerProv
             return Stack(
               fit: StackFit.expand,
               children: [
-                _Blob(color: Neon.cyan, alignment: Alignment(-1.2 + t * .5, -1.1 + t * .3), size: 420, opacity: .28),
-                _Blob(color: Neon.violet, alignment: Alignment(1.3 - t * .4, 1.2 - t * .3), size: 480, opacity: .26),
-                _Blob(color: Neon.pink, alignment: Alignment(.6 - t * .6, .1 + t * .2), size: 260, opacity: .14),
-              ],
+                _Blob(color: Neon.cyan, alignment: Alignment(-1.2 + t * .5, -1.1 + t * .3), size: 420, opacity: .14),
+                _Blob(color: Neon.violet, alignment: Alignment(1.3 - t * .4, 1.2 - t * .3), size: 480, opacity: .12),
+                              ],
             );
           },
         ),
@@ -243,7 +256,7 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
                   gradient: const LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Neon.cyan, Neon.violet, Neon.pink],
+                    colors: [Neon.cyan, Neon.violet],
                   ),
                   boxShadow: [BoxShadow(color: Neon.cyan.withValues(alpha: .5), blurRadius: 8)],
                 ),
@@ -257,8 +270,17 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
 
 /// Orbe del micrófono: anillo que gira y ondas mientras escucha.
 class MicOrb extends StatefulWidget {
-  const MicOrb({super.key, required this.on, required this.listening, required this.onTap, this.icon});
+  const MicOrb({
+    super.key,
+    required this.on,
+    required this.listening,
+    required this.onTap,
+    this.icon,
+    this.size = 150,
+  });
 
+  /// Tamaño total (el diseño se escala desde 150).
+  final double size;
   final bool on;
   final bool listening;
   final VoidCallback onTap;
@@ -283,9 +305,13 @@ class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
     final active = widget.on && widget.listening;
     final core = active ? Neon.pink : Neon.cyan;
     return SizedBox(
-      width: 150,
-      height: 150,
-      child: AnimatedBuilder(
+      width: widget.size,
+      height: widget.size,
+      child: FittedBox(
+        child: SizedBox(
+          width: 150,
+          height: 150,
+          child: AnimatedBuilder(
         animation: _c,
         builder: (context, _) => Stack(
           alignment: Alignment.center,
@@ -349,6 +375,8 @@ class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
           ],
         ),
       ),
+        ),
+      ),
     );
   }
 }
@@ -372,18 +400,16 @@ class NeonCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: dark
-              ? [
-                  Neon.cyan.withValues(alpha: .16),
-                  Neon.violet.withValues(alpha: .14),
-                  Neon.pink.withValues(alpha: .12),
-                ]
+              ? [Neon.surfaceHigh, Neon.surface]
               : [
                   Theme.of(context).colorScheme.primaryContainer,
                   Theme.of(context).colorScheme.tertiaryContainer,
                 ],
         ),
-        border: Border.all(color: Neon.cyan.withValues(alpha: dark ? .3 : .15)),
-        boxShadow: dark ? Neon.glow(Neon.cyan, .5) : null,
+        border: Border.all(color: Colors.white.withValues(alpha: dark ? .08 : .15)),
+        boxShadow: dark
+            ? [BoxShadow(color: Colors.black.withValues(alpha: .35), blurRadius: 30, offset: const Offset(0, 12))]
+            : null,
       ),
       child: child,
     );

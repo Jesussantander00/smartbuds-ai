@@ -67,6 +67,7 @@ class _HomeShellState extends State<HomeShell> {
         controller: widget.controller,
         onOpenPermissions: widget.onOpenNotificationAccess,
         platformNote: widget.platformNote,
+        assistant: widget.assistant,
       ),
     ];
     return Scaffold(

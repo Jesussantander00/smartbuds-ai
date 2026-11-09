@@ -44,14 +44,49 @@ class _HomeScreenState extends State<HomeScreen> {
       widget.assistant,
       if (widget.voice != null) widget.voice!,
     ];
+    final voice = widget.voice;
     return Scaffold(
+      floatingActionButton: voice == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 72),
+              child: ListenableBuilder(
+                listenable: voice,
+                builder: (context, _) => Semantics(
+                  button: true,
+                  label: voice.enabled ? 'Dejar de escuchar' : 'Escuchar',
+                  child: MicOrb(
+                    size: 92,
+                    on: voice.enabled,
+                    listening: voice.listening && !voice.paused,
+                    onTap: voice.toggle,
+                    icon: voice.enabled
+                        ? (voice.paused ? Icons.mic_off : Icons.mic)
+                        : Icons.mic_none,
+                  ),
+                ),
+              ),
+            ),
       appBar: AppBar(
-        title: const Text('SmartBuds AI'),
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            ShaderMask(
+              shaderCallback: (r) => Neon.gradient.createShader(r),
+              child: const Icon(Icons.headphones, color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 10),
+            const Text('SmartBuds'),
+          ],
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Compartir canción',
-            icon: const Icon(Icons.share),
-            onPressed: widget.assistant.shareCurrent,
+          ListenableBuilder(
+            listenable: Listenable.merge(listenables),
+            builder: (context, _) => _ConnectionPill(
+              controller: widget.controller,
+              assistant: widget.assistant,
+              voice: voice,
+            ),
           ),
           IconButton(
             tooltip: 'Modo carro',
@@ -69,9 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListenableBuilder(
         listenable: Listenable.merge(listenables),
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 180),
           children: [
-            _NowPlaying(detection: widget.controller.detection, assistant: widget.assistant),
+            if (voice != null) _MicStatus(voice: voice),
+            _NowPlaying(detection: widget.controller.detection, assistant: widget.assistant,
+                controller: widget.controller),
             _ExtrasRow(assistant: widget.assistant),
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
             if (widget.assistant.contextSuggestion != null)
@@ -94,8 +131,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 16),
-            if (widget.voice != null) _MicCard(voice: widget.voice!),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -141,9 +176,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
 /// Qué suena: carátula, título, barra de progreso y acciones rápidas.
 class _NowPlaying extends StatefulWidget {
-  const _NowPlaying({required this.detection, required this.assistant});
+  const _NowPlaying({required this.detection, required this.assistant, required this.controller});
   final DetectionResult detection;
   final Assistant assistant;
+  final DetectedPlayerController controller;
 
   @override
   State<_NowPlaying> createState() => _NowPlayingState();
@@ -196,103 +232,157 @@ class _NowPlayingState extends State<_NowPlaying> {
 
   static String _fmt(int ms) {
     final t = Duration(milliseconds: ms);
-    final m = t.inMinutes;
-    final sec = (t.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$sec';
+    return '${t.inMinutes}:${(t.inSeconds % 60).toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final detection = widget.detection;
-    final (String app, String? title, String? artist) = switch (detection) {
+    final (String app, String? title, String? artist) = switch (widget.detection) {
       PlayerDetected(:final candidate) => (
           candidate.status.appName,
           candidate.status.title,
           candidate.status.artist,
         ),
-      NeedsChoice() => ('Varios reproductores', 'Revisa la pestaña Dispositivos', null),
-      NoPlayer() => ('Sin música', 'Pon algo en tu app de música o di «Busca…»', null),
+      NeedsChoice() => ('Varios reproductores', 'Elige uno en Dispositivos', null),
+      NoPlayer() => ('Nada sonando', 'Pon música o toca el micrófono y di «Busca…»', null),
     };
     final s = _status;
     final playing = s?.isPlaying ?? false;
     final art = s?.art;
     final duration = s?.durationMs;
     final pos = s == null ? null : _positionNow(s);
+    final busy = widget.controller.busy;
+
+    Widget control(IconData icon, String label, MusicCommand cmd, {bool main = false}) {
+      final button = main
+          ? DecoratedBox(
+              decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Neon.gradient),
+              child: IconButton(
+                tooltip: label,
+                iconSize: 40,
+                padding: const EdgeInsets.all(14),
+                color: Neon.space0,
+                onPressed: s == null || busy ? null : () => widget.controller.send(cmd),
+                icon: Icon(icon),
+              ),
+            )
+          : IconButton(
+              tooltip: label,
+              iconSize: 36,
+              padding: const EdgeInsets.all(12),
+              onPressed: s == null || busy ? null : () => widget.controller.send(cmd),
+              icon: Icon(icon),
+            );
+      return button;
+    }
 
     return NeonCard(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                child: art != null
-                    ? ClipRRect(
-                        key: ValueKey(s?.trackKey),
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.memory(art,
-                            width: 72, height: 72, fit: BoxFit.cover, gaplessPlayback: true),
-                      )
-                    : SizedBox(
-                        key: const ValueKey('eq'),
-                        width: 72,
-                        height: 72,
-                        child: Center(child: NeonEqualizer(playing: playing)),
-                      ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(app.toUpperCase(),
-                        style: theme.textTheme.labelMedium?.copyWith(letterSpacing: 1.4)),
-                    const SizedBox(height: 4),
-                    if (title != null)
-                      Text(title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                    if (artist != null && artist.isNotEmpty)
-                      Text(artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium),
-                  ],
+          // Carátula: la protagonista.
+          LayoutBuilder(
+            builder: (context, c) {
+              final side = c.maxWidth.clamp(0.0, 300.0).toDouble();
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 450),
+                child: Container(
+                  key: ValueKey(s?.trackKey ?? 'none'),
+                  width: side,
+                  height: side,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: .45),
+                          blurRadius: 36,
+                          offset: const Offset(0, 16)),
+                    ],
+                    gradient: art == null
+                        ? LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Neon.cyan.withValues(alpha: .25),
+                              Neon.violet.withValues(alpha: .3),
+                            ],
+                          )
+                        : null,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: art != null
+                      ? Image.memory(art, fit: BoxFit.cover, gaplessPlayback: true,
+                          semanticLabel: 'Carátula de ${title ?? 'la canción'}')
+                      : Center(
+                          child: playing
+                              ? const NeonEqualizer(playing: true, height: 64)
+                              : Icon(Icons.music_note_rounded,
+                                  size: 96, color: Colors.white.withValues(alpha: .5)),
+                        ),
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          Text(title ?? '',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+          if (artist != null && artist.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(artist,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: .7))),
+            ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (playing) ...[
+                const NeonEqualizer(playing: true, height: 14),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                [
+                  app.toUpperCase(),
+                  if ((s?.album ?? '').isNotEmpty) s!.album!,
+                ].join(' · '),
+                style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.2, color: Neon.cyan),
               ),
-              if (art != null && playing) NeonEqualizer(playing: playing, height: 24),
             ],
           ),
           if (s != null && duration != null && duration > 0 && pos != null) ...[
             const SizedBox(height: 8),
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
               ),
               child: Slider(
+                semanticFormatterCallback: (v) => _fmt((v * duration).round()),
                 value: (_dragging ?? pos / duration).clamp(0.0, 1.0).toDouble(),
                 onChanged: (v) => setState(() => _dragging = v),
                 onChangeEnd: (v) async {
                   final target = (v * duration).round();
                   setState(() => _dragging = null);
-                  final ok = await widget.assistant.media
-                          ?.seek(s.playerId, positionMs: target) ??
+                  final ok = await widget.assistant.media?.seek(s.playerId, positionMs: target) ??
                       false;
                   if (!ok && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Este reproductor no deja adelantar.')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Este reproductor no deja adelantar.')));
                   }
                 },
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   Text(_fmt(_dragging == null ? pos : (_dragging! * duration).round()),
@@ -303,28 +393,122 @@ class _NowPlayingState extends State<_NowPlaying> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              control(Icons.skip_previous_rounded, 'Anterior', MusicCommand.previous),
+              control(playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  playing ? 'Pausa' : 'Reproducir', MusicCommand.togglePlayPause,
+                  main: true),
+              control(Icons.skip_next_rounded, 'Siguiente', MusicCommand.next),
+            ],
+          ),
           if (s != null && (title ?? '').isNotEmpty)
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
                   tooltip: 'Me gusta',
-                  icon: const Icon(Icons.favorite_border),
+                  icon: const Icon(Icons.favorite_border_rounded),
                   onPressed: () => widget.assistant.handleIntent(const LikeIntent()),
                 ),
                 IconButton(
                   tooltip: 'Nunca más esta',
-                  icon: const Icon(Icons.block),
+                  icon: const Icon(Icons.block_rounded),
                   onPressed: () => widget.assistant.blockCurrent(),
                 ),
                 IconButton(
                   tooltip: 'Compartir',
-                  icon: const Icon(Icons.share_outlined),
+                  icon: const Icon(Icons.ios_share_rounded),
                   onPressed: widget.assistant.shareCurrent,
                 ),
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Estado del micrófono en una línea (el botón flota abajo a la derecha).
+class _MicStatus extends StatelessWidget {
+  const _MicStatus({required this.voice});
+  final VoiceEngine voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (IconData icon, Color color, String text) = !voice.enabled
+        ? (Icons.mic_off_rounded, Colors.white54, 'Micrófono apagado · toca el botón para hablar')
+        : voice.error != null
+            ? (Icons.error_outline, theme.colorScheme.error, voice.error!)
+            : voice.askingForSong
+                ? (Icons.hearing, Neon.pink, 'Dime la canción…')
+                : voice.paused
+                    ? (Icons.headset_off, Colors.orangeAccent, 'En pausa: conecta tus audífonos')
+                    : voice.listening
+                        ? (Icons.graphic_eq, Neon.pink, 'Escuchando')
+                        : (Icons.hourglass_top, Colors.white70, 'Preparando el micrófono…');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              voice.lastHeard.isNotEmpty && voice.enabled ? '$text · «${voice.lastHeard}»' : text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Encabezado: ¿hay reproductor y audífonos?
+class _ConnectionPill extends StatelessWidget {
+  const _ConnectionPill({required this.controller, required this.assistant, this.voice});
+  final DetectedPlayerController controller;
+  final Assistant assistant;
+  final VoiceEngine? voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = controller.detection is PlayerDetected;
+    final phones = assistant.headphoneName != null || (voice?.headphonesConnected ?? false);
+    final ok = player || phones;
+    return Tooltip(
+      message: [
+        player ? 'Reproductor conectado' : 'Sin reproductor',
+        phones ? (assistant.headphoneName ?? 'Audífonos conectados') : 'Sin audífonos',
+      ].join(' · '),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.white.withValues(alpha: .06),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: ok ? Neon.cyan : Colors.white30,
+                boxShadow: ok ? [const BoxShadow(color: Neon.cyan, blurRadius: 8)] : null,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(phones ? Icons.headphones : Icons.headset_off, size: 16),
+          ],
+        ),
       ),
     );
   }
@@ -338,78 +522,35 @@ class _QueueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ExpansionTile(
+        initiallyExpanded: assistant.queue.length <= 3,
+        shape: const Border(),
+        leading: const Icon(Icons.queue_music_rounded),
+        title: Text('Sigue después (${assistant.queue.length})'),
         children: [
-          const ListTile(
-            dense: true,
-            leading: Icon(Icons.queue_music),
-            title: Text('Sigue después'),
-          ),
           for (var i = 0; i < assistant.queue.length; i++)
             ListTile(
               dense: true,
               title: Text(assistant.queue[i]),
               leading: Text('${i + 1}'),
-              trailing: IconButton(
-                tooltip: 'Quitar',
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () => assistant.removeFromQueue(i),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (i > 0)
+                    IconButton(
+                      tooltip: 'Subir',
+                      icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+                      onPressed: () => assistant.moveInQueue(i, i - 1),
+                    ),
+                  IconButton(
+                    tooltip: 'Quitar',
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => assistant.removeFromQueue(i),
+                  ),
+                ],
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _MicCard extends StatelessWidget {
-  const _MicCard({required this.voice});
-  final VoiceEngine voice;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final on = voice.enabled;
-    final status = !on
-        ? 'Toca para que SmartBuds te escuche'
-        : voice.askingForSong
-            ? '¿Qué canción? Dila ahora…'
-            : voice.paused
-                ? 'En pausa: conecta tus audífonos para seguir'
-                : voice.listening
-                    ? 'Escuchando, también con la pantalla apagada'
-                    : 'Preparando el micrófono…';
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Tooltip(
-              message: on ? 'Dejar de escuchar' : 'Escuchar',
-              child: MicOrb(
-                on: on,
-                listening: voice.listening && !voice.paused,
-                onTap: voice.toggle,
-                icon: on ? (voice.paused ? Icons.mic_off : Icons.mic) : Icons.mic_none,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(status, textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
-            if (voice.lastHeard.isNotEmpty)
-              Text('Oí: «${voice.lastHeard}»', style: theme.textTheme.bodySmall),
-            if (voice.error != null)
-              Text(voice.error!, style: TextStyle(color: theme.colorScheme.error)),
-            const SizedBox(height: 8),
-            Chip(
-              avatar: Icon(voice.headphonesConnected ? Icons.headphones : Icons.headset_off,
-                  size: 18),
-              label: Text(voice.headphonesConnected
-                  ? 'Audífonos conectados'
-                  : 'Sin audífonos'),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import '../../core/ui/futuristic.dart';
+import '../assistant/assistant.dart';
 import 'detected_player_controller.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
@@ -12,7 +14,11 @@ class DetectedPlayerScreen extends StatefulWidget {
     this.voice,
     this.onOpenPermissions,
     this.platformNote,
+    this.assistant,
   });
+
+  /// Audífonos, ajustes rápidos (opcional; null en pruebas).
+  final Assistant? assistant;
 
   final DetectedPlayerController controller;
 
@@ -83,6 +89,10 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                           child: const Text('Conceder acceso'),
                         ),
                 ),
+              if (widget.assistant != null) ...[
+                _HeadphonesCard(assistant: widget.assistant!),
+                const SizedBox(height: 12),
+              ],
               _DetectionCard(controller: c),
               const SizedBox(height: 12),
               if (widget.voice != null) ...[
@@ -142,6 +152,118 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Tus audífonos, destacados: conexión, último usado y ajustes rápidos.
+class _HeadphonesCard extends StatelessWidget {
+  const _HeadphonesCard({required this.assistant});
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListenableBuilder(
+      listenable: Listenable.merge([assistant, if (assistant.settings != null) assistant.settings!]),
+      builder: (context, _) {
+        final s = assistant.settings;
+        final name = assistant.headphoneName;
+        final connected = name != null;
+        final saved = name == null ? null : s?.headphoneVolumes[name];
+        return NeonCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: connected ? Neon.gradient : null,
+                      color: connected ? null : Colors.white.withValues(alpha: .08),
+                    ),
+                    child: Icon(connected ? Icons.headphones : Icons.headset_off,
+                        size: 32, color: connected ? Neon.space0 : Colors.white54),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name ?? 'Sin audífonos',
+                            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: connected ? Colors.greenAccent : Colors.white30,
+                              ),
+                            ),
+                            Text(connected ? 'Conectados' : 'Desconectados',
+                                style: theme.textTheme.bodySmall),
+                          ],
+                        ),
+                        if (!connected && s?.lastHeadphone != null)
+                          Text('Últimos usados: ${s!.lastHeadphone}', style: theme.textTheme.bodySmall),
+                        if (saved != null)
+                          Text('Volumen guardado: $saved %', style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Actualizar',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: assistant.refreshHeadphone,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'La batería de cada audífono y del estuche solo la muestra la app del '
+                'fabricante: Android no la comparte con otras apps.',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+              ),
+              if (s != null) ...[
+                const Divider(height: 24),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Pausar al quitarlos'),
+                  value: s.pauseOnUnplug,
+                  onChanged: (v) {
+                    s.update(pauseOnUnplug: v);
+                    assistant.media?.setPauseOnUnplug(v);
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Retomar al conectarlos'),
+                  value: s.resumeOnHeadphones,
+                  onChanged: (v) => s.update(resumeOnHeadphones: v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Dos toques = siguiente'),
+                  value: s.headphoneTaps,
+                  onChanged: (v) {
+                    s.update(headphoneTaps: v);
+                    assistant.media?.setTapGestures(v);
+                  },
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

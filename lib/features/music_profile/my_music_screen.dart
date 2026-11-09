@@ -8,6 +8,7 @@ import '../assistant/assistant.dart';
 import 'music_profile.dart';
 import 'supabase_sync.dart';
 import 'year_in_music_screen.dart';
+import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 
 /// Mi música: lo que SmartBuds aprendió de tus gustos.
@@ -54,6 +55,8 @@ class MyMusicScreen extends StatelessWidget {
                 AccountCard(auth: auth!),
                 const SizedBox(height: 12),
               ],
+              _IdentityCard(profile: profile),
+              const SizedBox(height: 12),
               WeeklyStatsCard(profile: profile),
               const SizedBox(height: 12),
               Row(
@@ -419,6 +422,78 @@ class _ArtistCarousel extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Tu identidad musical en una tarjeta: un perfil con nombre propio.
+class _IdentityCard extends StatelessWidget {
+  const _IdentityCard({required this.profile});
+  final MusicProfile profile;
+
+  /// Un «tipo de oyente» a partir de cómo escuchas.
+  (String, String, IconData) _persona() {
+    final artists = profile.topArtists(50);
+    if (profile.tracks.length < 5 || artists.isEmpty) {
+      return ('Recién llegado', 'Sigue escuchando: SmartBuds está aprendiendo.', Icons.auto_awesome);
+    }
+    final total = artists.fold<double>(0, (a, e) => a + e.$2);
+    final topShare = total == 0 ? 0 : artists.first.$2 / total;
+    if (topShare > .4) {
+      return ('Fan de ${artists.first.$1}', 'Tu artista favorito domina tu música.', Icons.star_rounded);
+    }
+    if (artists.length >= 15) {
+      return ('Explorador', 'Escuchas a muchos artistas distintos.', Icons.explore_rounded);
+    }
+    final night = profile.favoriteDaypart == Daypart.noche || profile.favoriteDaypart == Daypart.madrugada;
+    if (night) return ('Oyente nocturno', 'Tu mejor música suena de noche.', Icons.nightlight_round);
+    return ('Equilibrado', 'Mezclas favoritos y cosas nuevas.', Icons.balance_rounded);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (name, desc, icon) = _persona();
+    final top = profile.topArtists(3).map((e) => e.$1).toList();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Neon.cyan.withValues(alpha: .22), Neon.violet.withValues(alpha: .28)],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Neon.gradient),
+            child: Icon(icon, size: 34, color: Neon.space0),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('TU PERFIL MUSICAL',
+                    style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.4, color: Neon.cyan)),
+                Text(name, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                Text(desc, style: theme.textTheme.bodySmall),
+                if (top.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(top.join(' · '),
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

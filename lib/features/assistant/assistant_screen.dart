@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/settings/app_settings.dart';
+import '../../core/ui/futuristic.dart';
+import '../../core/voice_engine/command_parser.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import 'assistant.dart';
 
@@ -161,6 +163,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
           children: [
+            if (voice != null && _filter.isEmpty) _hero(context, voice!),
+            if (widget.assistant != null && _filter.isEmpty) _quick(context),
+            const SizedBox(height: 12),
             TextField(
               onChanged: (v) => setState(() => _filter = v.trim()),
               decoration: const InputDecoration(
@@ -324,7 +329,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       Wrap(
                         spacing: 12,
                         children: [
-                          for (final c in const [0xFF00B4D8, 0xFF7C4DFF, 0xFFE91E63, 0xFF4CAF50, 0xFFFF9800])
+                          for (final c in const [0xFF20DDF2, 0xFF9567FF, 0xFFFF4FD8, 0xFF4CAF50, 0xFFFF9800])
                             GestureDetector(
                               onTap: () => settings.update(seedColor: c),
                               child: CircleAvatar(
@@ -345,6 +350,109 @@ class _AssistantScreenState extends State<AssistantScreen> {
               const SizedBox(height: 16),
               _onlyMyVoice(context),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Micrófono central, lo que oyó y la respuesta de SmartBuds en una burbuja.
+  Widget _hero(BuildContext context, VoiceEngine v) {
+    final theme = Theme.of(context);
+    final last = v.history.isEmpty ? null : v.history.first;
+    final state = !v.enabled
+        ? 'Micrófono apagado'
+        : v.askingForSong
+            ? 'Te escucho…'
+            : v.paused
+                ? 'En pausa (sin audífonos)'
+                : v.listening
+                    ? 'Escuchando'
+                    : 'Preparando…';
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        MicOrb(
+          size: 170,
+          on: v.enabled,
+          listening: v.listening && !v.paused,
+          onTap: v.toggle,
+          icon: v.enabled ? (v.paused ? Icons.mic_off : Icons.mic) : Icons.mic_none,
+        ),
+        const SizedBox(height: 4),
+        Text(state,
+            style: theme.textTheme.titleMedium?.copyWith(
+                color: v.enabled && v.listening ? Neon.pink : null, fontWeight: FontWeight.w600)),
+        if (v.lastHeard.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('«${v.lastHeard}»',
+                textAlign: TextAlign.center, style: theme.textTheme.bodyLarge),
+          ),
+        if (last?.reply != null)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Neon.surfaceHigh,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+                bottomLeft: Radius.circular(4),
+              ),
+              border: Border.all(color: Neon.cyan.withValues(alpha: .25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.auto_awesome, size: 18, color: Neon.cyan),
+                const SizedBox(width: 8),
+                Flexible(child: Text(last!.reply!)),
+              ],
+            ),
+          ),
+        if (v.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(v.error!,
+                textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
+          ),
+      ],
+    );
+  }
+
+  static const _quickCommands = <(IconData, String, String)>[
+    (Icons.music_note, '¿Qué suena?', 'que suena'),
+    (Icons.favorite, 'Mis favoritas', 'pon mis favoritas'),
+    (Icons.explore, 'Algo nuevo', 'pon algo nuevo'),
+    (Icons.radio, 'Mi radio', 'pon mi radio'),
+    (Icons.history_toggle_off, 'Olvidadas', 'pon favoritas olvidadas'),
+    (Icons.bedtime, 'Apagar en 30 min', 'apaga en treinta minutos'),
+  ];
+
+  /// Comandos frecuentes a un toque.
+  Widget _quick(BuildContext context) {
+    const parser = CommandParser();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (final (icon, label, phrase) in _quickCommands)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ActionChip(
+                  avatar: Icon(icon, size: 18),
+                  label: Text(label),
+                  onPressed: () {
+                    final intent = parser.parseIntent(phrase);
+                    if (intent != null) widget.assistant?.handleIntent(intent);
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -380,7 +488,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   for (final e in items)
                     ListTile(
                       dense: true,
-                      leading: Text(TimeOfDay.fromDateTime(e.at).format(context),
+                      leading: Icon(_iconFor(e.action), color: Neon.cyan),
+                      trailing: Text(TimeOfDay.fromDateTime(e.at).format(context),
                           style: theme.textTheme.labelSmall),
                       title: Text(e.action),
                       subtitle: Text([
@@ -397,6 +506,21 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
       ),
     ];
+  }
+
+  static IconData _iconFor(String action) {
+    final a = action.toLowerCase();
+    if (a.startsWith('buscar') || a.startsWith('letra')) return Icons.search;
+    if (a.contains('siguiente') || a.contains('anterior')) return Icons.skip_next;
+    if (a.contains('volumen')) return Icons.volume_up;
+    if (a.contains('pausa') || a.contains('continuar')) return Icons.play_arrow;
+    if (a.contains('gusta') || a.contains('favorit')) return Icons.favorite;
+    if (a.contains('bloquear') || a.contains('nunca')) return Icons.block;
+    if (a.contains('después') || a.contains('cola')) return Icons.queue_music;
+    if (a.contains('apagar') || a.contains('temporizador')) return Icons.bedtime;
+    if (a.contains('compartir')) return Icons.ios_share;
+    if (a.contains('radio')) return Icons.radio;
+    return Icons.record_voice_over;
   }
 
   Future<void> _showBlocked(BuildContext context) async {
