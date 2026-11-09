@@ -240,6 +240,8 @@ class Assistant extends ChangeNotifier {
         await playSimilar();
       case WhyIntent():
         await explainCurrent();
+      case DurationIntent(:final minutes):
+        await playFor(minutes);
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);
@@ -278,6 +280,28 @@ class Assistant extends ChangeNotifier {
     final pick = list[_random.nextInt(min(4, list.length))];
     await _say('Te pongo ${pick.title}, de ${pick.artist}.');
     await handleSearch(SearchRequest('${pick.title} ${pick.artist}'));
+  }
+
+  /// Lista por duración: tus canciones para [minutes] (la primera suena, el resto en cola).
+  Future<void> playFor(int minutes) async {
+    final list = profile.playlistFor(minutes, random: _random);
+    if (list.isEmpty) {
+      await _say('Aún no conozco suficientes canciones tuyas. Escucha un poco más.');
+      return;
+    }
+    String q(TrackStats t) => [t.title, if (t.artist != null) t.artist].join(' ');
+    queue
+      ..clear()
+      ..addAll(list.skip(1).map(q));
+    notifyListeners();
+    await _say('Lista de $minutes minutos: ${list.length} canciones tuyas.');
+    await handleSearch(SearchRequest(q(list.first)));
+  }
+
+  /// Vuelve a poner en la cola algo que se quitó (para «Deshacer»).
+  void restoreToQueue(int index, String query) {
+    queue.insert(index.clamp(0, queue.length), query);
+    notifyListeners();
   }
 
   Future<void> explainCurrent() async {

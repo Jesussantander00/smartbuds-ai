@@ -173,6 +173,12 @@ class WhyIntent extends VoiceIntent {
   const WhyIntent();
 }
 
+/// «Pon media hora de música»: una lista de tus canciones para ese tiempo.
+class DurationIntent extends VoiceIntent {
+  const DurationIntent(this.minutes);
+  final int minutes;
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -389,6 +395,8 @@ class CommandParser {
     'nunca más este artista', 'bloquea este artista',
     'pon favoritas olvidadas', 'mis favoritas olvidadas', 'algo que no escucho hace rato',
     'comparte mi semana',
+    'pon media hora de música', 'pon una hora de música', 'pon quince minutos de música',
+    'pon treinta minutos de música', 'pon diez minutos de música',
     'pon algo parecido', 'algo parecido a esta', 'pon una parecida',
     'por qué esta', 'por qué me gusta esta', 'por qué pusiste esta',
     'volumen al máximo', 'volumen al mínimo', 'volumen a la mitad',
@@ -429,6 +437,8 @@ class CommandParser {
     if (_forgotten.contains(text)) return const ForgottenIntent();
     if (_shareWeek.contains(text)) return const ShareWeekIntent();
     if (_similar.contains(text)) return const SimilarIntent();
+    final dur = parseDuration(text);
+    if (dur != null) return DurationIntent(dur);
     if (_why.contains(text)) return const WhyIntent();
     for (final p in const ['despues pon ', 'luego pon ', 'en cola pon ', 'pon despues ']) {
       if (text.startsWith(p) && text.length > p.length + 2) {
@@ -543,7 +553,7 @@ class CommandParser {
     if (m == null) return null;
     final query = m.group(3)!.trim();
     if (query.split(' ').length < 2 && query.length < 4) return null; // muy corto
-    return SearchIntent(SearchRequest(query));
+    return SearchIntent(SearchRequest(refineQuery(query)));
   }
 
   /// Frase libre dicha después de «Oye música»: una orden o pedido si lo es;
@@ -554,7 +564,7 @@ class CommandParser {
     final intent = parseIntent(text);
     if (intent != null && intent is! WakeIntent) return intent;
     if (wakePhrases.contains(text)) return null;
-    return SearchIntent(SearchRequest(heard.trim()));
+    return SearchIntent(SearchRequest(refineQuery(heard.trim())));
   }
 
   /// Modo estricto para la voz: la frase completa debe ser una orden
@@ -562,6 +572,62 @@ class CommandParser {
   MusicCommand? parseExact(String heard) {
     final text = normalize(heard);
     return _phrases[text] ?? _words[text];
+  }
+
+  /// «pon media hora de música», «treinta minutos de música» → minutos.
+  int? parseDuration(String heard) {
+    final text = normalize(heard);
+    final m = RegExp(r'^(pon |ponme |quiero )?(una lista de )?(.+?) de (musica|canciones)$').firstMatch(text);
+    if (m == null) return null;
+    final what = m.group(3)!;
+    if (what == 'media hora') return 30;
+    if (what == 'una hora') return 60;
+    if (what == 'hora y media') return 90;
+    if (what == 'un cuarto de hora') return 15;
+    final mm = RegExp(r'^(.+?) minutos$').firstMatch(what);
+    if (mm == null) return null;
+    final w = mm.group(1)!;
+    final n = int.tryParse(w) ?? sleepNumbers[w];
+    if (n == null || n < 5 || n > 180) return null;
+    return n;
+  }
+
+  /// Mejora lo que se va a buscar:
+  /// - época: «música de los ochenta» → «éxitos de los 80»
+  /// - versiones: «versión acústica de Tusa» → «Tusa acústico»
+  /// - descripción: «una canción tranquila con guitarra» → «canción tranquila guitarra»
+  static String refineQuery(String query) {
+    var q = normalize(query);
+    const eras = {
+      'sesenta': '60', 'setenta': '70', 'ochenta': '80', 'noventa': '90',
+      'dos mil': '2000', '2000s': '2000', 'dosmil': '2000',
+      '60': '60', '70': '70', '80': '80', '90': '90', '2000': '2000', '2010': '2010',
+    };
+    final era = RegExp(r'^(musica |canciones |algo |exitos |exitos )?(.*?)\s*de los (anos )?(\w+( mil)?)$')
+        .firstMatch(q);
+    if (era != null && eras.containsKey(era.group(4))) {
+      final genre = era.group(2)!.trim();
+      final decade = eras[era.group(4)]!;
+      return genre.isEmpty ? 'exitos de los $decade' : '$genre de los $decade exitos';
+    }
+    const versions = {
+      'acustica': 'acustico', 'acustico': 'acustico', 'en vivo': 'en vivo',
+      'remix': 'remix', 'original': 'official audio', 'oficial': 'official audio',
+      'lenta': 'slowed', 'instrumental': 'instrumental', 'karaoke': 'karaoke',
+    };
+    final ver = RegExp(r'^(la )?(version )?(acustica|acustico|en vivo|remix|original|oficial|lenta|instrumental|karaoke) de (.+)$')
+        .firstMatch(q);
+    if (ver != null) return '${ver.group(4)} ${versions[ver.group(3)]}';
+    final desc = RegExp(r'^(una |alguna )?(cancion|musica|algo) (.+)$').firstMatch(q);
+    if (desc != null && desc.group(3)!.split(' ').length >= 2) {
+      final words = desc
+          .group(3)!
+          .split(' ')
+          .where((w) => !const {'con', 'que', 'tenga', 'de', 'y', 'una', 'un', 'para'}.contains(w))
+          .join(' ');
+      return '${desc.group(2) == 'musica' ? 'musica' : 'cancion'} $words';
+    }
+    return query.trim();
   }
 
   /// «busca <algo> [en <app>]» → qué buscar y dónde; si no es búsqueda, null.
@@ -586,7 +652,7 @@ class CommandParser {
         }
       }
       if (query.isEmpty) return null;
-      return SearchRequest(query, appPackage: pkg, appName: name);
+      return SearchRequest(refineQuery(query), appPackage: pkg, appName: name);
     }
     return null;
   }

@@ -556,7 +556,19 @@ class _QueueCard extends StatelessWidget {
                   IconButton(
                     tooltip: 'Quitar',
                     icon: const Icon(Icons.close, size: 20),
-                    onPressed: () => assistant.removeFromQueue(i),
+                    onPressed: () {
+                      final removed = assistant.queue[i];
+                      assistant.removeFromQueue(i);
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(SnackBar(
+                          content: Text('Quitaste «$removed»'),
+                          action: SnackBarAction(
+                            label: 'Deshacer',
+                            onPressed: () => assistant.restoreToQueue(i, removed),
+                          ),
+                        ));
+                    },
                   ),
                 ],
               ),
