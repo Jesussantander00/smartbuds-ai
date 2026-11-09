@@ -111,6 +111,12 @@ void main() {
       }
       listen('E');
       expect(profile.moodTracks['para entrenar']!.length, greaterThanOrEqualTo(3));
+      // Recién sonaron: no se repiten enseguida.
+      expect(profile.pickMood('para entrenar'), isNull);
+      now = now.add(const Duration(hours: 3)); // fuera del ambiente
+      for (var i = 0; i < 10; i++) {
+        listen('Otra $i');
+      }
       expect(profile.pickMood('para entrenar'), isNotNull);
       expect(profile.pickMood('para dormir'), isNull);
     });
