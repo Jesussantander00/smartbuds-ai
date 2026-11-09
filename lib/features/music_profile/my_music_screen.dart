@@ -44,7 +44,6 @@ class MyMusicScreen extends StatelessWidget {
       body: ListenableBuilder(
         listenable: profile,
         builder: (context, _) {
-          final top = profile.topTracks(10);
           final artists = profile.topArtists(5);
           final plays = profile.tracks.values.fold<int>(0, (s, t) => s + t.plays);
           final likes = profile.tracks.values.where((t) => t.likes > 0).length;
@@ -123,60 +122,40 @@ class MyMusicScreen extends StatelessWidget {
                 _ArtistCarousel(artists: [for (final (a, _) in artists) a], assistant: assistant),
               ],
               const SizedBox(height: 20),
-              Text('Tus canciones top', style: theme.textTheme.titleMedium),
-              if (top.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Todavía no hay suficiente información. Escucha música con '
-                      'SmartBuds activo y di «me gusta» cuando algo te encante.'),
-                ),
-              if (top.isNotEmpty)
-                Text('Toca ⋮ para editar tus gustos.', style: theme.textTheme.bodySmall),
-              for (final t in top)
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.music_note),
-                  title: Text(t.title),
-                  subtitle: Text(t.artist ?? ''),
-                  onTap: () => assistant.handleSearch(
-                      SearchRequest([t.title, if (t.artist != null) t.artist].join(' '))),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(t.score(profile.weights).toStringAsFixed(0)),
-                      PopupMenuButton<String>(
-                        onSelected: (v) {
-                          switch (v) {
-                            case 'like':
-                              profile.likeTrack(t.key);
-                            case 'remove':
-                              profile.removeTrack(t.key);
-                            case 'block':
-                              assistant.settings
-                                  ?.block(title: t.title, artist: t.artist);
-                              profile.removeTrack(t.key);
-                            case 'blockArtist':
-                              assistant.settings
-                                  ?.block(artist: t.artist, wholeArtist: true);
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'like', child: Text('Me gusta más')),
-                          const PopupMenuItem(value: 'remove', child: Text('Quitar de mis gustos')),
-                          const PopupMenuItem(value: 'block', child: Text('Nunca más esta')),
-                          if ((t.artist ?? '').isNotEmpty)
-                            PopupMenuItem(
-                                value: 'blockArtist', child: Text('Bloquear a ${t.artist}')),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              _TopTracksSection(profile: profile, assistant: assistant),
+              const SizedBox(height: 12),
+              Text('Listas por duración', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final m in const [15, 30, 45, 60])
+                    ActionChip(
+                      avatar: const Icon(Icons.timer_outlined, size: 18),
+                      label: Text('$m min'),
+                      onPressed: () => assistant.playFor(m),
+                    ),
+                ],
+              ),
               const SizedBox(height: 20),
               Text('Tus gustos', style: theme.textTheme.titleMedium),
               Card(
                 child: Column(
                   children: [
+                    Builder(builder: (context) {
+                      final dups = profile.duplicateGroups();
+                      if (dups.isEmpty) return const SizedBox.shrink();
+                      return ListTile(
+                        leading: const Icon(Icons.cleaning_services_outlined),
+                        title: Text('Limpiar duplicados (${dups.length})'),
+                        subtitle: Text('Ej.: ${dups.first.map((t) => '«${t.title}»').take(2).join(' y ')}'),
+                        onTap: () {
+                          final n = profile.mergeDuplicates();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Listo: uní $n canciones repetidas.')));
+                        },
+                      );
+                    }),
                     ListTile(
                       leading: const Icon(Icons.compare_arrows),
                       title: const Text('Comparar gustos con un amigo'),
@@ -337,6 +316,98 @@ extension on MyMusicScreen {
                 : 'En común: ${r.shared.join(', ')}.'),
         actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cerrar'))],
       ),
+    );
+  }
+}
+
+/// Tus canciones: actuales (este mes), clásicos o todas, con menú para editarlas.
+class _TopTracksSection extends StatefulWidget {
+  const _TopTracksSection({required this.profile, required this.assistant});
+  final MusicProfile profile;
+  final Assistant assistant;
+
+  @override
+  State<_TopTracksSection> createState() => _TopTracksSectionState();
+}
+
+class _TopTracksSectionState extends State<_TopTracksSection> {
+  String _view = 'now';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final profile = widget.profile;
+    final assistant = widget.assistant;
+    final top = switch (_view) {
+      'now' => profile.currentFavorites(),
+      'classic' => profile.classics(),
+      _ => profile.topTracks(10),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Tus canciones', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'now', label: Text('Actuales')),
+            ButtonSegment(value: 'classic', label: Text('Clásicos')),
+            ButtonSegment(value: 'all', label: Text('Todas')),
+          ],
+          selected: {_view},
+          onSelectionChanged: (v) => setState(() => _view = v.first),
+        ),
+        const SizedBox(height: 4),
+        if (top.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(switch (_view) {
+              'now' => 'Este mes aún no hay favoritas. Escucha música y di «me gusta».',
+              'classic' => 'Todavía no tienes clásicos: todo lo que te gusta lo escuchas seguido.',
+              _ => 'Todavía no hay suficiente información. Escucha música con SmartBuds activo '
+                  'y di «me gusta» cuando algo te encante.',
+            }),
+          ),
+        if (top.isNotEmpty)
+          Text('Toca ⋮ para editar tus gustos.', style: theme.textTheme.bodySmall),
+        for (final t in top)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.music_note),
+            title: Text(t.title),
+            subtitle: Text(t.artist ?? ''),
+            onTap: () => assistant
+                .handleSearch(SearchRequest([t.title, if (t.artist != null) t.artist].join(' '))),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(t.score(profile.weights).toStringAsFixed(0)),
+                PopupMenuButton<String>(
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'like':
+                        profile.likeTrack(t.key);
+                      case 'remove':
+                        profile.removeTrack(t.key);
+                      case 'block':
+                        assistant.settings?.block(title: t.title, artist: t.artist);
+                        profile.removeTrack(t.key);
+                      case 'blockArtist':
+                        assistant.settings?.block(artist: t.artist, wholeArtist: true);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'like', child: Text('Me gusta más')),
+                    const PopupMenuItem(value: 'remove', child: Text('Quitar de mis gustos')),
+                    const PopupMenuItem(value: 'block', child: Text('Nunca más esta')),
+                    if ((t.artist ?? '').isNotEmpty)
+                      PopupMenuItem(value: 'blockArtist', child: Text('Bloquear a ${t.artist}')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

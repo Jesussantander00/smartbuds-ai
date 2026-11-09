@@ -169,6 +169,7 @@ class VoiceEngine extends ChangeNotifier {
         ShareWeekIntent() => 'Compartir mi semana',
         SimilarIntent() => 'Algo parecido',
         WhyIntent() => '¿Por qué esta?',
+        DurationIntent(:final minutes) => 'Lista de $minutes min',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -402,6 +403,7 @@ class VoiceEngine extends ChangeNotifier {
             ShareWeekIntent() ||
             SimilarIntent() ||
             WhyIntent() ||
+            DurationIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

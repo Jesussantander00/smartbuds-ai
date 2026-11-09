@@ -663,6 +663,105 @@ class MusicProfile extends ChangeNotifier {
     return reasons.isEmpty ? const ['La has escuchado poco: SmartBuds sigue aprendiendo.'] : reasons;
   }
 
+  // ============================================ Organización de tus listas
+
+  /// Tus favoritas de ahora: con señales positivas en los últimos 30 días.
+  List<TrackStats> currentFavorites([int n = 10]) {
+    final from = _clock().subtract(const Duration(days: 30));
+    final recentPositive = {
+      for (final e in history)
+        if (!e.at.isBefore(from) &&
+            (e.type == ListenEventType.complete ||
+                e.type == ListenEventType.like ||
+                e.type == ListenEventType.repeat))
+          e.key,
+    };
+    return topTracks(200).where((t) => recentPositive.contains(t.key)).take(n).toList();
+  }
+
+  /// Tus clásicos: te gustan mucho, pero no los has escuchado este mes.
+  List<TrackStats> classics([int n = 10]) {
+    final current = {for (final t in currentFavorites(200)) t.key};
+    return topTracks(200).where((t) => !current.contains(t.key)).take(n).toList();
+  }
+
+  /// Título «limpio» para detectar la misma canción con nombres distintos
+  /// («Tusa (Official Video)», «TUSA - Letra», «Tusa ft. Nicki Minaj»).
+  static String cleanTitle(String title) {
+    var t = title.toLowerCase();
+    t = t.replaceAll(RegExp(r'[\(\[].*?[\)\]]'), ' ');
+    t = t.replaceAll(
+        RegExp(r'\b(feat\.?|ft\.?|featuring|con)\b.*$'), ' ');
+    t = t.replaceAll(
+        RegExp(r'-\s*(official|oficial|video|audio|lyric|letra|visualizer|remaster).*$'), ' ');
+    const from = 'áàäâéèëêíìïîóòöôúùüûñ';
+    const to = 'aaaaeeeeiiiioooouuuun';
+    final b = StringBuffer();
+    for (final ch in t.split('')) {
+      final i = from.indexOf(ch);
+      b.write(i >= 0 ? to[i] : ch);
+    }
+    return b.toString().replaceAll(RegExp(r'[^a-z0-9 ]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Grupos de la misma canción guardada con nombres distintos.
+  List<List<TrackStats>> duplicateGroups() {
+    final groups = <String, List<TrackStats>>{};
+    for (final t in tracks.values) {
+      final artist = cleanTitle(t.artist ?? '').split(' ').firstOrNull ?? '';
+      final k = '${cleanTitle(t.title)}|$artist';
+      if (k.startsWith('|')) continue;
+      (groups[k] ??= []).add(t);
+    }
+    return [for (final g in groups.values) if (g.length > 1) g];
+  }
+
+  /// Une los duplicados en la versión más escuchada. Devuelve cuántos quitó.
+  int mergeDuplicates() {
+    var removed = 0;
+    for (final g in duplicateGroups()) {
+      g.sort((a, b) => b.plays.compareTo(a.plays));
+      final keep = g.first;
+      for (final d in g.skip(1)) {
+        keep
+          ..plays += d.plays
+          ..completes += d.completes
+          ..skips += d.skips
+          ..repeats += d.repeats
+          ..likes += d.likes
+          ..dislikes += d.dislikes;
+        d.positiveByDaypart.forEach((k, v) {
+          keep.positiveByDaypart[k] = (keep.positiveByDaypart[k] ?? 0) + v;
+        });
+        final dl = d.lastPlayedAt, kl = keep.lastPlayedAt;
+        if (dl != null && (kl == null || dl.isAfter(kl))) keep.lastPlayedAt = dl;
+        for (var i = 0; i < history.length; i++) {
+          final e = history[i];
+          if (e.key == d.key) history[i] = ListenEvent(e.at, keep.key, e.type);
+        }
+        for (final set in moodTracks.values) {
+          if (set.remove(d.key)) set.add(keep.key);
+        }
+        tracks.remove(d.key);
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      _scheduleSave();
+      notifyListeners();
+    }
+    return removed;
+  }
+
+  /// Canciones para llenar unos [minutes] (≈3,5 min cada una), sin repetir.
+  List<TrackStats> playlistFor(int minutes, {Random? random}) {
+    final count = (minutes / 3.5).round().clamp(2, 40);
+    final pool = topTracks(80).where((t) => !_excluded(t)).toList()..shuffle(random ?? Random());
+    final now = Daypart.of(_clock());
+    pool.sort((a, b) => b.affinity(now).compareTo(a.affinity(now)));
+    return pool.take(count).toList();
+  }
+
   /// Canciones que sonaron hace poco (para no repetirlas).
   Set<String> recentKeys([int n = 10]) => history.reversed
       .where((e) => e.type == ListenEventType.play)

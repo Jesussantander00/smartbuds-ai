@@ -72,6 +72,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Nunca más esta»', 'No vuelve a sonar. «Nunca más este artista» bloquea al artista'),
     ('«Pon favoritas olvidadas»', 'Lo que te encantaba y hace rato no suena'),
     ('«Comparte mi semana»', 'Tu resumen musical para WhatsApp'),
+    ('«Pon media hora de música»', 'Una lista de tus canciones para ese tiempo'),
+    ('«Busca música de los ochenta»', 'Por época: sesenta, setenta, ochenta, noventa, dos mil'),
+    ('«Busca la versión acústica de …»', 'También «en vivo», «remix», «original», «instrumental»'),
+    ('«Busca una canción tranquila con guitarra»', 'Busca por descripción'),
     ('«Pon algo parecido»', 'Una canción de un artista parecido al que suena'),
     ('«¿Por qué esta?»', 'Te dice qué sabe SmartBuds de la canción que suena'),
   ];
