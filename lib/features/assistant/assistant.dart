@@ -236,6 +236,10 @@ class Assistant extends ChangeNotifier {
         await playForgotten();
       case ShareWeekIntent():
         await shareSummary(days: 7);
+      case SimilarIntent():
+        await playSimilar();
+      case WhyIntent():
+        await explainCurrent();
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);
@@ -496,6 +500,7 @@ class Assistant extends ChangeNotifier {
   // --------------------------------------------- Radio, anuncios, aburrimiento
 
   Future<void> setRadio(bool on) async {
+    if (on) radioSongs = 0;
     settings?.update(radioMode: on);
     if (on) {
       await voice?.speak('Radio activada. Pongo música sin parar.', force: true);
@@ -506,8 +511,19 @@ class Assistant extends ChangeNotifier {
   }
 
   /// Siguiente canción de la radio: 70 % favoritas, 30 % descubrimientos.
+  /// Canciones puestas por la radio en esta sesión (para el descubrimiento gradual).
+  int radioSongs = 0;
+
+  /// Proporción de canciones nuevas: fija 30 %, o gradual de 10 % a 50 %.
+  double get noveltyRatio {
+    if (!(settings?.gradualDiscovery ?? true)) return 0.3;
+    return (0.1 + 0.1 * (radioSongs ~/ 3)).clamp(0.1, 0.5).toDouble();
+  }
+
   Future<void> nextRadioSong() async {
-    if (_random.nextDouble() < 0.7 && profile.pickFavorite() != null) {
+    final novelty = noveltyRatio;
+    radioSongs++;
+    if (_random.nextDouble() >= novelty && profile.pickFavorite() != null) {
       await playFavorite();
     } else {
       await discover();

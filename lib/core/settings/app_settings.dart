@@ -56,6 +56,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Qué tan desconocidos son los descubrimientos: 0 conocidos, 1 mixto, 2 joyas ocultas.
   int discoveryLevel = 1;
 
+  /// Descubrimiento gradual: la radio empieza con tus conocidas y va metiendo
+  /// más canciones nuevas a medida que sigue sonando.
+  bool gradualDiscovery = true;
+
   /// Pausar la música al desconectar los audífonos.
   bool pauseOnUnplug = true;
 
@@ -166,6 +170,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     }
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
+    gradualDiscovery = d['gradualDiscovery'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
     discoveryLevel = (d['discoveryLevel'] as num?)?.toInt() ?? 1;
     pauseOnUnplug = d['pauseOnUnplug'] != false;
@@ -207,6 +212,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     String? themeMode,
     int? seedColor,
     bool? shortReplies,
+    bool? gradualDiscovery,
     int? discoveryLevel,
     bool? pauseOnUnplug,
     bool? pauseOnCalls,
@@ -214,6 +220,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? weatherSuggestions,
   }) {
     if (shortReplies != null) this.shortReplies = shortReplies;
+    if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
     if (discoveryLevel != null) this.discoveryLevel = discoveryLevel;
     if (pauseOnUnplug != null) this.pauseOnUnplug = pauseOnUnplug;
     if (pauseOnCalls != null) this.pauseOnCalls = pauseOnCalls;
@@ -276,6 +283,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'seedColor': seedColor,
         'designVersion': 3,
         'shortReplies': shortReplies,
+        'gradualDiscovery': gradualDiscovery,
         'lastHeadphone': lastHeadphone,
         'discoveryLevel': discoveryLevel,
         'pauseOnUnplug': pauseOnUnplug,

@@ -8,6 +8,7 @@ import '../assistant/assistant.dart';
 import 'music_profile.dart';
 import 'supabase_sync.dart';
 import 'year_in_music_screen.dart';
+import 'insights.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 
@@ -56,6 +57,7 @@ class MyMusicScreen extends StatelessWidget {
                 const SizedBox(height: 12),
               ],
               _IdentityCard(profile: profile),
+              InsightsSection(profile: profile, assistant: assistant),
               const SizedBox(height: 12),
               WeeklyStatsCard(profile: profile),
               const SizedBox(height: 12),

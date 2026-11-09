@@ -97,6 +97,19 @@ class TrackStats {
       );
 }
 
+/// Cambios recientes en tu gusto.
+class TasteShift {
+  const TasteShift(this.rising, this.fading);
+
+  /// Artistas que estás escuchando mucho más que antes.
+  final List<String> rising;
+
+  /// Artistas que escuchabas mucho y ya casi no.
+  final List<String> fading;
+
+  bool get isEmpty => rising.isEmpty && fading.isEmpty;
+}
+
 enum ListenEventType { play, complete, skip, repeat, like, dislike }
 
 /// Momentos del día, para que «Pon algo que me guste» elija según la hora.
@@ -530,8 +543,10 @@ class MusicProfile extends ChangeNotifier {
   TrackStats? pickFavorite({Random? random}) {
     final recent = recentKeys(10);
     final now = Daypart.of(_clock());
+    final tired = {for (final (t, _) in overexposed()) t.key}; // descanso para las sobreexpuestas
     final candidates = topTracks(30)
-        .where((t) => t.key != _current?.key && !recent.contains(t.key) && !_excluded(t))
+        .where((t) =>
+            t.key != _current?.key && !recent.contains(t.key) && !_excluded(t) && !tired.contains(t.key))
         .toList()
       // Favoritas de este momento del día primero (hasta +50 % de puntuación).
       ..sort((a, b) => (b.score(weights) * (1 + 0.5 * b.affinity(now)))
@@ -539,6 +554,113 @@ class MusicProfile extends ChangeNotifier {
     if (candidates.isEmpty) return null;
     final top = candidates.take(5).toList();
     return top[(random ?? Random()).nextInt(top.length)];
+  }
+
+  // ================================================ Inteligencia musical
+
+  /// Reproducciones por artista entre [from] y [to] (desde el historial).
+  Map<String, int> _artistPlays(DateTime from, DateTime to) {
+    final out = <String, int>{};
+    for (final e in history) {
+      if (e.type != ListenEventType.play || e.at.isBefore(from) || !e.at.isBefore(to)) continue;
+      final a = tracks[e.key]?.artist;
+      if (a == null || a.isEmpty) continue;
+      out[a] = (out[a] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  /// Detector de cambios de gusto: artistas que están creciendo en las últimas
+  /// 2 semanas frente a los 2 meses anteriores (y los que dejaste de escuchar).
+  TasteShift tasteShift() {
+    final now = _clock();
+    final recent = _artistPlays(now.subtract(const Duration(days: 14)), now.add(const Duration(seconds: 1)));
+    final before = _artistPlays(now.subtract(const Duration(days: 74)), now.subtract(const Duration(days: 14)));
+    final rTotal = recent.values.fold<int>(0, (a, b) => a + b);
+    final bTotal = before.values.fold<int>(0, (a, b) => a + b);
+    if (rTotal < 8) return const TasteShift([], []);
+    double share(Map<String, int> m, int total, String a) => total == 0 ? 0 : (m[a] ?? 0) / total;
+    final rising = <String>[];
+    for (final a in recent.keys) {
+      final now_ = share(recent, rTotal, a);
+      final was = share(before, bTotal, a);
+      if ((recent[a] ?? 0) >= 3 && now_ >= .12 && now_ >= was * 2 + .05) rising.add(a);
+    }
+    rising.sort((a, b) => (recent[b] ?? 0).compareTo(recent[a] ?? 0));
+    final fading = <String>[];
+    if (bTotal >= 15) {
+      for (final a in before.keys) {
+        if (share(before, bTotal, a) >= .15 && share(recent, rTotal, a) < .03) fading.add(a);
+      }
+    }
+    return TasteShift(rising.take(3).toList(), fading.take(3).toList());
+  }
+
+  /// Canciones sobreexpuestas: sonaron [times] veces o más en los últimos 7 días.
+  List<(TrackStats, int)> overexposed({int times = 8}) {
+    final from = _clock().subtract(const Duration(days: 7));
+    final counts = <String, int>{};
+    for (final e in history) {
+      if (e.type == ListenEventType.play && !e.at.isBefore(from)) {
+        counts[e.key] = (counts[e.key] ?? 0) + 1;
+      }
+    }
+    final list = [
+      for (final e in counts.entries)
+        if (e.value >= times && tracks[e.key] != null) (tracks[e.key]!, e.value),
+    ]..sort((a, b) => b.$2.compareTo(a.$2));
+    return list;
+  }
+
+  /// Evolución: tu artista principal mes a mes (los últimos [months]).
+  List<({DateTime month, String? artist, int plays})> evolution({int months = 6}) {
+    final now = _clock();
+    final out = <({DateTime month, String? artist, int plays})>[];
+    for (var i = months - 1; i >= 0; i--) {
+      final start = DateTime(now.year, now.month - i);
+      final end = DateTime(now.year, now.month - i + 1);
+      final m = _artistPlays(start, end);
+      final total = m.values.fold<int>(0, (a, b) => a + b);
+      String? top;
+      var best = 0;
+      m.forEach((a, n) {
+        if (n > best) {
+          best = n;
+          top = a;
+        }
+      });
+      out.add((month: start, artist: top, plays: total));
+    }
+    return out;
+  }
+
+  /// «ADN» de por qué te gusta una canción, con lo que SmartBuds sabe de verdad
+  /// (tu forma de escucharla), no adivinando cómo suena.
+  List<String> whyYouLike(String key) {
+    final t = tracks[key];
+    if (t == null) return const ['Es nueva para ti: SmartBuds aún no tiene datos de ella.'];
+    final reasons = <String>[];
+    if (t.likes > 0) reasons.add('Le diste «me gusta» ${t.likes == 1 ? 'una vez' : '${t.likes} veces'}.');
+    if (t.plays >= 2) {
+      final rate = t.plays == 0 ? 0 : (t.completes / t.plays * 100).round();
+      reasons.add('La has puesto ${t.plays} veces y la escuchas completa el $rate %.');
+    }
+    if (t.repeats > 0) reasons.add('La repetiste ${t.repeats == 1 ? 'una vez' : '${t.repeats} veces'}.');
+    final best = Daypart.values.reduce((a, b) => t.affinity(a) >= t.affinity(b) ? a : b);
+    if (t.affinity(best) >= .5) reasons.add('Sobre todo te gusta ${best.label}.');
+    final a = t.artist;
+    if (a != null) {
+      final rank = topArtists(10).indexWhere((e) => e.$1 == a);
+      if (rank >= 0) reasons.add('$a es tu artista #${rank + 1}.');
+    }
+    for (final e in moodTracks.entries) {
+      if (e.value.contains(key)) {
+        reasons.add('Está en tu mezcla «${e.key}».');
+        break;
+      }
+    }
+    if (t.skips > t.completes && t.skips >= 2) reasons.add('Ojo: la saltas más de lo que la terminas.');
+    return reasons.isEmpty ? const ['La has escuchado poco: SmartBuds sigue aprendiendo.'] : reasons;
   }
 
   /// Canciones que sonaron hace poco (para no repetirlas).
