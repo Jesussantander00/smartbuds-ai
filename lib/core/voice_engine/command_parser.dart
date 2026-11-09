@@ -121,6 +121,48 @@ class MoodIntent extends VoiceIntent {
   final String query;
 }
 
+/// «Volumen al cincuenta», «pon el volumen en 30», «volumen al máximo».
+class VolumeIntent extends VoiceIntent {
+  const VolumeIntent(this.percent);
+  final int percent;
+}
+
+/// «Después pon Ojalá»: la pone cuando termine o cambie la actual.
+/// [query] null = SmartBuds pregunta «¿Qué pongo después?».
+class QueueIntent extends VoiceIntent {
+  const QueueIntent([this.query]);
+  final String? query;
+}
+
+/// «La que dice "baby no me llames"»: busca por un pedazo de la letra.
+/// [words] null = SmartBuds pregunta «¿Qué dice la letra?».
+class LyricsIntent extends VoiceIntent {
+  const LyricsIntent([this.words]);
+  final String? words;
+}
+
+/// «Nunca más esta» / «Nunca más este artista»: no vuelve a sonar.
+class BlockIntent extends VoiceIntent {
+  const BlockIntent({this.artist = false});
+  final bool artist;
+}
+
+/// «Cambia y sube»: varias órdenes seguidas en una frase.
+class MultiIntent extends VoiceIntent {
+  const MultiIntent(this.parts);
+  final List<VoiceIntent> parts;
+}
+
+/// «Pon favoritas olvidadas»: canciones que te encantaban y hace rato no suenan.
+class ForgottenIntent extends VoiceIntent {
+  const ForgottenIntent();
+}
+
+/// «Comparte mi semana»: tu resumen musical para enviar.
+class ShareWeekIntent extends VoiceIntent {
+  const ShareWeekIntent();
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -262,6 +304,29 @@ class CommandParser {
     'cuarenta y cinco': 45, 'sesenta': 60,
   };
 
+  static const _queuePrompts = {'despues pon', 'luego pon', 'pon despues', 'ponla despues'};
+  static const _lyricsPrompts = {'la que dice', 'busca la que dice', 'la cancion que dice'};
+  static const _blockTrack = {
+    'nunca mas esta', 'no quiero escuchar mas esta', 'nunca mas esta cancion',
+    'bloquea esta cancion', 'no me la pongas mas',
+  };
+  static const _blockArtist = {
+    'nunca mas este artista', 'bloquea este artista', 'no quiero escuchar mas este artista',
+  };
+  static const _forgotten = {
+    'pon favoritas olvidadas', 'favoritas olvidadas', 'mis favoritas olvidadas',
+    'algo que no escucho hace rato', 'pon algo que no escucho hace rato',
+  };
+  static const _shareWeek = {'comparte mi semana', 'comparte mi resumen'};
+
+  /// Números dichos en palabras para el volumen exacto.
+  static const volumeNumbers = {
+    'cero': 0, 'diez': 10, 'veinte': 20, 'treinta': 30, 'cuarenta': 40,
+    'cincuenta': 50, 'sesenta': 60, 'setenta': 70, 'ochenta': 80,
+    'noventa': 90, 'cien': 100, 'la mitad': 50, 'medio': 50,
+    'maximo': 100, 'minimo': 10, 'tope': 100,
+  };
+
   static const _artistPrompts = {
     'pon algo de', 'pon musica de', 'pon canciones de', 'quiero escuchar a',
   };
@@ -300,6 +365,19 @@ class CommandParser {
     'comparte esta', 'comparte la canción',
     'pon mi radio', 'modo radio', 'quita la radio',
     'cancela el temporizador', 'no apagues',
+    'después pon', 'luego pon', 'pon después',
+    'la que dice', 'la canción que dice',
+    'nunca más esta', 'no quiero escuchar más esta', 'nunca más esta canción',
+    'nunca más este artista', 'bloquea este artista',
+    'pon favoritas olvidadas', 'mis favoritas olvidadas', 'algo que no escucho hace rato',
+    'comparte mi semana',
+    'volumen al máximo', 'volumen al mínimo', 'volumen a la mitad',
+    'volumen al diez', 'volumen al veinte', 'volumen al treinta', 'volumen al cuarenta',
+    'volumen al cincuenta', 'volumen al sesenta', 'volumen al setenta',
+    'volumen al ochenta', 'volumen al noventa', 'volumen al cien',
+    'pon el volumen al máximo', 'pon el volumen al cincuenta',
+    'cambia y sube', 'cambia y baja', 'pausa y baja', 'siguiente y sube',
+    'cambia y me gusta', 'me gusta y cambia', 'sube y cambia', 'baja y cambia',
     'apaga en cinco minutos', 'apaga en diez minutos', 'apaga en quince minutos',
     'apaga en veinte minutos', 'apaga en treinta minutos',
     'apaga en cuarenta y cinco minutos', 'apaga en sesenta minutos', 'apaga en una hora',
@@ -319,7 +397,27 @@ class CommandParser {
     if (wakePhrases.contains(text) || customWakePhrases.contains(text)) {
       return const WakeIntent();
     }
+    final multi = _parseMulti(text);
+    if (multi != null) return multi;
     if (_nowPlaying.contains(text)) return const NowPlayingIntent();
+    final volume = parseVolume(text);
+    if (volume != null) return VolumeIntent(volume);
+    if (_queuePrompts.contains(text)) return const QueueIntent();
+    if (_lyricsPrompts.contains(text)) return const LyricsIntent();
+    if (_blockTrack.contains(text)) return const BlockIntent();
+    if (_blockArtist.contains(text)) return const BlockIntent(artist: true);
+    if (_forgotten.contains(text)) return const ForgottenIntent();
+    if (_shareWeek.contains(text)) return const ShareWeekIntent();
+    for (final p in const ['despues pon ', 'luego pon ', 'en cola pon ', 'pon despues ']) {
+      if (text.startsWith(p) && text.length > p.length + 2) {
+        return QueueIntent(text.substring(p.length).trim());
+      }
+    }
+    for (final p in const ['la que dice ', 'busca la que dice ', 'la cancion que dice ']) {
+      if (text.startsWith(p) && text.length > p.length + 2) {
+        return LyricsIntent(text.substring(p.length).trim());
+      }
+    }
     if (_restart.contains(text)) return const RestartIntent();
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
@@ -352,6 +450,51 @@ class CommandParser {
     final cmd = parseExact(text);
     if (cmd != null) return CommandIntent(cmd);
     return null;
+  }
+
+  /// «cambia y sube» → [CommandIntent(next), CommandIntent(volumeUp)].
+  /// Solo si TODAS las partes son órdenes cortas (no rompe «busca X y Y»).
+  MultiIntent? _parseMulti(String text) {
+    if (!text.contains(' y ')) return null;
+    final parts = text.split(' y ');
+    if (parts.length < 2 || parts.length > 3) return null;
+    final out = <VoiceIntent>[];
+    for (final part in parts) {
+      final p = part.trim();
+      final cmd = parseExact(p);
+      if (cmd != null) {
+        out.add(CommandIntent(cmd));
+        continue;
+      }
+      if (_likes.contains(p)) {
+        out.add(const LikeIntent());
+        continue;
+      }
+      if (_dislikes.contains(p)) {
+        out.add(const DislikeIntent());
+        continue;
+      }
+      final v = parseVolume(p);
+      if (v != null) {
+        out.add(VolumeIntent(v));
+        continue;
+      }
+      return null;
+    }
+    return MultiIntent(out);
+  }
+
+  /// «volumen al cincuenta», «pon el volumen en 30», «volumen al máximo» → 0–100.
+  int? parseVolume(String heard) {
+    final text = normalize(heard);
+    final m = RegExp(r'^(pon |sube |baja )?(el )?volumen (al|a|en) (.+?)( por ciento)?$')
+        .firstMatch(text);
+    if (m == null) return null;
+    var what = m.group(4)!.trim();
+    if (what.startsWith('el ')) what = what.substring(3);
+    final n = int.tryParse(what) ?? volumeNumbers[what];
+    if (n == null || n < 0 || n > 100) return null;
+    return n;
   }
 
   /// «apaga en veinte minutos», «apaga en 20 minutos», «apaga en una hora».

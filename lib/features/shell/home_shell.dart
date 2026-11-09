@@ -54,6 +54,7 @@ class _HomeShellState extends State<HomeShell> {
         settings: widget.settings,
         voice: widget.voice,
         onHeadphoneTapsChanged: widget.onHeadphoneTapsChanged,
+        assistant: widget.assistant,
       ),
       MyMusicScreen(
         profile: widget.profile,
@@ -69,6 +70,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
     ];
     return Scaffold(
+      extendBody: true, // el fondo espacial se ve detrás de la barra inferior
       body: IndexedStack(index: _tab, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,

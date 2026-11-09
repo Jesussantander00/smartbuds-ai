@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/settings/app_settings.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import 'assistant.dart';
 
 /// Asistente: qué puedes decir y cómo responde SmartBuds.
 class AssistantScreen extends StatefulWidget {
@@ -10,7 +11,11 @@ class AssistantScreen extends StatefulWidget {
     required this.settings,
     this.voice,
     this.onHeadphoneTapsChanged,
+    this.assistant,
   });
+
+  /// Para los ajustes que hablan con el teléfono (llamadas, audífonos).
+  final Assistant? assistant;
 
   final AppSettings settings;
   final VoiceEngine? voice;
@@ -26,6 +31,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
   AppSettings get settings => widget.settings;
   VoiceEngine? get voice => widget.voice;
   bool _speakerAvailable = false;
+  String _filter = '';
+  bool _allHistory = false;
 
   @override
   void initState() {
@@ -56,6 +63,13 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Deshacer»', 'Vuelve a la canción de antes, donde iba'),
     ('«Comparte esta»', 'Prepara el enlace para WhatsApp'),
     ('«Pon mi radio»', 'Música sin parar: favoritas y descubrimientos'),
+    ('«Volumen al cincuenta»', 'Volumen exacto. También «al máximo», «a la mitad»'),
+    ('«Después pon …»', 'La pone cuando termine la actual (cola)'),
+    ('«La que dice …»', 'Busca por un pedazo de la letra'),
+    ('«Cambia y sube»', 'Varias órdenes en una frase'),
+    ('«Nunca más esta»', 'No vuelve a sonar. «Nunca más este artista» bloquea al artista'),
+    ('«Pon favoritas olvidadas»', 'Lo que te encantaba y hace rato no suena'),
+    ('«Comparte mi semana»', 'Tu resumen musical para WhatsApp'),
   ];
 
   Future<void> _editWake(BuildContext context) async {
@@ -97,153 +111,332 @@ class _AssistantScreenState extends State<AssistantScreen> {
     await widget.voice?.setCustomWake(value);
   }
 
+  bool _match(String a, [String b = '']) {
+    if (_filter.isEmpty) return true;
+    final f = _filter.toLowerCase();
+    return a.toLowerCase().contains(f) || b.toLowerCase().contains(f);
+  }
+
+  /// Un interruptor que se oculta si no coincide con la búsqueda.
+  Widget? _switch(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+    if (!_match(title, subtitle)) return null;
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: onChanged,
+    );
+  }
+
+  /// Sección con título; desaparece si ningún ajuste coincide.
+  List<Widget> _section(BuildContext context, String title, IconData icon, List<Widget?> items) {
+    final visible = items.whereType<Widget>().toList();
+    if (visible.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 20, 4, 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(title.toUpperCase(),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(letterSpacing: 1.3, color: Theme.of(context).colorScheme.primary)),
+          ],
+        ),
+      ),
+      Card(child: Column(children: visible)),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final media = widget.assistant?.media;
     return Scaffold(
       appBar: AppBar(title: const Text('Asistente')),
       body: ListenableBuilder(
         listenable: Listenable.merge([settings, if (voice != null) voice!]),
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
           children: [
-            Text('Lo que puedes decir', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text('Di la orden sola, con una pequeña pausa antes y después. '
-                'Hablar o cantar normal no dispara nada.'),
-            const SizedBox(height: 8),
-            Card(
-              child: Column(
-                children: [
-                  for (final (say, does) in _commands)
-                    ListTile(dense: true, title: Text(say), subtitle: Text(does)),
-                ],
+            TextField(
+              onChanged: (v) => setState(() => _filter = v.trim()),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Buscar un ajuste u orden…',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
             ),
-            const SizedBox(height: 16),
-            Text('Ajustes', style: Theme.of(context).textTheme.titleMedium),
-            SwitchListTile(
-              title: const Text('Respuesta por voz'),
-              subtitle: const Text('SmartBuds te confirma al oído: «Reproduciendo…»'),
-              value: settings.voiceFeedback,
-              onChanged: (v) {
+            if (voice != null && _filter.isEmpty) ..._history(context, voice!),
+            ..._section(context, 'Lo que puedes decir', Icons.record_voice_over, [
+              if (_filter.isEmpty)
+                const ListTile(
+                  dense: true,
+                  title: Text('Di la orden sola, con una pequeña pausa antes y después. '
+                      'Hablar o cantar normal no dispara nada.'),
+                ),
+              for (final (say, does) in _commands)
+                if (_match(say, does)) ListTile(dense: true, title: Text(say), subtitle: Text(does)),
+            ]),
+            ..._section(context, 'Voz y escucha', Icons.mic, [
+              _switch('Respuesta por voz', 'SmartBuds te confirma al oído: «Reproduciendo…»',
+                  settings.voiceFeedback, (v) {
                 settings.update(voiceFeedback: v);
                 voice?.feedbackEnabled = v;
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Seguir a mis audífonos'),
-              subtitle: const Text(
-                  'Pausa la escucha al quitarte los audífonos y la reanuda al conectarlos'),
-              value: settings.followHeadphones,
-              onChanged: (v) {
-                settings.update(followHeadphones: v);
-                voice?.followHeadphones = v;
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Solo con «Oye música»'),
-              subtitle: const Text('SmartBuds solo obedece después de que digas «Oye música». '
-                  'Casi nunca se activa por error.'),
-              value: settings.wakeWord,
-              onChanged: (v) {
+              }),
+              _switch('Respuestas cortas', 'Solo lo esencial: una frase por respuesta.',
+                  settings.shortReplies, (v) {
+                settings.update(shortReplies: v);
+                voice?.shortReplies = v;
+              }),
+              _switch('Solo con «Oye música»',
+                  'Solo obedece después de «Oye música». Casi nunca se activa por error.',
+                  settings.wakeWord, (v) {
                 settings.update(wakeWord: v);
                 voice?.requireWakeWord = v;
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Toques en los audífonos'),
-              subtitle: const Text('Dos toques: siguiente canción. Tres toques: la anterior. '
-                  'Funciona con cualquier audífono con botón.'),
-              value: settings.headphoneTaps,
-              onChanged: (v) {
-                settings.update(headphoneTaps: v);
-                widget.onHeadphoneTapsChanged?.call(v);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Radio SmartBuds'),
-              subtitle: const Text('Cuando termina una canción, SmartBuds elige la siguiente.'),
-              value: settings.radioMode,
-              onChanged: (v) => settings.update(radioMode: v),
-            ),
-            SwitchListTile(
-              title: const Text('Anunciar cada canción'),
-              subtitle: const Text('Dice suavemente el nombre de la canción nueva.'),
-              value: settings.announceSongs,
-              onChanged: (v) => settings.update(announceSongs: v),
-            ),
-            SwitchListTile(
-              title: const Text('Retomar al conectar audífonos'),
-              subtitle: const Text('La música sigue donde la dejaste.'),
-              value: settings.resumeOnHeadphones,
-              onChanged: (v) => settings.update(resumeOnHeadphones: v),
-            ),
-            ListTile(
-              leading: const Icon(Icons.campaign),
-              title: const Text('Tu palabra de activación'),
-              subtitle: Text(settings.wakePhrase.isEmpty
-                  ? 'Además de «Oye música». Toca para elegir una.'
-                  : '«${settings.wakePhrase}» (y también «Oye música»)'),
-              onTap: () => _editWake(context),
-            ),
-            SwitchListTile(
-              title: const Text('Enviar reportes de errores'),
-              subtitle: const Text('Anónimos: solo el tipo de error, nunca tu voz ni lo que dices.'),
-              value: settings.errorReports,
-              onChanged: (v) => settings.update(errorReports: v),
-            ),
-            const SizedBox(height: 8),
-            Text('Apariencia', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'dark', label: Text('Oscuro'), icon: Icon(Icons.dark_mode)),
-                ButtonSegment(value: 'light', label: Text('Claro'), icon: Icon(Icons.light_mode)),
-                ButtonSegment(value: 'system', label: Text('Auto'), icon: Icon(Icons.brightness_auto)),
-              ],
-              selected: {settings.themeMode},
-              onSelectionChanged: (v) => settings.update(themeMode: v.first),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              children: [
-                for (final c in const [0xFF00B4D8, 0xFF7C4DFF, 0xFFE91E63, 0xFF4CAF50, 0xFFFF9800])
-                  GestureDetector(
-                    onTap: () => settings.update(seedColor: c),
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Color(c),
-                      child: settings.seedColor == c
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : null,
+              }),
+              if (_match('Tu palabra de activación', 'oye música'))
+                ListTile(
+                  leading: const Icon(Icons.campaign),
+                  title: const Text('Tu palabra de activación'),
+                  subtitle: Text(settings.wakePhrase.isEmpty
+                      ? 'Además de «Oye música». Toca para elegir una.'
+                      : '«${settings.wakePhrase}» (y también «Oye música»)'),
+                  onTap: () => _editWake(context),
+                ),
+              if (voice != null && _match('Probar la voz de SmartBuds'))
+                ListTile(
+                  leading: const Icon(Icons.volume_up),
+                  title: const Text('Probar la voz de SmartBuds'),
+                  onTap: () => voice!.speak('Hola, soy SmartBuds. Dime qué quieres escuchar.',
+                      force: true),
+                ),
+            ]),
+            ..._section(context, 'Música', Icons.library_music, [
+              _switch('Radio SmartBuds', 'Cuando termina una canción, SmartBuds elige la siguiente.',
+                  settings.radioMode, (v) => settings.update(radioMode: v)),
+              _switch('Anunciar cada canción', 'Dice suavemente el nombre de la canción nueva.',
+                  settings.announceSongs, (v) => settings.update(announceSongs: v)),
+              if (_match('Nivel de descubrimiento', 'joyas ocultas conocidos'))
+                ListTile(
+                  title: const Text('Nivel de descubrimiento'),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: SegmentedButton<int>(
+                      segments: const [
+                        ButtonSegment(value: 0, label: Text('Conocidos')),
+                        ButtonSegment(value: 1, label: Text('Mixto')),
+                        ButtonSegment(value: 2, label: Text('Joyas ocultas')),
+                      ],
+                      selected: {settings.discoveryLevel},
+                      onSelectionChanged: (v) => settings.update(discoveryLevel: v.first),
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (voice != null)
-              ListTile(
-                leading: const Icon(Icons.record_voice_over),
-                title: const Text('Probar la voz de SmartBuds'),
-                onTap: () => voice!.speak('Hola, soy SmartBuds. Dime qué quieres escuchar.',
-                    force: true),
-              ),
-            const SizedBox(height: 16),
-            if (voice != null) _onlyMyVoice(context),
-            const SizedBox(height: 16),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.screen_lock_portrait),
-                title: Text('Con la pantalla apagada'),
-                subtitle: Text(
-                    'Mientras el micrófono esté activo verás la notificación «SmartBuds está '
-                    'escuchando». Puedes bloquear el teléfono o cerrar la app: sigue '
-                    'escuchando hasta que toques «Detener» en la notificación.'),
-              ),
-            ),
+                ),
+              _switch('Sugerencias según el clima',
+                  'Usa tu ubicación aproximada (por internet, sin GPS) para sugerir música.',
+                  settings.weatherSuggestions, (v) {
+                settings.update(weatherSuggestions: v);
+                widget.assistant?.refreshWeather();
+              }),
+              if (_match('Bloqueadas', 'nunca más'))
+                ListTile(
+                  leading: const Icon(Icons.block),
+                  title: const Text('Bloqueadas («Nunca más»)'),
+                  subtitle: Text(
+                      '${settings.blockedTracks.length} canciones · ${settings.blockedArtists.length} artistas'),
+                  onTap: () => _showBlocked(context),
+                ),
+            ]),
+            ..._section(context, 'Audífonos y llamadas', Icons.headphones, [
+              _switch('Seguir a mis audífonos',
+                  'Pausa la escucha al quitarte los audífonos y la reanuda al conectarlos',
+                  settings.followHeadphones, (v) {
+                settings.update(followHeadphones: v);
+                voice?.followHeadphones = v;
+              }),
+              _switch('Pausar al quitar los audífonos', 'La música se detiene sola al desconectarlos.',
+                  settings.pauseOnUnplug, (v) {
+                settings.update(pauseOnUnplug: v);
+                media?.setPauseOnUnplug(v);
+              }),
+              _switch('Retomar al conectar audífonos', 'La música sigue donde la dejaste.',
+                  settings.resumeOnHeadphones, (v) => settings.update(resumeOnHeadphones: v)),
+              _switch('Pausar en llamadas', 'Pausa al entrar una llamada y sigue al colgar.',
+                  settings.pauseOnCalls, (v) {
+                settings.update(pauseOnCalls: v);
+                media?.setCallPause(v);
+              }),
+              _switch('Toques en los audífonos',
+                  'Dos toques: siguiente canción. Tres toques: la anterior.',
+                  settings.headphoneTaps, (v) {
+                settings.update(headphoneTaps: v);
+                widget.onHeadphoneTapsChanged?.call(v);
+              }),
+              if (settings.headphoneVolumes.isNotEmpty && _match('Volumen por audífono'))
+                for (final e in settings.headphoneVolumes.entries)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.headset),
+                    title: Text(e.key),
+                    subtitle: Text('Volumen preferido: ${e.value} %'),
+                  ),
+            ]),
+            ..._section(context, 'Batería y privacidad', Icons.battery_saver, [
+              _switch('Ahorro de batería',
+                  'Con menos de 20 %: respuestas cortas, sin anuncios ni sugerencias por internet.',
+                  settings.batterySaver, (v) {
+                settings.update(batterySaver: v);
+                widget.assistant?.checkBattery();
+              }),
+              _switch('Enviar reportes de errores',
+                  'Anónimos: solo el tipo de error, nunca tu voz ni lo que dices.',
+                  settings.errorReports, (v) => settings.update(errorReports: v)),
+              if (_match('Con la pantalla apagada', 'notificación'))
+                const ListTile(
+                  leading: Icon(Icons.screen_lock_portrait),
+                  title: Text('Con la pantalla apagada'),
+                  subtitle: Text('Mientras el micrófono esté activo verás la notificación con '
+                      '⏮ ⏯ ⏭. Puedes bloquear el teléfono: sigue escuchando hasta que toques '
+                      '«Detener».'),
+                ),
+            ]),
+            ..._section(context, 'Apariencia', Icons.palette, [
+              if (_match('Apariencia', 'tema oscuro claro color'))
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'dark', label: Text('Oscuro'), icon: Icon(Icons.dark_mode)),
+                          ButtonSegment(value: 'light', label: Text('Claro'), icon: Icon(Icons.light_mode)),
+                          ButtonSegment(value: 'system', label: Text('Auto'), icon: Icon(Icons.brightness_auto)),
+                        ],
+                        selected: {settings.themeMode},
+                        onSelectionChanged: (v) => settings.update(themeMode: v.first),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        children: [
+                          for (final c in const [0xFF00B4D8, 0xFF7C4DFF, 0xFFE91E63, 0xFF4CAF50, 0xFFFF9800])
+                            GestureDetector(
+                              onTap: () => settings.update(seedColor: c),
+                              child: CircleAvatar(
+                                radius: 18,
+                                backgroundColor: Color(c),
+                                child: settings.seedColor == c
+                                    ? const Icon(Icons.check, color: Colors.white)
+                                    : null,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ]),
+            if (voice != null && _match('Solo mi voz', 'entrenar')) ...[
+              const SizedBox(height: 16),
+              _onlyMyVoice(context),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Historial de voz: lo que dijiste y lo que hizo SmartBuds.
+  List<Widget> _history(BuildContext context, VoiceEngine v) {
+    final theme = Theme.of(context);
+    final items = _allHistory ? v.history : v.history.take(5).toList();
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 20, 4, 6),
+        child: Row(
+          children: [
+            Icon(Icons.history, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('HISTORIAL DE VOZ',
+                style: theme.textTheme.labelLarge
+                    ?.copyWith(letterSpacing: 1.3, color: theme.colorScheme.primary)),
+          ],
+        ),
+      ),
+      Card(
+        child: v.history.isEmpty
+            ? const ListTile(
+                leading: Icon(Icons.mic_none),
+                title: Text('Aún no hay órdenes'),
+                subtitle: Text('Lo que le digas a SmartBuds aparecerá aquí.'),
+              )
+            : Column(
+                children: [
+                  for (final e in items)
+                    ListTile(
+                      dense: true,
+                      leading: Text(TimeOfDay.fromDateTime(e.at).format(context),
+                          style: theme.textTheme.labelSmall),
+                      title: Text(e.action),
+                      subtitle: Text([
+                        if (e.heard.isNotEmpty) 'Oí: «${e.heard}»',
+                        if (e.reply != null) 'Dijo: «${e.reply}»',
+                      ].join('\n')),
+                    ),
+                  if (v.history.length > 5)
+                    TextButton(
+                      onPressed: () => setState(() => _allHistory = !_allHistory),
+                      child: Text(_allHistory ? 'Ver menos' : 'Ver todo (${v.history.length})'),
+                    ),
+                ],
+              ),
+      ),
+    ];
+  }
+
+  Future<void> _showBlocked(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => ListenableBuilder(
+        listenable: settings,
+        builder: (context, _) {
+          final tracks = settings.blockedTracks.toList()..sort();
+          final artists = settings.blockedArtists.toList()..sort();
+          if (tracks.isEmpty && artists.isEmpty) {
+            return const SizedBox(
+              height: 160,
+              child: Center(child: Text('No hay nada bloqueado.')),
+            );
+          }
+          return ListView(
+            shrinkWrap: true,
+            children: [
+              for (final a in artists)
+                ListTile(
+                  leading: const Icon(Icons.person_off),
+                  title: Text(a),
+                  subtitle: const Text('Artista'),
+                  trailing: TextButton(
+                      onPressed: () => settings.unblock(a, artist: true),
+                      child: const Text('Desbloquear')),
+                ),
+              for (final t in tracks)
+                ListTile(
+                  leading: const Icon(Icons.music_off),
+                  title: Text(t.split('|').first),
+                  subtitle: Text(t.split('|').last),
+                  trailing: TextButton(
+                      onPressed: () => settings.unblock(t), child: const Text('Desbloquear')),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

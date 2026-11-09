@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'connectors/android_media/android_media_connector.dart';
 import 'connectors/connector_interface.dart';
 import 'connectors/deezer/similar_artists.dart';
+import 'connectors/weather/weather.dart';
 import 'connectors/youtube/youtube_search.dart';
 import 'core/capability_manager/capability_manager.dart';
 import 'core/command_router/command_router.dart';
@@ -18,6 +19,7 @@ import 'core/settings/app_settings.dart';
 import 'core/storage/json_store.dart';
 import 'core/voice_engine/voice_engine.dart';
 import 'core/telemetry/error_reporter.dart';
+import 'core/ui/futuristic.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
 import 'features/devices/detected_player_controller.dart';
@@ -147,7 +149,9 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       media: android,
       settings: widget.settings,
       errors: widget.errors,
+      weather: WeatherService(),
     );
+    widget.profile.isBlocked = widget.settings.isBlocked;
 
     // Cada cambio del reproductor: perfil, asistente (radio, anuncios…) y
     // modo de escucha (abierta si no suena nada).
@@ -179,6 +183,15 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..threshold = widget.settings.voiceThreshold;
       voice = v;
       assistant.voice = v;
+      // Respuestas cortas: por ajuste o porque queda poca batería.
+      void syncShort() =>
+          v.shortReplies = widget.settings.shortReplies || assistant.lowBattery;
+      syncShort();
+      widget.settings.addListener(syncShort);
+      assistant.addListener(syncShort);
+      unawaited(android?.setPauseOnUnplug(widget.settings.pauseOnUnplug));
+      if (Platform.isAndroid) unawaited(android?.setCallPause(widget.settings.pauseOnCalls));
+      assistant.startBackground();
       unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
@@ -230,9 +243,10 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         'system' => ThemeMode.system,
         _ => ThemeMode.dark,
       },
-      theme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.light, useMaterial3: true),
-      darkTheme:
-          ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
+      theme: smartBudsTheme(Brightness.light, seed),
+      darkTheme: smartBudsTheme(Brightness.dark, seed),
+      // Fondo espacial animado detrás de todas las pantallas.
+      builder: (context, child) => SpaceBackground(child: child ?? const SizedBox()),
       home: ListenableBuilder(
         listenable: widget.settings,
         builder: (context, _) {

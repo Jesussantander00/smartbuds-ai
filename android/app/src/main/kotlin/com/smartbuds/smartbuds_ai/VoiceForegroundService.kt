@@ -22,6 +22,9 @@ class VoiceForegroundService : Service() {
         private const val CHANNEL_ID = "smartbuds_listening"
         private const val NOTIFICATION_ID = 4202
         private const val ACTION_STOP = "com.smartbuds.smartbuds_ai.STOP_LISTENING"
+        private const val ACTION_PREV = "com.smartbuds.smartbuds_ai.MEDIA_PREV"
+        private const val ACTION_TOGGLE = "com.smartbuds.smartbuds_ai.MEDIA_TOGGLE"
+        private const val ACTION_NEXT = "com.smartbuds.smartbuds_ai.MEDIA_NEXT"
 
         fun start(context: Context) {
             val intent = Intent(context, VoiceForegroundService::class.java)
@@ -45,6 +48,16 @@ class VoiceForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val media = when (intent?.action) {
+            ACTION_PREV -> "previous"
+            ACTION_TOGGLE -> "togglePlayPause"
+            ACTION_NEXT -> "next"
+            else -> null
+        }
+        if (media != null) {
+            MediaSessionConnector.instance?.commandActive(media)
+            return START_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             SmartBudsApplication.instance?.voiceRecognizer?.stopFromNotification()
             stopSelf()
@@ -90,6 +103,16 @@ class VoiceForegroundService : Service() {
             Intent(this, VoiceForegroundService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        fun mediaAction(code: Int, action: String, icon: Int, label: String) =
+            Notification.Action.Builder(
+                android.graphics.drawable.Icon.createWithResource(this, icon),
+                label,
+                PendingIntent.getService(
+                    this, code,
+                    Intent(this, VoiceForegroundService::class.java).setAction(action),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            ).build()
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -102,6 +125,10 @@ class VoiceForegroundService : Service() {
             .setContentText("Di «Cambia», «Pausa» o «Busca» y una canción")
             .setContentIntent(open)
             .setOngoing(true)
+            .setStyle(Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2))
+            .addAction(mediaAction(10, ACTION_PREV, android.R.drawable.ic_media_previous, "Anterior"))
+            .addAction(mediaAction(11, ACTION_TOGGLE, android.R.drawable.ic_media_pause, "Pausa"))
+            .addAction(mediaAction(12, ACTION_NEXT, android.R.drawable.ic_media_next, "Siguiente"))
             .addAction(
                 Notification.Action.Builder(
                     android.graphics.drawable.Icon.createWithResource(

@@ -36,7 +36,7 @@ Future<void> pumpScreen(WidgetTester tester, DetectedPlayerController c) async {
 void main() {
   testWidgets('sin reproductores muestra «Ningún reproductor»', (tester) async {
     await pumpScreen(tester, controllerFor(FakeSource([])));
-    expect(find.text('Reproductor detectado'), findsOneWidget);
+    expect(find.text('Dispositivos'), findsOneWidget);
     expect(find.text('Ningún reproductor'), findsOneWidget);
   });
 

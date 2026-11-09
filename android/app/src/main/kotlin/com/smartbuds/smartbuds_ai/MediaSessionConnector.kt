@@ -5,7 +5,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.BatteryManager
+import java.io.ByteArrayOutputStream
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -73,6 +77,8 @@ class MediaSessionConnector(
 
     fun dispose() {
         stopWatching()
+        stopCallWatch()
+        setPauseOnUnplug(false)
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
         if (instance === this) instance = null
@@ -131,6 +137,21 @@ class MediaSessionConnector(
                 "shareText" -> result.success(shareText(call.argument<String>("text") ?: ""))
                 "setTapGestures" -> {
                     taps.enabled = call.argument<Boolean>("enabled") != false
+                    result.success(true)
+                }
+                "setVolumePercent" -> result.success(
+                    setVolumePercent(call.argument<Number>("percent")?.toInt() ?: 50)
+                )
+                "getVolumePercent" -> result.success(volumePercent())
+                "getOutputDevice" -> result.success(outputDevice())
+                "getBattery" -> result.success(battery())
+                "setCallPause" -> {
+                    callPauseEnabled = call.argument<Boolean>("enabled") != false
+                    if (callPauseEnabled) startCallWatch() else stopCallWatch()
+                    result.success(true)
+                }
+                "setPauseOnUnplug" -> {
+                    setPauseOnUnplug(call.argument<Boolean>("enabled") != false)
                     result.success(true)
                 }
                 "adjustSystemVolume" -> result.success(
@@ -320,6 +341,148 @@ class MediaSessionConnector(
         }
     }
 
+    // ------------------------------------------------- Volumen, salida, batería
+
+    private fun setVolumePercent(percent: Int): Boolean {
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val target = Math.round(max * percent.coerceIn(0, 100) / 100f)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI)
+        return true
+    }
+
+    private fun volumePercent(): Int {
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 0
+        return Math.round(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max)
+    }
+
+    /** Nombre de los audífonos conectados (Bluetooth o cable), o null. */
+    private fun outputDevice(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
+        val wanted = setOf(
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+        )
+        val d = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .firstOrNull { it.type in wanted } ?: return null
+        val name = d.productName?.toString()?.trim().orEmpty()
+        return name.ifEmpty {
+            if (d.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) "Audífonos Bluetooth" else "Audífonos con cable"
+        }
+    }
+
+    private fun battery(): Map<String, Any> {
+        val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val charging = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) bm.isCharging else false
+        return mapOf("level" to level, "charging" to charging)
+    }
+
+    // ------------------------------------- Pausa al quitarse los audífonos
+
+    private var noisyRegistered = false
+    private val noisyReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                try {
+                    activeControllers().filter {
+                        it.playbackState?.state == PlaybackState.STATE_PLAYING
+                    }.forEach { it.transportControls.pause() }
+                } catch (_: SecurityException) {}
+            }
+        }
+    }
+
+    private fun setPauseOnUnplug(enabled: Boolean) {
+        if (enabled && !noisyRegistered) {
+            context.registerReceiver(
+                noisyReceiver,
+                android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+            )
+            noisyRegistered = true
+        } else if (!enabled && noisyRegistered) {
+            try { context.unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
+            noisyRegistered = false
+        }
+    }
+
+    // ------------------------------------------- Pausa durante llamadas
+
+    private var callPauseEnabled = false
+    private var inCall = false
+    private var pausedForCall: String? = null
+    private val callWatch = object : Runnable {
+        override fun run() {
+            val mode = audioManager.mode
+            val calling = mode == AudioManager.MODE_IN_CALL ||
+                mode == AudioManager.MODE_IN_COMMUNICATION ||
+                mode == AudioManager.MODE_RINGTONE
+            if (calling && !inCall) {
+                inCall = true
+                val playing = try {
+                    activeControllers().firstOrNull {
+                        it.playbackState?.state == PlaybackState.STATE_PLAYING
+                    }
+                } catch (_: SecurityException) { null }
+                if (playing != null) {
+                    pausedForCall = playerId(playing)
+                    playing.transportControls.pause()
+                }
+            } else if (!calling && inCall) {
+                inCall = false
+                val id = pausedForCall
+                pausedForCall = null
+                if (id != null) main.postDelayed({
+                    try { findController(id)?.transportControls?.play() } catch (_: SecurityException) {}
+                }, 1500)
+            }
+            if (callPauseEnabled) main.postDelayed(this, 1500)
+        }
+    }
+
+    private fun startCallWatch() {
+        main.removeCallbacks(callWatch)
+        main.post(callWatch)
+    }
+
+    private fun stopCallWatch() = main.removeCallbacks(callWatch)
+
+    /** Para los botones de la notificación: actúa sobre lo que está sonando. */
+    fun commandActive(command: String): Boolean {
+        val list = try { activeControllers() } catch (_: SecurityException) { emptyList() }
+        val c = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            ?: list.firstOrNull() ?: return false
+        return sendCommand(playerId(c), command)
+    }
+
+    // ------------------------------------------------------------- Carátula
+
+    private var artKey: String? = null
+    private var artBytes: ByteArray? = null
+
+    /** Carátula reducida a 160 px en JPEG, cacheada por canción. */
+    private fun artFor(md: MediaMetadata?): ByteArray? {
+        if (md == null) return null
+        val key = "${md.getString(MediaMetadata.METADATA_KEY_TITLE)}|" +
+            "${md.getString(MediaMetadata.METADATA_KEY_ARTIST)}"
+        if (key == artKey) return artBytes
+        val bmp = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        artKey = key
+        artBytes = try {
+            bmp?.let {
+                val scaled = Bitmap.createScaledBitmap(it, 160, 160, true)
+                val out = ByteArrayOutputStream()
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                out.toByteArray()
+            }
+        } catch (_: Exception) { null }
+        return artBytes
+    }
+
     private fun adjustVolume(up: Boolean): Boolean {
         audioManager.adjustStreamVolume(
             AudioManager.STREAM_MUSIC,
@@ -345,6 +508,10 @@ class MediaSessionConnector(
             "positionMs" to ps?.let { currentPosition(it) },
             "lastActiveAtMs" to ps?.let { toEpochMs(it.lastPositionUpdateTime) },
             "actions" to actions(ps),
+            "durationMs" to md?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0 },
+            "album" to md?.getString(MediaMetadata.METADATA_KEY_ALBUM),
+            "art" to if (ps?.state == PlaybackState.STATE_PLAYING ||
+                ps?.state == PlaybackState.STATE_PAUSED) artFor(md) else null,
         )
     }
 

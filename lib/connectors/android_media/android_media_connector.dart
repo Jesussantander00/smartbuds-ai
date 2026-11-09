@@ -78,6 +78,41 @@ class AndroidMediaSource
     }
   }
 
+  Future<T?> _safe<T>(String method, [Object? args]) async {
+    try {
+      return await _channel.invokeMethod<T>(method, args);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Volumen del sistema en porcentaje (0–100).
+  Future<bool> setVolumePercent(int percent) async =>
+      await _safe<bool>('setVolumePercent', {'percent': percent}) ?? false;
+
+  Future<int?> volumePercent() => _safe<int>('getVolumePercent');
+
+  /// Nombre de los audífonos conectados, o null si suena por el altavoz.
+  Future<String?> outputDevice() => _safe<String>('getOutputDevice');
+
+  /// Nivel de batería (0–100) y si está cargando.
+  Future<({int level, bool charging})?> battery() async {
+    final m = await _safe<Map<dynamic, dynamic>>('getBattery');
+    if (m == null) return null;
+    return (
+      level: (m['level'] as num?)?.toInt() ?? 100,
+      charging: m['charging'] == true,
+    );
+  }
+
+  /// Pausa la música durante llamadas y la reanuda al colgar.
+  Future<void> setCallPause(bool enabled) =>
+      _safe<bool>('setCallPause', {'enabled': enabled});
+
+  /// Pausa la música al desconectar los audífonos.
+  Future<void> setPauseOnUnplug(bool enabled) =>
+      _safe<bool>('setPauseOnUnplug', {'enabled': enabled});
+
   /// Dos toques al audífono = siguiente, tres = anterior.
   Future<void> setTapGestures(bool enabled) async {
     try {

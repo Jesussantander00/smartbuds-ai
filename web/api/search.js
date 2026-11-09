@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
     type: 'video',
     videoCategoryId: '10', // Música
     videoEmbeddable: 'true', // que se pueda reproducir dentro de la página
-    maxResults: '5',
+    maxResults: '8',
     q,
     key,
   }).toString();
@@ -40,6 +40,7 @@ module.exports = async function handler(req, res) {
         id: it.id.videoId,
         title: unescape(it.snippet.title),
         channel: unescape(it.snippet.channelTitle || ''),
+        thumb: it.snippet.thumbnails?.default?.url || '',
       }));
     if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value);
     cache.set(q.toLowerCase(), items);

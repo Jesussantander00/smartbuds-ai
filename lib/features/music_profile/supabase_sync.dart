@@ -141,6 +141,8 @@ class SupabaseSync {
         .openUrl(method, Uri.parse('$url/rest/v1/$path'))
         .timeout(const Duration(seconds: 8));
     req.headers.set('apikey', anonKey);
+    // Sin cuenta, la base solo deja tocar las filas de este teléfono (supabase/seguridad.sql).
+    req.headers.set('x-device-id', deviceId);
     // Con cuenta: el token del usuario. Sin cuenta: la clave pública si es
     // de las antiguas (JWT); las nuevas «publishable» solo van en apikey.
     final bearer = token ?? (anonKey.startsWith('eyJ') ? anonKey : null);

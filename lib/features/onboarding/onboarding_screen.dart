@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../devices/detected_player_controller.dart';
 
@@ -77,19 +78,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
             return ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                Icon(Icons.headphones, size: 64, color: theme.colorScheme.primary),
+                _Appear(
+                  index: 0,
+                  child: Column(
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (r) => Neon.gradient.createShader(r),
+                        child: const Icon(Icons.headphones, size: 72, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      const NeonEqualizer(playing: true, height: 28),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
-                Text('Bienvenido a SmartBuds',
-                    textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
+                _Appear(
+                  index: 1,
+                  child: Text('Bienvenido a SmartBuds',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Controla tu música con la voz, sin tocar el teléfono. '
-                  'Tres pasos y listo.',
-                  textAlign: TextAlign.center,
+                const _Appear(
+                  index: 2,
+                  child: Text(
+                    'Controla tu música con la voz, sin tocar el teléfono. '
+                    'Tres pasos y listo.',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 if (widget.onRequestMusicAccess != null)
                   _Step(
+                    index: 3,
                     number: 1,
                     title: 'Conectar Apple Music',
                     body: 'En iPhone, SmartBuds controla la app Música con tu cuenta '
@@ -105,6 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                   )
                 else
                   _Step(
+                    index: 3,
                     number: 1,
                     title: 'Ver qué música suena',
                     body: 'Activa «SmartBuds AI» en Acceso a notificaciones. '
@@ -118,6 +140,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                           ),
                   ),
                 _Step(
+                  index: 4,
                   number: 2,
                   title: 'Escucharte',
                   body: 'Permite el micrófono para escuchar tus órdenes '
@@ -134,6 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                         ),
                 ),
                 _Step(
+                  index: 5,
                   number: 3,
                   title: 'Pruébalo',
                   body: voice == null
@@ -152,9 +176,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                         ),
                 ),
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: widget.onFinished,
-                  child: const Text('Empezar'),
+                _Appear(
+                  index: 6,
+                  child: FilledButton(
+                    onPressed: widget.onFinished,
+                    child: const Text('Empezar'),
+                  ),
                 ),
                 TextButton(
                   onPressed: widget.onFinished,
@@ -171,6 +198,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
 
 class _Step extends StatelessWidget {
   const _Step({
+    required this.index,
     required this.number,
     required this.title,
     required this.body,
@@ -178,6 +206,7 @@ class _Step extends StatelessWidget {
     this.action,
   });
 
+  final int index;
   final int number;
   final String title;
   final String body;
@@ -187,17 +216,49 @@ class _Step extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
+    return _Appear(
+      index: index,
+      child: Card(
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: done ? Colors.green : theme.colorScheme.secondaryContainer,
-          child: done ? const Icon(Icons.check, color: Colors.white) : Text('$number'),
+        leading: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
+          child: CircleAvatar(
+            key: ValueKey(done),
+            backgroundColor: done ? Colors.green : theme.colorScheme.secondaryContainer,
+            child: done ? const Icon(Icons.check, color: Colors.white) : Text('$number'),
+          ),
         ),
         title: Text(title),
         subtitle: Text(body),
         trailing: done ? null : action,
         isThreeLine: true,
       ),
+      ),
+    );
+  }
+}
+
+/// Aparece deslizándose desde abajo, uno tras otro según [index].
+class _Appear extends StatelessWidget {
+  const _Appear({required this.index, required this.child});
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
+    final delay = index * 120;
+    final total = 450 + delay;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(delay / total, 1, curve: Curves.easeOutCubic),
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 24 * (1 - t)), child: child),
+      ),
+      child: child,
     );
   }
 }

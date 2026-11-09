@@ -176,6 +176,17 @@
         },
         onStateChange: (e) => {
           const isPlaying = e.data === YT.PlayerState.PLAYING;
+          if (isPlaying && pendingConfirm && pendingConfirm === current) {
+            current.startedAt = Date.now(); // el tiempo escuchado empieza ahora
+            record(current, 'play');
+            say(`Reproduciendo ${current.title}`);
+            pendingConfirm = null;
+          }
+          if (current?.videoId) {
+            $('nowSource').textContent = isPlaying ? 'Sonando en SmartBuds'
+              : e.data === YT.PlayerState.BUFFERING ? 'Cargando…'
+              : e.data === YT.PlayerState.PAUSED ? 'En pausa' : $('nowSource').textContent;
+          }
           $('playBtn').textContent = isPlaying ? '⏸' : '▶';
           document.body.classList.toggle('is-playing', isPlaying); // ecualizador animado
           if (e.data === YT.PlayerState.ENDED) next(false);
@@ -188,13 +199,54 @@
   yt.src = 'https://www.youtube.com/iframe_api';
   document.head.appendChild(yt);
 
-  async function findVideo(query) {
+  /** Resultados de música, sin duplicados ni videos que no son la canción. */
+  let pendingConfirm = null; // canción elegida que aún no empieza a sonar
+
+  async function findVideos(query) {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
     if (res.status === 503) throw new Error('La búsqueda aún no está activada (falta la clave en Vercel).');
     if (!res.ok) throw new Error('No pude buscar la canción.');
     const items = await res.json();
-    if (!items.length) throw new Error(`No encontré «${query}».`);
-    return items[0];
+    const q = query.toLowerCase();
+    const junk = /(reacci[oó]n|reaction|tutorial|karaoke|cover|en vivo|live|entrevista|interview|trailer|shorts?|#shorts|1 hora|1 hour|loop)/i;
+    const seen = new Set();
+    const good = items.filter((v) => {
+      const m = v.title.match(junk);
+      if (m && !q.includes(m[1].toLowerCase())) return false; // solo si lo pediste
+      const k = parseTitle(v).title.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const list = good.length ? good : items;
+    if (!list.length) throw new Error(`No encontré «${query}».`);
+    return list;
+  }
+
+  async function findVideo(query) { return (await findVideos(query))[0]; }
+
+  /** Búsqueda escrita: muestra las opciones para que elijas (la voz pone la primera). */
+  async function showResults(query) {
+    const box = $('results');
+    status('Buscando…');
+    try {
+      const list = await findVideos(query);
+      box.innerHTML = '';
+      for (const v of list.slice(0, 5)) {
+        const info = parseTitle(v);
+        const b = document.createElement('button');
+        b.className = 'result';
+        b.innerHTML = `${v.thumb ? `<img src="${v.thumb}" alt="">` : ''}<span><b></b><small></small></span>`;
+        b.querySelector('b').textContent = info.title;
+        b.querySelector('small').textContent = info.artist;
+        b.onclick = () => { box.classList.add('hidden'); play({ ...info, videoId: v.id }); };
+        box.appendChild(b);
+      }
+      box.classList.remove('hidden');
+      status('Elige la que buscabas.');
+    } catch (e) {
+      status(e.message);
+    }
   }
 
   /** «Ojalá - Ryan Castro (Video Oficial)» → título y artista razonables. */
@@ -279,9 +331,14 @@
       let info;
       let videoId = null;
       if (target === 'here') {
-        const video = await findVideo(query);
-        videoId = video.id;
-        info = item.title ? { title: item.title, artist: item.artist } : parseTitle(video);
+        if (item.videoId) {
+          videoId = item.videoId;
+          info = { title: item.title, artist: item.artist };
+        } else {
+          const video = await findVideo(query);
+          videoId = video.id;
+          info = item.title ? { title: item.title, artist: item.artist } : parseTitle(video);
+        }
       } else {
         const link = await appLink(target, query);
         info = item.title ? { title: item.title, artist: item.artist }
@@ -302,11 +359,16 @@
         $('playerWrap').classList.add('empty');
         if (playerReady) player.pauseVideo();
       }
-      $('nowSource').textContent = `Sonando en ${APPS[target].name}`;
       $('nowTitle').textContent = [info.title, info.artist].filter(Boolean).join(' — ');
-      record(current, 'play');
+      if (videoId) {
+        // Aún no suena: se cuenta y se anuncia cuando YouTube confirme (onStateChange).
+        $('nowSource').textContent = 'Cargando…';
+        pendingConfirm = current;
+      } else {
+        // En otra app no se puede confirmar que suene: no se cuenta como escuchada.
+        $('nowSource').textContent = `Enviada a ${APPS[target].name} (SmartBuds no ve si suena)`;
+      }
       status(target === 'here' ? '' : `Abriendo en ${APPS[target].name}. Vuelve aquí y toca ⏭ para la siguiente.`);
-      if (target === 'here') say(`Reproduciendo ${info.title}`);
     } catch (e) {
       status(e.message);
       say('No pude ponerla.');
@@ -657,7 +719,7 @@
   $('search').onsubmit = (e) => {
     e.preventDefault();
     const q = $('q').value.trim();
-    if (q) { $('q').blur(); play({ query: q }); }
+    if (q) { $('q').blur(); if (target === 'here') showResults(q); else play({ query: q }); }
   };
   $('login').onsubmit = (e) => { e.preventDefault(); doAuth('signin'); };
   $('signup').onclick = () => doAuth('signup');

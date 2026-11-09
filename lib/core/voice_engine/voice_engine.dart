@@ -7,6 +7,19 @@ import '../models.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
+/// Una línea del historial de voz: lo que dijiste y lo que respondió SmartBuds.
+class VoiceLogEntry {
+  VoiceLogEntry(this.at, this.heard, this.action);
+  final DateTime at;
+  final String heard;
+
+  /// Qué entendió («Siguiente canción», «Buscar: Ojalá»…).
+  final String action;
+
+  /// Lo que SmartBuds dijo después (si dijo algo).
+  String? reply;
+}
+
 /// Motor de voz: escucha continua (también con la pantalla apagada) y convierte
 /// lo que oye en órdenes. El reconocimiento lo hace el módulo Kotlin
 /// `VoiceRecognizer`; la interpretación, [CommandParser].
@@ -104,6 +117,62 @@ class VoiceEngine extends ChangeNotifier {
     try {
       await _method.invokeMethod('setGrammarEnabled', {'enabled': !value});
     } catch (_) {}
+  }
+
+  /// Respuestas cortas: solo la primera frase de cada respuesta hablada.
+  bool shortReplies = false;
+
+  /// Últimas órdenes entendidas (la más reciente primero).
+  final List<VoiceLogEntry> history = [];
+  static const historyMax = 50;
+
+  void _log(VoiceIntent intent) {
+    history.insert(0, VoiceLogEntry(_clock(), lastHeard, describe(intent)));
+    if (history.length > historyMax) history.removeLast();
+  }
+
+  /// Texto legible de una orden (para el historial).
+  static String describe(VoiceIntent intent) => switch (intent) {
+        CommandIntent(:final command) => switch (command) {
+            MusicCommand.next => 'Siguiente canción',
+            MusicCommand.previous => 'Canción anterior',
+            MusicCommand.pause => 'Pausa',
+            MusicCommand.play => 'Continuar',
+            MusicCommand.togglePlayPause => 'Pausa / continuar',
+            MusicCommand.volumeUp => 'Subir volumen',
+            MusicCommand.volumeDown => 'Bajar volumen',
+          },
+        SearchIntent(:final request) => 'Buscar: ${request.query}',
+        SearchPromptIntent() => 'Buscar…',
+        ArtistPromptIntent() => 'Artista…',
+        WakeIntent() => 'Activación',
+        NowPlayingIntent() => '¿Qué suena?',
+        RestartIntent() => 'Repetir',
+        SeekIntent(:final seconds) => seconds > 0 ? 'Adelantar' : 'Atrasar',
+        SleepIntent(:final minutes) =>
+          minutes == 0 ? 'Cancelar temporizador' : 'Apagar en $minutes min',
+        UndoIntent() => 'Deshacer',
+        ShareIntent() => 'Compartir canción',
+        RadioIntent(:final on) => on ? 'Radio activada' : 'Radio desactivada',
+        LikeIntent() => 'Me gusta',
+        DislikeIntent() => 'No me gusta',
+        FavoriteIntent() => 'Mis favoritas',
+        DiscoverIntent() => 'Algo nuevo',
+        ArtistIntent(:final artist) => 'Artista: $artist',
+        MoodIntent(:final mood) => 'Ambiente $mood',
+        VolumeIntent(:final percent) => 'Volumen al $percent %',
+        QueueIntent(:final query) => query == null ? 'Poner después…' : 'Después: $query',
+        LyricsIntent(:final words) => words == null ? 'Por la letra…' : 'Letra: «$words»',
+        BlockIntent(:final artist) => artist ? 'Bloquear artista' : 'Nunca más esta',
+        MultiIntent(:final parts) => parts.map(describe).join(' + '),
+        ForgottenIntent() => 'Favoritas olvidadas',
+        ShareWeekIntent() => 'Compartir mi semana',
+      };
+
+  /// Primera frase de [text] (para respuestas cortas).
+  static String shorten(String text) {
+    final m = RegExp(r'^(.+?[.!?])(\s|$)').firstMatch(text.trim());
+    return m == null ? text : m.group(1)!;
   }
 
   /// «Solo mi voz».
@@ -223,8 +292,13 @@ class VoiceEngine extends ChangeNotifier {
   /// Respuesta hablada por los audífonos (si está activada).
   Future<void> speak(String text, {bool force = false}) async {
     if (!feedbackEnabled && !force) return;
+    final said = shortReplies ? shorten(text) : text;
+    if (history.isNotEmpty &&
+        _clock().difference(history.first.at) < const Duration(seconds: 20)) {
+      history.first.reply ??= said;
+    }
     try {
-      await _method.invokeMethod('speak', {'text': text});
+      await _method.invokeMethod('speak', {'text': said});
     } catch (_) {}
   }
 
@@ -285,7 +359,8 @@ class VoiceEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _dispatch(VoiceIntent intent) {
+  void _dispatch(VoiceIntent intent, {bool log = true}) {
+    if (log) _log(intent);
     switch (intent) {
       case CommandIntent(:final command):
         final now = _clock();
@@ -306,7 +381,24 @@ class VoiceEngine extends ChangeNotifier {
         unawaited(_askForArtist());
       case WakeIntent():
         unawaited(_listenAfterWake());
-      case NowPlayingIntent() ||
+      case QueueIntent(query: null):
+        unawaited(_askThen('¿Qué pongo después?', (h) => QueueIntent(h)));
+      case LyricsIntent(words: null):
+        unawaited(_askThen('¿Qué dice la letra?', (h) => LyricsIntent(h)));
+      case MultiIntent(:final parts):
+        unawaited(() async {
+          for (final p in parts) {
+            _dispatch(p, log: false);
+            await Future<void>.delayed(const Duration(milliseconds: 900));
+          }
+        }());
+      case VolumeIntent() ||
+            QueueIntent() ||
+            LyricsIntent() ||
+            BlockIntent() ||
+            ForgottenIntent() ||
+            ShareWeekIntent() ||
+            NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||
             SleepIntent() ||
@@ -377,6 +469,27 @@ class VoiceEngine extends ChangeNotifier {
     final intent = parser.parseFree(heard);
     if (intent == null || intent is WakeIntent) return;
     _dispatch(intent);
+  }
+
+  /// Pregunta [question], escucha la respuesta y la convierte en una orden.
+  Future<void> _askThen(String question, VoiceIntent Function(String heard) build) async {
+    final handler = onIntent;
+    if (handler == null) return;
+    askingForSong = true;
+    notifyListeners();
+    await speak(question, force: true);
+    final heard = await listenOnce();
+    askingForSong = false;
+    if (heard == null || heard.trim().isEmpty) {
+      await speak('No te entendí.');
+      notifyListeners();
+      return;
+    }
+    lastHeard = heard;
+    final intent = build(heard.trim());
+    _log(intent);
+    notifyListeners();
+    await handler(intent);
   }
 
   /// «Pon algo de» → «¿De quién?» → escucha el artista con el reconocedor preciso.

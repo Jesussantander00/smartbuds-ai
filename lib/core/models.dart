@@ -1,6 +1,8 @@
 /// Modelos compartidos por todo SmartBuds AutoConnect.
 library;
 
+import 'dart:typed_data';
+
 /// Comandos universales. «Cambia» siempre es [MusicCommand.next],
 /// sin importar qué reproductor lo reciba.
 enum MusicCommand {
@@ -47,6 +49,9 @@ class PlayerStatus {
     this.artist,
     this.positionMs,
     this.lastActiveAt,
+    this.durationMs,
+    this.album,
+    this.art,
   });
 
   /// Identificador estable mientras dure la sesión multimedia.
@@ -60,6 +65,20 @@ class PlayerStatus {
 
   /// Última vez que la sesión cambió de estado o de posición.
   final DateTime? lastActiveAt;
+
+  /// Duración de la canción, si la app la informa.
+  final int? durationMs;
+  final String? album;
+
+  /// Carátula reducida (JPEG), si la app la comparte.
+  final Uint8List? art;
+
+  /// Progreso 0–1, o null si no se conoce la duración.
+  double? get progress {
+    final d = durationMs, p = positionMs;
+    if (d == null || p == null || d <= 0) return null;
+    return (p / d).clamp(0.0, 1.0).toDouble();
+  }
 
   bool get isPlaying => state == PlaybackState.playing;
 
@@ -75,10 +94,13 @@ class PlayerStatus {
       state: _parseState(map['state'] as String?),
       title: map['title'] as String?,
       artist: map['artist'] as String?,
-      positionMs: map['positionMs'] as int?,
+      positionMs: (map['positionMs'] as num?)?.toInt(),
       lastActiveAt: (lastActive == null || lastActive <= 0)
           ? null
           : DateTime.fromMillisecondsSinceEpoch(lastActive),
+      durationMs: (map['durationMs'] as num?)?.toInt(),
+      album: map['album'] as String?,
+      art: map['art'] is Uint8List ? map['art'] as Uint8List : null,
     );
   }
 
