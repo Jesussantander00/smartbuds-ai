@@ -18,6 +18,7 @@ import 'core/settings/app_settings.dart';
 import 'core/storage/json_store.dart';
 import 'core/voice_engine/voice_engine.dart';
 import 'core/telemetry/error_reporter.dart';
+import 'core/ui/futuristic.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
 import 'features/devices/detected_player_controller.dart';
@@ -230,9 +231,10 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         'system' => ThemeMode.system,
         _ => ThemeMode.dark,
       },
-      theme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.light, useMaterial3: true),
-      darkTheme:
-          ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
+      theme: smartBudsTheme(Brightness.light, seed),
+      darkTheme: smartBudsTheme(Brightness.dark, seed),
+      // Fondo espacial animado detrás de todas las pantallas.
+      builder: (context, child) => SpaceBackground(child: child ?? const SizedBox()),
       home: ListenableBuilder(
         listenable: widget.settings,
         builder: (context, _) {

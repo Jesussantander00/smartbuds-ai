@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import '../../core/ui/futuristic.dart';
 import '../assistant/assistant.dart';
 import 'car_mode_screen.dart';
 import '../devices/detected_player_controller.dart';
@@ -143,25 +144,29 @@ class _NowPlaying extends StatelessWidget {
       NeedsChoice() => ('Varios reproductores', 'Revisa la pestaña Dispositivos'),
       NoPlayer() => ('Sin música', 'Pon algo en tu app de música o di «Busca…»'),
     };
-    return Card(
-      color: theme.colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Icon(Icons.graphic_eq, size: 40, color: theme.colorScheme.onPrimaryContainer),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(app, style: theme.textTheme.labelLarge),
-                  if (song != null) Text(song, style: theme.textTheme.titleLarge),
-                ],
-              ),
+    final playing = detection is PlayerDetected &&
+        (detection as PlayerDetected).candidate.status.isPlaying;
+    return NeonCard(
+      child: Row(
+        children: [
+          NeonEqualizer(playing: playing),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(app.toUpperCase(),
+                    style: theme.textTheme.labelMedium?.copyWith(letterSpacing: 1.4)),
+                const SizedBox(height: 4),
+                if (song != null)
+                  Text(song,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -189,11 +194,14 @@ class _MicCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            IconButton.filled(
-              iconSize: 56,
-              tooltip: on ? 'Dejar de escuchar' : 'Escuchar',
-              onPressed: voice.toggle,
-              icon: Icon(on ? (voice.paused ? Icons.mic_off : Icons.mic) : Icons.mic_none),
+            Tooltip(
+              message: on ? 'Dejar de escuchar' : 'Escuchar',
+              child: MicOrb(
+                on: on,
+                listening: voice.listening && !voice.paused,
+                onTap: voice.toggle,
+                icon: on ? (voice.paused ? Icons.mic_off : Icons.mic) : Icons.mic_none,
+              ),
             ),
             const SizedBox(height: 12),
             Text(status, textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
