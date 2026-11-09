@@ -50,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: voice == null
           ? null
           : Padding(
-              padding: const EdgeInsets.only(bottom: 72),
+              padding: const EdgeInsets.only(bottom: 8),
               child: ListenableBuilder(
                 listenable: voice,
                 builder: (context, _) => Semantics(
@@ -105,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListenableBuilder(
         listenable: Listenable.merge(listenables),
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 180),
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 120),
           children: [
             if (voice != null) _MicStatus(voice: voice),
             _NowPlaying(detection: widget.controller.detection, assistant: widget.assistant,

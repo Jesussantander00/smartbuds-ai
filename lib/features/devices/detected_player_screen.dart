@@ -74,7 +74,7 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
         body: RefreshIndicator(
           onRefresh: c.refresh,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
             children: [
               if (widget.platformNote != null)
                 _Banner(icon: Icons.info_outline, text: widget.platformNote!),

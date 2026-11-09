@@ -11,6 +11,7 @@ import '../home/home_screen.dart';
 import '../music_profile/music_profile.dart';
 import '../music_profile/my_music_screen.dart';
 import '../music_profile/supabase_sync.dart';
+import 'glass_sidebar.dart';
 
 /// Navegación principal: Inicio · Asistente · Mi música · Dispositivos.
 class HomeShell extends StatefulWidget {
@@ -45,6 +46,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
@@ -70,17 +72,51 @@ class _HomeShellState extends State<HomeShell> {
         assistant: widget.assistant,
       ),
     ];
+    final media = MediaQuery.of(context);
+    final wide = media.size.width >= 900; // en computadora/tablet queda abierta al lado
+    final open = _open || wide;
+    final railSpace = (wide ? GlassSidebar.expandedWidth : GlassSidebar.collapsedWidth) + 20;
     return Scaffold(
-      extendBody: true, // el fondo espacial se ve detrás de la barra inferior
-      body: IndexedStack(index: _tab, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
-          NavigationDestination(icon: Icon(Icons.mic_none), selectedIcon: Icon(Icons.mic), label: 'Asistente'),
-          NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: 'Mi música'),
-          NavigationDestination(icon: Icon(Icons.headphones_outlined), selectedIcon: Icon(Icons.headphones), label: 'Dispositivos'),
+      body: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(left: railSpace),
+            child: MediaQuery.removePadding(
+              context: context,
+              removeLeft: true,
+              child: IndexedStack(index: _tab, children: pages),
+            ),
+          ),
+          // Al abrir la barra en el teléfono, oscurece suavemente el resto.
+          if (_open && !wide)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _open = false),
+                child: AnimatedOpacity(
+                  opacity: 1,
+                  duration: const Duration(milliseconds: 200),
+                  child: ColoredBox(color: Colors.black.withValues(alpha: .18)),
+                ),
+              ),
+            ),
+          Positioned(
+            left: 10,
+            top: media.padding.top + 10,
+            bottom: media.padding.bottom + 10,
+            child: GlassSidebar(
+              expanded: open,
+              onToggle: wide ? () {} : () => setState(() => _open = !_open),
+              selected: _tab,
+              onSelect: (i) => setState(() {
+                _tab = i;
+                _open = false;
+              }),
+              assistant: widget.assistant,
+              controller: widget.controller,
+              settings: widget.settings,
+              voice: widget.voice,
+            ),
+          ),
         ],
       ),
     );
