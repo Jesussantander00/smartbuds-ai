@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -160,10 +161,28 @@ class MusicProfile extends ChangeNotifier {
   static const completeAfter = Duration(seconds: 90);
   static const skipBefore = Duration(seconds: 30);
   static const commandWindow = Duration(seconds: 6);
-  static const maxHistory = 3000; // ~varias semanas, para el resumen semanal
+  static const maxHistory = 15000; // ~un año de escucha, para «Tu año en música»
 
   final Map<String, TrackStats> tracks = {};
   final List<ListenEvent> history = [];
+
+  /// Canciones bloqueadas («Nunca más esta»): no se eligen nunca.
+  bool Function(String title, String? artist)? isBlocked;
+
+  /// Listas automáticas por ambiente: «entrenar» → canciones que terminaste
+  /// o marcaste «me gusta» mientras sonaba ese ambiente.
+  final Map<String, Set<String>> moodTracks = {};
+
+  /// Ambiente pedido hace poco («pon algo para entrenar»), para aprender la lista.
+  String? currentMood;
+  DateTime? _moodAt;
+
+  void setMood(String mood) {
+    currentMood = mood;
+    _moodAt = _clock();
+  }
+
+  bool _excluded(TrackStats t) => isBlocked?.call(t.title, t.artist) ?? false;
 
   TrackStats? _current;
   DateTime? _currentStart;
@@ -187,7 +206,128 @@ class MusicProfile extends ChangeNotifier {
       final ev = ListenEvent.fromJson(Map<String, dynamic>.from(e as Map));
       if (ev != null) history.add(ev);
     }
+    moodTracks.clear();
+    for (final e in ((d['moods'] as Map?) ?? const {}).entries) {
+      moodTracks[e.key as String] = {...(e.value as List).cast<String>()};
+    }
     notifyListeners();
+  }
+
+  // ------------------------------------------------- Listas por ambiente
+
+  /// Una canción de tu lista automática para [mood], o null si aún es corta.
+  TrackStats? pickMood(String mood, {Random? random}) {
+    final recent = recentKeys(10);
+    final list = (moodTracks[mood] ?? const <String>{})
+        .map((k) => tracks[k])
+        .whereType<TrackStats>()
+        .where((t) => t.score(weights) > 0 && !_excluded(t) && !recent.contains(t.key))
+        .toList();
+    if (list.length < 3) return null;
+    return list[(random ?? Random()).nextInt(list.length)];
+  }
+
+  // ------------------------------------------------ Favoritas olvidadas
+
+  /// Canciones que te encantaban y llevan [after] sin sonar.
+  List<TrackStats> forgottenFavorites({Duration after = const Duration(days: 21)}) {
+    final now = _clock();
+    final list = tracks.values
+        .where((t) =>
+            t.score(weights) >= 4 &&
+            !_excluded(t) &&
+            (t.lastPlayedAt == null || now.difference(t.lastPlayedAt!) >= after))
+        .toList()
+      ..sort((a, b) => b.score(weights).compareTo(a.score(weights)));
+    return list;
+  }
+
+  // ------------------------------------------------- Editar tus gustos
+
+  /// «Me gusta» desde la lista (sin que esté sonando).
+  void likeTrack(String key) {
+    final t = tracks[key];
+    if (t == null) return;
+    t.likes++;
+    _record(t, ListenEventType.like);
+    notifyListeners();
+  }
+
+  /// Olvida una canción por completo.
+  void removeTrack(String key) {
+    if (tracks.remove(key) == null) return;
+    history.removeWhere((e) => e.key == key);
+    for (final s in moodTracks.values) {
+      s.remove(key);
+    }
+    if (_current?.key == key) _current = null;
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  // --------------------------------------------- Copia y comparar gustos
+
+  /// Copia de seguridad de tus gustos (JSON) para guardar o pasar a otro teléfono.
+  /// Solo canciones y listas (sin el historial detallado) para que quepa en un mensaje.
+  String exportJson() => jsonEncode({
+        'app': 'smartbuds',
+        'v': 1,
+        'tracks': [for (final t in tracks.values) t.toJson()],
+        'moods': {for (final e in moodTracks.entries) e.key: e.value.toList()},
+      });
+
+  /// Une una copia exportada con lo que ya hay. Devuelve cuántas canciones trajo,
+  /// o -1 si el texto no es una copia válida.
+  int importJson(String raw) {
+    try {
+      final d = jsonDecode(raw.trim());
+      if (d is! Map || d['tracks'] is! List) return -1;
+      final list = [
+        for (final t in d['tracks'] as List)
+          TrackStats.fromJson(Map<String, dynamic>.from(t as Map)),
+      ];
+      mergeRemote(list);
+      for (final e in ((d['moods'] as Map?) ?? const {}).entries) {
+        (moodTracks[e.key as String] ??= <String>{}).addAll((e.value as List).cast<String>());
+      }
+      _scheduleSave();
+      return list.length;
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  /// Código corto con tus 15 artistas principales, para comparar con amigos.
+  String tasteCode() {
+    final names = topArtists(15).map((e) => e.$1).toList();
+    return 'SB1:${base64Url.encode(utf8.encode(jsonEncode(names)))}';
+  }
+
+  /// Compara tu gusto con el código de otra persona.
+  /// Devuelve el % de afinidad y los artistas en común, o null si el código no sirve.
+  ({int percent, List<String> shared})? compareTaste(String code) {
+    final raw = code.trim();
+    final i = raw.indexOf('SB1:');
+    if (i < 0) return null;
+    try {
+      final payload = raw.substring(i + 4).split(RegExp(r'\s')).first;
+      final theirs = (jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(payload))))
+              as List)
+          .cast<String>();
+      final mine = topArtists(15).map((e) => e.$1).toList();
+      if (theirs.isEmpty || mine.isEmpty) return (percent: 0, shared: <String>[]);
+      final mineLow = {for (final m in mine) m.toLowerCase(): m};
+      final shared = [
+        for (final t in theirs)
+          if (mineLow.containsKey(t.toLowerCase())) mineLow[t.toLowerCase()]!,
+      ];
+      final union = {...mineLow.keys, ...theirs.map((t) => t.toLowerCase())}.length;
+      // Jaccard suavizado: compartir 5 de 15 ya es mucha afinidad.
+      final pct = (100 * (shared.length / union) * 2.2).clamp(0, 100).round();
+      return (percent: pct, shared: shared);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Une canciones traídas de la nube (otra instalación u otro teléfono).
@@ -390,8 +530,8 @@ class MusicProfile extends ChangeNotifier {
   TrackStats? pickFavorite({Random? random}) {
     final recent = recentKeys(10);
     final now = Daypart.of(_clock());
-    final candidates = topTracks(20)
-        .where((t) => t.key != _current?.key && !recent.contains(t.key))
+    final candidates = topTracks(30)
+        .where((t) => t.key != _current?.key && !recent.contains(t.key) && !_excluded(t))
         .toList()
       // Favoritas de este momento del día primero (hasta +50 % de puntuación).
       ..sort((a, b) => (b.score(weights) * (1 + 0.5 * b.affinity(now)))
@@ -426,6 +566,7 @@ class MusicProfile extends ChangeNotifier {
   Future<void> clear() async {
     tracks.clear();
     history.clear();
+    moodTracks.clear();
     _current = null;
     _currentStart = null;
     await _store.save(_toJson());
@@ -442,6 +583,11 @@ class MusicProfile extends ChangeNotifier {
         type == ListenEventType.like) {
       final d = Daypart.of(daypartAt ?? ev.at);
       stats.positiveByDaypart[d] = (stats.positiveByDaypart[d] ?? 0) + 1;
+      // Lista automática del ambiente pedido en la última hora y media.
+      final mood = currentMood, at = _moodAt;
+      if (mood != null && at != null && ev.at.difference(at) < const Duration(minutes: 90)) {
+        (moodTracks[mood] ??= <String>{}).add(stats.key);
+      }
     }
     history.add(ev);
     if (history.length > maxHistory) history.removeRange(0, history.length - maxHistory);
@@ -457,6 +603,7 @@ class MusicProfile extends ChangeNotifier {
   Map<String, dynamic> _toJson() => {
         'tracks': [for (final t in tracks.values) t.toJson()],
         'history': [for (final e in history) e.toJson()],
+        'moods': {for (final e in moodTracks.entries) e.key: e.value.toList()},
       };
 
   @override

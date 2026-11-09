@@ -56,7 +56,7 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
       listenable: c,
       builder: (context, _) => Scaffold(
         appBar: AppBar(
-          title: const Text('Reproductor detectado'),
+          title: const Text('Dispositivos'),
           actions: [
             IconButton(
               tooltip: 'Actualizar',
@@ -89,24 +89,55 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 _VoiceBar(voice: widget.voice!),
                 const SizedBox(height: 12),
               ],
-              _TestControls(controller: c),
-              if (c.lastResult != null) _ResultTile(result: c.lastResult!),
-              const SizedBox(height: 20),
-              Text('Reproductores y capacidades',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              Text('Tus apps de música', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
               if (c.players.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Text(
-                    'No hay sesiones multimedia activas. Abre un reproductor '
-                    'y reproduce algo.',
+                    'No hay música abierta. Abre tu app de música y pon algo: '
+                    'aparecerá aquí sola.',
                     textAlign: TextAlign.center,
                   ),
                 ),
-              for (final p in c.players) _PlayerTile(view: p, controller: c),
-              const SizedBox(height: 20),
-              _CapabilityLog(controller: c),
+              for (final p in c.players)
+                Card(
+                  child: ListTile(
+                    leading: Icon(p.status.isPlaying
+                        ? Icons.graphic_eq
+                        : Icons.pause_circle_outline),
+                    title: Text(p.status.appName),
+                    subtitle: Text(p.status.title == null
+                        ? (p.status.isPlaying ? 'Sonando' : 'En pausa')
+                        : '${p.status.title}${p.status.artist == null ? '' : ' — ${p.status.artist}'}'),
+                    trailing: Icon(
+                      p.voiceCaps.level == ControlLevel.direct
+                          ? Icons.check_circle
+                          : Icons.info_outline,
+                      color: p.voiceCaps.level == ControlLevel.direct
+                          ? Colors.green
+                          : Colors.orange,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Card(
+                child: ExpansionTile(
+                  leading: const Icon(Icons.tune),
+                  title: const Text('Avanzado'),
+                  subtitle: const Text('Pruebas, capacidades y registro'),
+                  childrenPadding: const EdgeInsets.all(8),
+                  children: [
+                    _TestControls(controller: c),
+                    if (c.lastResult != null) _ResultTile(result: c.lastResult!),
+                    const SizedBox(height: 12),
+                    for (final p in c.players) _PlayerTile(view: p, controller: c),
+                    const SizedBox(height: 12),
+                    _CapabilityLog(controller: c),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 100),
             ],
           ),
         ),

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'connectors/android_media/android_media_connector.dart';
 import 'connectors/connector_interface.dart';
 import 'connectors/deezer/similar_artists.dart';
+import 'connectors/weather/weather.dart';
 import 'connectors/youtube/youtube_search.dart';
 import 'core/capability_manager/capability_manager.dart';
 import 'core/command_router/command_router.dart';
@@ -148,7 +149,9 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       media: android,
       settings: widget.settings,
       errors: widget.errors,
+      weather: WeatherService(),
     );
+    widget.profile.isBlocked = widget.settings.isBlocked;
 
     // Cada cambio del reproductor: perfil, asistente (radio, anuncios…) y
     // modo de escucha (abierta si no suena nada).
@@ -180,6 +183,15 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..threshold = widget.settings.voiceThreshold;
       voice = v;
       assistant.voice = v;
+      // Respuestas cortas: por ajuste o porque queda poca batería.
+      void syncShort() =>
+          v.shortReplies = widget.settings.shortReplies || assistant.lowBattery;
+      syncShort();
+      widget.settings.addListener(syncShort);
+      assistant.addListener(syncShort);
+      unawaited(android?.setPauseOnUnplug(widget.settings.pauseOnUnplug));
+      if (Platform.isAndroid) unawaited(android?.setCallPause(widget.settings.pauseOnCalls));
+      assistant.startBackground();
       unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.

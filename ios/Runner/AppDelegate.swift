@@ -110,9 +110,46 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       }
     case "filesDir":
       result(filesDir())
+    case "getVolumePercent":
+      result(Int(AVAudioSession.sharedInstance().outputVolume * 100))
+    case "setVolumePercent", "setCallPause", "setPauseOnUnplug":
+      // iOS no deja fijar el volumen ni vigilar llamadas desde una app;
+      // Apple Music ya pausa sola al quitar los audífonos o al llamar.
+      result(false)
+    case "getOutputDevice":
+      result(outputDevice() ?? NSNull())
+    case "getBattery":
+      UIDevice.current.isBatteryMonitoringEnabled = true
+      let level = UIDevice.current.batteryLevel
+      let st = UIDevice.current.batteryState
+      result([
+        "level": level < 0 ? 100 : Int(level * 100),
+        "charging": st == .charging || st == .full,
+      ])
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  private func outputDevice() -> String? {
+    let headphones: [AVAudioSession.Port] = [.bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .headphones]
+    let out = AVAudioSession.sharedInstance().currentRoute.outputs
+      .first { headphones.contains($0.portType) }
+    return out?.portName
+  }
+
+  private var artId: UInt64 = 0
+  private var artData: FlutterStandardTypedData?
+
+  /// Carátula de Apple Music reducida a 160 px (JPEG), cacheada por canción.
+  private func artwork(_ item: MPMediaItem?) -> Any {
+    guard let item = item else { return NSNull() }
+    if item.persistentID != artId {
+      artId = item.persistentID
+      let image = item.artwork?.image(at: CGSize(width: 160, height: 160))
+      artData = image?.jpegData(compressionQuality: 0.8).map { FlutterStandardTypedData(bytes: $0) }
+    }
+    return artData ?? NSNull()
   }
 
   /// Carpeta privada de la app para guardar ajustes y perfil (no se borra al cerrar).
@@ -235,6 +272,9 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       "positionMs": orNull(positionMs),
       "lastActiveAtMs": Int(lastActiveAt.timeIntervalSince1970 * 1000),
       "actions": ["play", "pause", "togglePlayPause", "next", "previous"],
+      "durationMs": orNull(item.map { Int($0.playbackDuration * 1000) }),
+      "album": orNull(item?.albumTitle),
+      "art": artwork(item),
     ]
   }
 

@@ -54,6 +54,7 @@ class _HomeShellState extends State<HomeShell> {
         settings: widget.settings,
         voice: widget.voice,
         onHeadphoneTapsChanged: widget.onHeadphoneTapsChanged,
+        assistant: widget.assistant,
       ),
       MyMusicScreen(
         profile: widget.profile,

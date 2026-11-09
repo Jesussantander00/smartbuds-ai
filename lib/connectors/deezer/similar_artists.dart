@@ -3,14 +3,21 @@ import 'dart:io';
 
 /// Un artista parecido y sus canciones más escuchadas.
 class SimilarArtist {
-  const SimilarArtist(this.name, this.topTracks);
+  const SimilarArtist(this.name, this.topTracks, {this.fans, this.picture});
   final String name;
   final List<String> topTracks;
+
+  /// Seguidores en Deezer (para el nivel de descubrimiento).
+  final int? fans;
+  final String? picture;
 }
 
 /// Busca artistas parecidos a uno dado.
 abstract class SimilarArtistsFinder {
   Future<List<SimilarArtist>> similarTo(String artist, {int max = 6});
+
+  /// Foto del artista (para las tarjetas de favoritos), o null.
+  Future<String?> pictureOf(String artist) async => null;
 }
 
 /// Artistas parecidos con la API pública de Deezer (gratis, sin clave).
@@ -38,10 +45,30 @@ class DeezerSimilarArtists implements SimilarArtistsFinder {
         for (final t in ((top['data'] as List?) ?? const []).whereType<Map>())
           if (t['title'] is String) t['title'] as String,
       ];
-      out.add(SimilarArtist(name, titles));
+      out.add(SimilarArtist(
+        name,
+        titles,
+        fans: (a['nb_fan'] as num?)?.toInt(),
+        picture: a['picture_medium'] as String?,
+      ));
       if (out.length >= max) break;
     }
     return out;
+  }
+
+  final Map<String, String?> _pictures = {};
+
+  @override
+  Future<String?> pictureOf(String artist) async {
+    if (_pictures.containsKey(artist)) return _pictures[artist];
+    try {
+      final found =
+          await _get('/search/artist?q=${Uri.encodeQueryComponent(artist)}&limit=1');
+      final pic = (found['data'] as List?)?.cast<Map>().firstOrNull?['picture_medium'];
+      return _pictures[artist] = pic is String ? pic : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> _get(String path) async {

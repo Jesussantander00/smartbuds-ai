@@ -50,6 +50,64 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   String themeMode = 'dark';
   int seedColor = 0xFF00B4D8;
 
+  /// Respuestas habladas cortas (solo la primera frase).
+  bool shortReplies = false;
+
+  /// Qué tan desconocidos son los descubrimientos: 0 conocidos, 1 mixto, 2 joyas ocultas.
+  int discoveryLevel = 1;
+
+  /// Pausar la música al desconectar los audífonos.
+  bool pauseOnUnplug = true;
+
+  /// Pausar durante llamadas y retomar al colgar.
+  bool pauseOnCalls = true;
+
+  /// Con batería baja: menos voz y menos internet.
+  bool batterySaver = true;
+
+  /// Sugerencias según el clima (usa la ubicación aproximada por internet).
+  bool weatherSuggestions = false;
+
+  /// Volumen preferido por audífono (nombre → %).
+  Map<String, int> headphoneVolumes = {};
+
+  /// «Nunca más esta»: canciones (trackKey en minúsculas) y artistas bloqueados.
+  Set<String> blockedTracks = {};
+  Set<String> blockedArtists = {};
+
+  bool isBlocked(String? title, String? artist) {
+    final a = (artist ?? '').toLowerCase().trim();
+    if (a.isNotEmpty && blockedArtists.contains(a)) return true;
+    return blockedTracks.contains('${(title ?? '').toLowerCase().trim()}|$a');
+  }
+
+  void block({String? title, String? artist, bool wholeArtist = false}) {
+    final a = (artist ?? '').toLowerCase().trim();
+    if (wholeArtist) {
+      if (a.isEmpty) return;
+      blockedArtists = {...blockedArtists, a};
+    } else {
+      blockedTracks = {...blockedTracks, '${(title ?? '').toLowerCase().trim()}|$a'};
+    }
+    _persist();
+    notifyListeners();
+  }
+
+  void unblock(String key, {bool artist = false}) {
+    if (artist) {
+      blockedArtists = {...blockedArtists}..remove(key);
+    } else {
+      blockedTracks = {...blockedTracks}..remove(key);
+    }
+    _persist();
+    notifyListeners();
+  }
+
+  void setHeadphoneVolume(String device, int percent) {
+    headphoneVolumes = {...headphoneVolumes, device: percent};
+    _persist();
+  }
+
   /// Sesión de la cuenta (Supabase Auth). Vacía = sin cuenta.
   String? authEmail;
   String? authUserId;
@@ -92,6 +150,18 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     themeMode = (d['themeMode'] as String?) ?? 'dark';
     seedColor = (d['seedColor'] as num?)?.toInt() ?? 0xFF00B4D8;
     headphoneTaps = d['headphoneTaps'] != false;
+    shortReplies = d['shortReplies'] == true;
+    discoveryLevel = (d['discoveryLevel'] as num?)?.toInt() ?? 1;
+    pauseOnUnplug = d['pauseOnUnplug'] != false;
+    pauseOnCalls = d['pauseOnCalls'] != false;
+    batterySaver = d['batterySaver'] != false;
+    weatherSuggestions = d['weatherSuggestions'] == true;
+    headphoneVolumes = {
+      for (final e in ((d['headphoneVolumes'] as Map?) ?? const {}).entries)
+        e.key as String: (e.value as num).toInt(),
+    };
+    blockedTracks = {...((d['blockedTracks'] as List?) ?? const []).cast<String>()};
+    blockedArtists = {...((d['blockedArtists'] as List?) ?? const []).cast<String>()};
     authEmail = d['authEmail'] as String?;
     authUserId = d['authUserId'] as String?;
     authAccessToken = d['authAccessToken'] as String?;
@@ -120,7 +190,19 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? errorReports,
     String? themeMode,
     int? seedColor,
+    bool? shortReplies,
+    int? discoveryLevel,
+    bool? pauseOnUnplug,
+    bool? pauseOnCalls,
+    bool? batterySaver,
+    bool? weatherSuggestions,
   }) {
+    if (shortReplies != null) this.shortReplies = shortReplies;
+    if (discoveryLevel != null) this.discoveryLevel = discoveryLevel;
+    if (pauseOnUnplug != null) this.pauseOnUnplug = pauseOnUnplug;
+    if (pauseOnCalls != null) this.pauseOnCalls = pauseOnCalls;
+    if (batterySaver != null) this.batterySaver = batterySaver;
+    if (weatherSuggestions != null) this.weatherSuggestions = weatherSuggestions;
     if (wakePhrase != null) this.wakePhrase = wakePhrase;
     if (radioMode != null) this.radioMode = radioMode;
     if (announceSongs != null) this.announceSongs = announceSongs;
@@ -176,6 +258,15 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'errorReports': errorReports,
         'themeMode': themeMode,
         'seedColor': seedColor,
+        'shortReplies': shortReplies,
+        'discoveryLevel': discoveryLevel,
+        'pauseOnUnplug': pauseOnUnplug,
+        'pauseOnCalls': pauseOnCalls,
+        'batterySaver': batterySaver,
+        'weatherSuggestions': weatherSuggestions,
+        'headphoneVolumes': headphoneVolumes,
+        'blockedTracks': blockedTracks.toList(),
+        'blockedArtists': blockedArtists.toList(),
         'authEmail': authEmail,
         'authUserId': authUserId,
         'authAccessToken': authAccessToken,
