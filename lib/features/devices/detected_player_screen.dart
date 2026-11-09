@@ -183,10 +183,10 @@ class _HeadphonesCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: connected ? Neon.gradient : null,
-                      color: connected ? null : Colors.white.withValues(alpha: .08),
+                      color: connected ? null : theme.colorScheme.surfaceContainerHighest,
                     ),
                     child: Icon(connected ? Icons.headphones : Icons.headset_off,
-                        size: 32, color: connected ? Neon.space0 : Colors.white54),
+                        size: 32, color: connected ? Colors.white : theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -203,7 +203,7 @@ class _HeadphonesCard extends StatelessWidget {
                               margin: const EdgeInsets.only(right: 6),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: connected ? Colors.greenAccent : Colors.white30,
+                                color: connected ? Neon.cyan : theme.colorScheme.outline,
                               ),
                             ),
                             Text(connected ? 'Conectados' : 'Desconectados',
@@ -228,7 +228,7 @@ class _HeadphonesCard extends StatelessWidget {
               Text(
                 'La batería de cada audífono y del estuche solo la muestra la app del '
                 'fabricante: Android no la comparte con otras apps.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
               if (s != null) ...[
                 const Divider(height: 24),

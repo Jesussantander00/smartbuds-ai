@@ -318,8 +318,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     children: [
                       SegmentedButton<String>(
                         segments: const [
-                          ButtonSegment(value: 'dark', label: Text('Oscuro'), icon: Icon(Icons.dark_mode)),
                           ButtonSegment(value: 'light', label: Text('Claro'), icon: Icon(Icons.light_mode)),
+                          ButtonSegment(value: 'dark', label: Text('Oscuro'), icon: Icon(Icons.dark_mode)),
                           ButtonSegment(value: 'system', label: Text('Auto'), icon: Icon(Icons.brightness_auto)),
                         ],
                         selected: {settings.themeMode},
@@ -329,7 +329,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       Wrap(
                         spacing: 12,
                         children: [
-                          for (final c in const [0xFF20DDF2, 0xFF9567FF, 0xFFFF4FD8, 0xFF4CAF50, 0xFFFF9800])
+                          for (final c in const [0xFF2F8F83, 0xFF3D6FB6, 0xFF7A5AC8, 0xFFC0567A, 0xFFE6A85C])
                             GestureDetector(
                               onTap: () => settings.update(seedColor: c),
                               child: CircleAvatar(
@@ -382,7 +382,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
         const SizedBox(height: 4),
         Text(state,
             style: theme.textTheme.titleMedium?.copyWith(
-                color: v.enabled && v.listening ? Neon.pink : null, fontWeight: FontWeight.w600)),
+                color: v.enabled && v.listening ? const Color(0xFFB9762A) : null, fontWeight: FontWeight.w600)),
         if (v.lastHeard.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -394,7 +394,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Neon.surfaceHigh,
+              color: theme.colorScheme.secondaryContainer,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(18),
                 topRight: Radius.circular(18),
