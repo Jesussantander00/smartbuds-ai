@@ -691,7 +691,7 @@ class MusicProfile extends ChangeNotifier {
     var t = title.toLowerCase();
     t = t.replaceAll(RegExp(r'[\(\[].*?[\)\]]'), ' ');
     t = t.replaceAll(
-        RegExp(r'\b(feat\.?|ft\.?|featuring|con)\b.*$'), ' ');
+        RegExp(r'\b(feat\.?|ft\.?|featuring)\b.*$'), ' ');
     t = t.replaceAll(
         RegExp(r'-\s*(official|oficial|video|audio|lyric|letra|visualizer|remaster).*$'), ' ');
     const from = 'áàäâéèëêíìïîóòöôúùüûñ';
