@@ -659,12 +659,17 @@ class Assistant extends ChangeNotifier {
   /// Al volver a conectar los audífonos: la música sigue donde iba.
   Future<void> onHeadphonesChanged(bool connected) async {
     if (!connected) {
+      settings?.logConnection(false, headphoneName, _clock());
       headphoneName = null;
       notifyListeners();
       return;
     }
     await Future<void>.delayed(const Duration(milliseconds: 600));
     await refreshHeadphone();
+    settings?.logConnection(true, headphoneName, _clock());
+    // Audífonos preferidos: con otros, SmartBuds no toca volumen ni retoma.
+    final preferred = settings?.preferredHeadphone;
+    if (preferred != null && headphoneName != null && headphoneName != preferred) return;
     // Perfil por audífono: su volumen preferido.
     final saved = settings?.headphoneVolumes[headphoneName];
     if (saved != null) await media?.setVolumePercent(saved);
@@ -673,6 +678,30 @@ class Assistant extends ChangeNotifier {
     if (a == null || a.isPlaying) return;
     await Future<void>.delayed(const Duration(milliseconds: 800)); // que el audio cambie de salida
     await controller.sendVoice(MusicCommand.play);
+  }
+
+  /// Prueba de respuesta: cuánto tarda el reproductor en obedecer (pausa ↔ sigue).
+  /// Devuelve los milisegundos, o null si no respondió en 4 s.
+  Future<int?> measureLatency() async {
+    final a = active;
+    if (a == null) return null;
+    final before = a.isPlaying;
+    final sw = Stopwatch()..start();
+    await controller.send(MusicCommand.togglePlayPause);
+    int? ms;
+    while (sw.elapsedMilliseconds < 4000) {
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      if (active?.isPlaying != before) {
+        ms = sw.elapsedMilliseconds;
+        break;
+      }
+    }
+    // Dejarlo como estaba.
+    if (ms != null) {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await controller.send(MusicCommand.togglePlayPause);
+    }
+    return ms;
   }
 
   /// Sugerencia según la hora (para la tarjeta de Inicio), o null.

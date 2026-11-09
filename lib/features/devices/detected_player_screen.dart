@@ -6,6 +6,7 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../../core/ui/futuristic.dart';
 import '../assistant/assistant.dart';
 import 'detected_player_controller.dart';
+import 'connectivity.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
   const DetectedPlayerScreen({
@@ -91,6 +92,12 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 ),
               if (widget.assistant != null) ...[
                 _HeadphonesCard(assistant: widget.assistant!),
+                ConnectivityCard(
+                  assistant: widget.assistant!,
+                  controller: c,
+                  voice: widget.voice ?? widget.assistant!.voice,
+                  onOpenPermissions: widget.onOpenPermissions,
+                ),
                 const SizedBox(height: 12),
               ],
               _DetectionCard(controller: c),
@@ -214,9 +221,16 @@ class _HeadphonesCard extends StatelessWidget {
                           Text('Últimos usados: ${s!.lastHeadphone}', style: theme.textTheme.bodySmall),
                         if (saved != null)
                           Text('Volumen guardado: $saved %', style: theme.textTheme.bodySmall),
+                        if (s?.preferredHeadphone != null)
+                          Text(
+                              s!.preferredHeadphone == name
+                                  ? '★ Tus audífonos preferidos'
+                                  : 'Preferidos: ${s.preferredHeadphone}',
+                              style: theme.textTheme.bodySmall),
                       ],
                     ),
                   ),
+                  if (name != null && s != null) PreferredHeadphoneButton(settings: s, name: name),
                   IconButton(
                     tooltip: 'Actualizar',
                     icon: const Icon(Icons.refresh),
