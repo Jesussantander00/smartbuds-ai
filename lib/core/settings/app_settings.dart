@@ -72,6 +72,68 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
 
+  // ------------------------------------------------- Personalización
+
+  /// Secciones de Inicio en orden; las que no están, ocultas.
+  static const allHomeSections = ['now', 'extras', 'queue', 'suggestion', 'search', 'favorite'];
+  List<String> homeSections = [...allHomeSections];
+
+  void setHomeSections(List<String> sections) {
+    homeSections = [...sections];
+    _persist();
+    notifyListeners();
+  }
+
+  /// Comandos rápidos del Asistente (frases), en orden.
+  static const defaultQuickCommands = [
+    'que suena', 'pon mis favoritas', 'pon algo nuevo', 'pon mi radio',
+    'pon favoritas olvidadas', 'apaga en treinta minutos',
+  ];
+  List<String> quickCommands = [...defaultQuickCommands];
+
+  void setQuickCommands(List<String> list) {
+    quickCommands = [...list];
+    _persist();
+    notifyListeners();
+  }
+
+  /// Interfaz compacta (pantallas pequeñas).
+  bool compact = false;
+
+  /// Colorear la tarjeta de Inicio con los colores de la carátula.
+  bool dynamicColors = true;
+
+  /// Perfil de uso activo: 'diario', 'estudio', 'viaje' (o null = personalizado).
+  String? usageProfile;
+
+  /// Aplica un perfil de uso: un grupo de ajustes pensado para la situación.
+  void applyUsageProfile(String name) {
+    switch (name) {
+      case 'estudio': // pocas interrupciones
+        shortReplies = true;
+        announceSongs = false;
+        radioMode = true;
+        discoveryLevel = 0;
+        voiceFeedback = true;
+      case 'viaje': // música sin parar, descubrimientos y anuncios
+        shortReplies = false;
+        announceSongs = true;
+        radioMode = true;
+        discoveryLevel = 1;
+        voiceFeedback = true;
+      default: // diario
+        name = 'diario';
+        shortReplies = false;
+        announceSongs = false;
+        radioMode = false;
+        discoveryLevel = 1;
+        voiceFeedback = true;
+    }
+    usageProfile = name;
+    _persist();
+    notifyListeners();
+  }
+
   /// Audífonos preferidos: si hay, SmartBuds solo reacciona (volumen, retomar) con ellos.
   String? preferredHeadphone;
 
@@ -90,12 +152,41 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
-  /// Conexión inestable: 3 o más desconexiones en los últimos 15 minutos.
+  /// Desconexiones reales: no cuenta cambiar de unos audífonos a otros
+  /// (desconexión seguida en menos de 20 s por la conexión de OTROS audífonos).
+  List<HeadphoneEvent> realDisconnections() {
+    final out = <HeadphoneEvent>[];
+    for (var i = 0; i < connectionLog.length; i++) {
+      final e = connectionLog[i];
+      if (e.connected) continue;
+      final newer = i > 0 ? connectionLog[i - 1] : null;
+      final switched = newer != null &&
+          newer.connected &&
+          newer.name != null &&
+          e.name != null &&
+          newer.name != e.name &&
+          newer.at.difference(e.at) < const Duration(seconds: 20);
+      if (!switched) out.add(e);
+    }
+    return out;
+  }
+
+  /// Conexión inestable: 3 o más desconexiones reales en los últimos 15 minutos.
   bool unstableConnection(DateTime now) =>
-      connectionLog
-          .where((e) => !e.connected && now.difference(e.at) < const Duration(minutes: 15))
-          .length >=
-      3;
+      realDisconnections().where((e) => now.difference(e.at) < const Duration(minutes: 15)).length >= 3;
+
+  /// «Entendido» en el aviso: no lo repite durante una hora.
+  DateTime? unstableDismissedUntil;
+
+  bool showUnstableAlert(DateTime now) {
+    final until = unstableDismissedUntil;
+    return unstableConnection(now) && (until == null || now.isAfter(until));
+  }
+
+  void dismissUnstable(DateTime now) {
+    unstableDismissedUntil = now.add(const Duration(hours: 1));
+    notifyListeners();
+  }
 
   /// Últimos audífonos usados (nombre).
   String? lastHeadphone;
@@ -198,6 +289,13 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     gradualDiscovery = d['gradualDiscovery'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
     preferredHeadphone = d['preferredHeadphone'] as String?;
+    final hs = (d['homeSections'] as List?)?.cast<String>();
+    if (hs != null) homeSections = hs.where(allHomeSections.contains).toList();
+    final qc = (d['quickCommands'] as List?)?.cast<String>();
+    if (qc != null && qc.isNotEmpty) quickCommands = qc;
+    compact = d['compact'] == true;
+    dynamicColors = d['dynamicColors'] != false;
+    usageProfile = d['usageProfile'] as String?;
     connectionLog = [
       for (final e in (d['connectionLog'] as List?) ?? const [])
         if (e is Map && e['at'] is String)
@@ -244,6 +342,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     int? seedColor,
     bool? shortReplies,
     bool? gradualDiscovery,
+    bool? compact,
+    bool? dynamicColors,
     int? discoveryLevel,
     bool? pauseOnUnplug,
     bool? pauseOnCalls,
@@ -252,6 +352,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   }) {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
+    if (compact != null) this.compact = compact;
+    if (dynamicColors != null) this.dynamicColors = dynamicColors;
     if (discoveryLevel != null) this.discoveryLevel = discoveryLevel;
     if (pauseOnUnplug != null) this.pauseOnUnplug = pauseOnUnplug;
     if (pauseOnCalls != null) this.pauseOnCalls = pauseOnCalls;
@@ -317,6 +419,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'gradualDiscovery': gradualDiscovery,
         'lastHeadphone': lastHeadphone,
         'preferredHeadphone': preferredHeadphone,
+        'homeSections': homeSections,
+        'quickCommands': quickCommands,
+        'compact': compact,
+        'dynamicColors': dynamicColors,
+        'usageProfile': usageProfile,
         'connectionLog': [
           for (final e in connectionLog) {'at': e.at.toIso8601String(), 'c': e.connected, 'n': e.name},
         ],

@@ -97,6 +97,27 @@ class TrackStats {
       );
 }
 
+/// Cuándo sueles escuchar música.
+class ListeningPattern {
+  const ListeningPattern({
+    required this.sessions,
+    this.weekdayStart,
+    this.weekendStart,
+    this.typicalEnd,
+  });
+  final int sessions;
+  final int? weekdayStart;
+  final int? weekendStart;
+  final int? typicalEnd;
+
+  static String hour(int h) {
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return '$h12 ${h < 12 ? 'a. m.' : 'p. m.'}';
+  }
+
+  bool get isEmpty => weekdayStart == null && weekendStart == null && typicalEnd == null;
+}
+
 /// Cambios recientes en tu gusto.
 class TasteShift {
   const TasteShift(this.rising, this.fading);
@@ -661,6 +682,55 @@ class MusicProfile extends ChangeNotifier {
     }
     if (t.skips > t.completes && t.skips >= 2) reasons.add('Ojo: la saltas más de lo que la terminas.');
     return reasons.isEmpty ? const ['La has escuchado poco: SmartBuds sigue aprendiendo.'] : reasons;
+  }
+
+  // ================================================ Patrones de escucha
+
+  /// Tus sesiones (reproducciones separadas por más de 30 min de silencio):
+  /// a qué hora sueles empezar y terminar, entre semana y fin de semana.
+  ListeningPattern pattern() {
+    final plays = [
+      for (final e in history)
+        if (e.type == ListenEventType.play) e.at,
+    ]..sort();
+    final starts = <DateTime>[], ends = <DateTime>[];
+    for (var i = 0; i < plays.length; i++) {
+      if (i == 0 || plays[i].difference(plays[i - 1]) > const Duration(minutes: 30)) {
+        starts.add(plays[i]);
+        if (i > 0) ends.add(plays[i - 1]);
+      }
+    }
+    if (plays.isNotEmpty) ends.add(plays.last);
+    int? typicalHour(Iterable<DateTime> list) {
+      final counts = List<int>.filled(24, 0);
+      for (final d in list) {
+        counts[d.hour]++;
+      }
+      var best = -1, bestN = 0;
+      for (var h = 0; h < 24; h++) {
+        if (counts[h] > bestN) {
+          bestN = counts[h];
+          best = h;
+        }
+      }
+      return bestN >= 2 ? best : null;
+    }
+
+    bool weekend(DateTime d) => d.weekday >= DateTime.saturday;
+    return ListeningPattern(
+      sessions: starts.length,
+      weekdayStart: typicalHour(starts.where((d) => !weekend(d))),
+      weekendStart: typicalHour(starts.where(weekend)),
+      typicalEnd: typicalHour(ends),
+    );
+  }
+
+  /// ¿Es tu hora habitual de escuchar? (para la rutina de Inicio)
+  bool isUsualListeningTime() {
+    final p = pattern();
+    final now = _clock();
+    final h = now.weekday >= DateTime.saturday ? p.weekendStart : p.weekdayStart;
+    return h != null && (now.hour == h || now.hour == (h + 23) % 24);
   }
 
   // ============================================ Organización de tus listas

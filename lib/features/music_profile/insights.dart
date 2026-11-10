@@ -120,12 +120,27 @@ class InsightsSection extends StatelessWidget {
     final tired = profile.overexposed();
     final evo = profile.evolution();
     final hasEvo = evo.where((e) => e.plays > 0).length >= 2;
-    if (shift.isEmpty && tired.isEmpty && !hasEvo) return const SizedBox.shrink();
+    final pat = profile.pattern();
+    if (shift.isEmpty && tired.isEmpty && !hasEvo && pat.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
         Text('Tu inteligencia musical', style: theme.textTheme.titleMedium),
+        if (!pat.isEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.schedule_rounded, color: Neon.cyan),
+              title: const Text('Tu rutina musical'),
+              subtitle: Text([
+                if (pat.weekdayStart != null)
+                  'Entre semana sueles empezar a las ${ListeningPattern.hour(pat.weekdayStart!)}',
+                if (pat.weekendStart != null)
+                  'El fin de semana, a las ${ListeningPattern.hour(pat.weekendStart!)}',
+                if (pat.typicalEnd != null) 'Sueles terminar hacia las ${ListeningPattern.hour(pat.typicalEnd!)}',
+              ].join('.\n')),
+            ),
+          ),
         if (shift.rising.isNotEmpty)
           Card(
             child: ListTile(

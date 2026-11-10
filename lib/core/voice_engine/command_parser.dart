@@ -179,6 +179,17 @@ class DurationIntent extends VoiceIntent {
   final int minutes;
 }
 
+/// «Modo estudio / viaje / diario»: aplica un perfil de uso.
+class UsageProfileIntent extends VoiceIntent {
+  const UsageProfileIntent(this.profile);
+  final String profile;
+}
+
+/// «Sube la energía poco a poco»: de tranquila a fiesta, canción a canción.
+class EnergyRampIntent extends VoiceIntent {
+  const EnergyRampIntent();
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -341,6 +352,13 @@ class CommandParser {
     'por que esta', 'por que me gusta esta', 'por que me gusta', 'por que pusiste esta',
     'por que me gusta esta cancion',
   };
+  static const _profiles = {
+    'modo estudio': 'estudio', 'modo concentracion': 'estudio', 'modo viaje': 'viaje',
+    'modo diario': 'diario', 'modo normal': 'diario',
+  };
+  static const _energy = {
+    'sube la energia poco a poco', 'sube la energia', 'de tranquila a fiesta', 'calentamiento',
+  };
   static const _shareWeek = {'comparte mi semana', 'comparte mi resumen'};
 
   /// Números dichos en palabras para el volumen exacto.
@@ -395,6 +413,8 @@ class CommandParser {
     'nunca más este artista', 'bloquea este artista',
     'pon favoritas olvidadas', 'mis favoritas olvidadas', 'algo que no escucho hace rato',
     'comparte mi semana',
+    'modo estudio', 'modo viaje', 'modo diario', 'modo normal',
+    'sube la energía poco a poco', 'sube la energía',
     'pon media hora de música', 'pon una hora de música', 'pon quince minutos de música',
     'pon treinta minutos de música', 'pon diez minutos de música',
     'pon algo parecido', 'algo parecido a esta', 'pon una parecida',
@@ -437,6 +457,9 @@ class CommandParser {
     if (_forgotten.contains(text)) return const ForgottenIntent();
     if (_shareWeek.contains(text)) return const ShareWeekIntent();
     if (_similar.contains(text)) return const SimilarIntent();
+    final prof = _profiles[text];
+    if (prof != null) return UsageProfileIntent(prof);
+    if (_energy.contains(text)) return const EnergyRampIntent();
     final dur = parseDuration(text);
     if (dur != null) return DurationIntent(dur);
     if (_why.contains(text)) return const WhyIntent();

@@ -242,6 +242,10 @@ class Assistant extends ChangeNotifier {
         await explainCurrent();
       case DurationIntent(:final minutes):
         await playFor(minutes);
+      case UsageProfileIntent(:final profile):
+        await useProfile(profile);
+      case EnergyRampIntent():
+        await energyRamp();
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);
@@ -296,6 +300,43 @@ class Assistant extends ChangeNotifier {
     notifyListeners();
     await _say('Lista de $minutes minutos: ${list.length} canciones tuyas.');
     await handleSearch(SearchRequest(q(list.first)));
+  }
+
+  /// Perfil de uso: estudio (concentración), viaje (lista larga) o diario.
+  Future<void> useProfile(String name) async {
+    settings?.applyUsageProfile(name);
+    radioSongs = 0;
+    switch (name) {
+      case 'estudio':
+        await _say('Modo estudio: pocas interrupciones.');
+        await playMood('para concentrarme', 'musica para concentrarse estudiar instrumental');
+      case 'viaje':
+        await _say('Modo viaje: te preparo dos horas de tu música.');
+        await playFor(120);
+      default:
+        await _say('Modo diario.');
+    }
+  }
+
+  /// De tranquila a fiesta: la primera suena ya y las demás suben la energía.
+  Future<void> energyRamp() async {
+    const steps = [
+      ('tranquila', 'musica tranquila'),
+      ('alegre', 'musica alegre'),
+      ('para bailar', 'musica para bailar'),
+      ('fiesta', 'reggaeton para fiesta exitos'),
+    ];
+    String pick((String, String) step) {
+      final t = profile.pickMood(step.$1, random: _random);
+      return t == null ? step.$2 : [t.title, if (t.artist != null) t.artist].join(' ');
+    }
+
+    queue
+      ..clear()
+      ..addAll(steps.skip(1).map(pick));
+    notifyListeners();
+    await _say('Empiezo tranquilo y voy subiendo la energía.');
+    await handleSearch(SearchRequest(pick(steps.first)));
   }
 
   /// Vuelve a poner en la cola algo que se quitó (para «Deshacer»).
@@ -709,6 +750,7 @@ class Assistant extends ChangeNotifier {
     if (active?.isPlaying == true) return null;
     final w = weatherMood;
     if (w != null) return '${w.description}: ¿te pongo música ${w.mood}?';
+    if (profile.isUsualListeningTime()) return 'Es tu hora de música de siempre. ¿Pongo tus favoritas?';
     final fav = profile.favoriteDaypart;
     final now = Daypart.of(_clock());
     if (fav == null || fav != now || profile.pickFavorite() == null) return null;

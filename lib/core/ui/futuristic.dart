@@ -213,6 +213,7 @@ class Glass extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.opacity = .5,
     this.blur = 24,
+    this.tint,
   });
 
   final Widget child;
@@ -220,6 +221,9 @@ class Glass extends StatelessWidget {
   final EdgeInsets padding;
   final double opacity;
   final double blur;
+
+  /// Color suave que tiñe el vidrio (p. ej. el de la carátula).
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
@@ -237,9 +241,11 @@ class Glass extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: dark
-                    ? [Colors.white.withValues(alpha: .10), Colors.white.withValues(alpha: .04)]
-                    : [Colors.white.withValues(alpha: opacity + .15), Colors.white.withValues(alpha: opacity - .15)],
+                colors: tint != null
+                    ? [tint!.withValues(alpha: dark ? .30 : .38), Colors.white.withValues(alpha: dark ? .05 : opacity - .1)]
+                    : dark
+                        ? [Colors.white.withValues(alpha: .10), Colors.white.withValues(alpha: .04)]
+                        : [Colors.white.withValues(alpha: opacity + .15), Colors.white.withValues(alpha: opacity - .15)],
               ),
               border: Border.all(color: Colors.white.withValues(alpha: dark ? .12 : .75), width: 1.2),
             ),
@@ -484,14 +490,15 @@ class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
 
 /// Tarjeta principal: un panel de vidrio.
 class NeonCard extends StatelessWidget {
-  const NeonCard({super.key, required this.child, this.padding = const EdgeInsets.all(20)});
+  const NeonCard({super.key, required this.child, this.padding = const EdgeInsets.all(20), this.tint});
 
   final Widget child;
   final EdgeInsets padding;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Glass(padding: padding, child: child),
+        child: Glass(padding: padding, tint: tint, child: child),
       );
 }

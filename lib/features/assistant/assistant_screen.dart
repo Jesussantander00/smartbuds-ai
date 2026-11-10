@@ -76,6 +76,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
     ('«Busca música de los ochenta»', 'Por época: sesenta, setenta, ochenta, noventa, dos mil'),
     ('«Busca la versión acústica de …»', 'También «en vivo», «remix», «original», «instrumental»'),
     ('«Busca una canción tranquila con guitarra»', 'Busca por descripción'),
+    ('«Modo estudio / viaje / diario»', 'Cambia varios ajustes a la vez según lo que haces'),
+    ('«Sube la energía poco a poco»', 'De tranquila a fiesta, canción a canción'),
     ('«Pon algo parecido»', 'Una canción de un artista parecido al que suena'),
     ('«¿Por qué esta?»', 'Te dice qué sabe SmartBuds de la canción que suena'),
   ];
@@ -431,14 +433,57 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  static const _quickCommands = <(IconData, String, String)>[
-    (Icons.music_note, '¿Qué suena?', 'que suena'),
-    (Icons.favorite, 'Mis favoritas', 'pon mis favoritas'),
-    (Icons.explore, 'Algo nuevo', 'pon algo nuevo'),
-    (Icons.radio, 'Mi radio', 'pon mi radio'),
-    (Icons.history_toggle_off, 'Olvidadas', 'pon favoritas olvidadas'),
-    (Icons.bedtime, 'Apagar en 30 min', 'apaga en treinta minutos'),
-  ];
+  /// Catálogo de comandos rápidos (frase → icono y nombre).
+  static const _catalog = <String, (IconData, String)>{
+    'que suena': (Icons.music_note, '¿Qué suena?'),
+    'pon mis favoritas': (Icons.favorite, 'Mis favoritas'),
+    'pon algo nuevo': (Icons.explore, 'Algo nuevo'),
+    'pon mi radio': (Icons.radio, 'Mi radio'),
+    'pon favoritas olvidadas': (Icons.history_toggle_off, 'Olvidadas'),
+    'apaga en treinta minutos': (Icons.bedtime, 'Apagar en 30 min'),
+    'pon algo parecido': (Icons.auto_awesome_motion, 'Algo parecido'),
+    'pon media hora de musica': (Icons.timer, '30 min de música'),
+    'modo estudio': (Icons.menu_book, 'Modo estudio'),
+    'modo viaje': (Icons.directions_car, 'Modo viaje'),
+    'sube la energia poco a poco': (Icons.trending_up, 'Subir energía'),
+    'comparte mi semana': (Icons.ios_share, 'Compartir semana'),
+    'por que esta': (Icons.insights, '¿Por qué esta?'),
+  };
+
+  Future<void> _editQuick(BuildContext context) async {
+    final chosen = [...settings.quickCommands.where(_catalog.containsKey)];
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * .75,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              children: [
+                Text('Comandos rápidos', style: Theme.of(context).textTheme.titleLarge),
+                const Text('Elige cuáles aparecen. Se muestran en el orden en que los marcas.'),
+                for (final e in _catalog.entries)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(e.value.$1),
+                    title: Text(e.value.$2),
+                    subtitle: chosen.contains(e.key) ? Text('#${chosen.indexOf(e.key) + 1}') : null,
+                    value: chosen.contains(e.key),
+                    onChanged: (v) {
+                      setSheet(() => v == true ? chosen.add(e.key) : chosen.remove(e.key));
+                      settings.setQuickCommands(chosen.isEmpty ? AppSettings.defaultQuickCommands : chosen);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// Comandos frecuentes a un toque.
   Widget _quick(BuildContext context) {
@@ -450,18 +495,23 @@ class _AssistantScreenState extends State<AssistantScreen> {
         child: ListView(
           scrollDirection: Axis.horizontal,
           children: [
-            for (final (icon, label, phrase) in _quickCommands)
+            for (final phrase in settings.quickCommands.where(_catalog.containsKey))
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ActionChip(
-                  avatar: Icon(icon, size: 18),
-                  label: Text(label),
+                  avatar: Icon(_catalog[phrase]!.$1, size: 18),
+                  label: Text(_catalog[phrase]!.$2),
                   onPressed: () {
                     final intent = parser.parseIntent(phrase);
                     if (intent != null) widget.assistant?.handleIntent(intent);
                   },
                 ),
               ),
+            ActionChip(
+              avatar: const Icon(Icons.tune, size: 18),
+              label: const Text('Editar'),
+              onPressed: () => _editQuick(context),
+            ),
           ],
         ),
       ),

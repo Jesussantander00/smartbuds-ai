@@ -8,6 +8,8 @@ import '../../core/voice_engine/command_parser.dart';
 import '../music_profile/insights.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../../core/ui/futuristic.dart';
+import '../../core/ui/art_color.dart';
+import '../../core/settings/app_settings.dart';
 import '../assistant/assistant.dart';
 import 'car_mode_screen.dart';
 import '../devices/detected_player_controller.dart';
@@ -38,11 +40,207 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Una sección de Inicio (el orden y cuáles se ven se eligen en «Personalizar»).
+  List<Widget> _section(String id) => switch (id) {
+        'now' => [
+            _NowPlaying(
+                detection: widget.controller.detection,
+                assistant: widget.assistant,
+                controller: widget.controller),
+          ],
+        'extras' => [_ExtrasRow(assistant: widget.assistant)],
+        'queue' => [
+            if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
+          ],
+        'suggestion' => [
+            if (widget.assistant.contextSuggestion != null)
+              Card(
+                child: ListTile(
+                  leading: Icon(widget.assistant.weatherMood != null
+                      ? Icons.wb_cloudy_outlined
+                      : Icons.schedule),
+                  title: Text(widget.assistant.contextSuggestion!),
+                  trailing: TextButton(
+                    onPressed: () {
+                      final w = widget.assistant.weatherMood;
+                      if (w != null) {
+                        widget.assistant.playMood(w.mood, w.query);
+                      } else {
+                        widget.assistant.playFavorite();
+                      }
+                    },
+                    child: const Text('Sí'),
+                  ),
+                ),
+              ),
+          ],
+        'search' => [
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _query,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => widget.controller.search(_query.text),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'Buscar una canción',
+                      hintText: 'Ojalá Ryan Castro',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Buscar',
+                  onPressed: widget.controller.busy ? null : () => widget.controller.search(_query.text),
+                  icon: const Icon(Icons.search),
+                ),
+              ],
+            ),
+          ],
+        'favorite' => [
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: widget.controller.busy ? null : widget.assistant.playFavorite,
+              icon: const Icon(Icons.favorite),
+              label: const Text('Pon algo que me guste'),
+            ),
+          ],
+        _ => const [],
+      };
+
+  /// «Personalizar Inicio»: orden y secciones visibles, modo compacto,
+  /// colores de la carátula y perfil de uso.
+  Future<void> _customize() async {
+    final settings = widget.assistant.settings;
+    if (settings == null) return;
+    const names = {
+      'now': ('Sonando ahora', Icons.album_rounded),
+      'extras': ('Accesos rápidos', Icons.bolt_rounded),
+      'queue': ('Cola', Icons.queue_music_rounded),
+      'suggestion': ('Sugerencias', Icons.lightbulb_outline_rounded),
+      'search': ('Buscar', Icons.search_rounded),
+      'favorite': ('Pon algo que me guste', Icons.favorite_rounded),
+    };
+    final order = [
+      ...settings.homeSections,
+      ...AppSettings.allHomeSections.where((s) => !settings.homeSections.contains(s)),
+    ];
+    final visible = {...settings.homeSections};
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) {
+          void save() => settings.setHomeSections([for (final s in order) if (visible.contains(s)) s]);
+          final theme = Theme.of(context);
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * .8,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                children: [
+                  Text('Personalizar Inicio', style: theme.textTheme.titleLarge),
+                  Text('Arrastra para ordenar; apaga lo que no quieras ver.', style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  ReorderableListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    onReorder: (a, b) {
+                      setSheet(() {
+                        if (b > a) b--;
+                        order.insert(b, order.removeAt(a));
+                      });
+                      save();
+                    },
+                    children: [
+                      for (var i = 0; i < order.length; i++)
+                        ListTile(
+                          key: ValueKey(order[i]),
+                          contentPadding: EdgeInsets.zero,
+                          leading: ReorderableDragStartListener(
+                            index: i,
+                            child: const Icon(Icons.drag_indicator_rounded),
+                          ),
+                          title: Row(
+                            children: [
+                              Icon(names[order[i]]!.$2, size: 20),
+                              const SizedBox(width: 8),
+                              Text(names[order[i]]!.$1),
+                            ],
+                          ),
+                          trailing: Switch(
+                            value: visible.contains(order[i]),
+                            onChanged: (v) {
+                              setSheet(() => v ? visible.add(order[i]) : visible.remove(order[i]));
+                              save();
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Modo compacto'),
+                    subtitle: const Text('Carátula pequeña y menos botones (pantallas pequeñas).'),
+                    value: settings.compact,
+                    onChanged: (v) {
+                      settings.update(compact: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Colores de la carátula'),
+                    subtitle: const Text('La tarjeta de la canción toma el color de su portada.'),
+                    value: settings.dynamicColors,
+                    onChanged: (v) {
+                      settings.update(dynamicColors: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Perfil de uso', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 6),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'diario', label: Text('Diario'), icon: Icon(Icons.wb_sunny_outlined)),
+                      ButtonSegment(value: 'estudio', label: Text('Estudio'), icon: Icon(Icons.menu_book_rounded)),
+                      ButtonSegment(value: 'viaje', label: Text('Viaje'), icon: Icon(Icons.directions_car_rounded)),
+                    ],
+                    emptySelectionAllowed: true,
+                    selected: {if (settings.usageProfile != null) settings.usageProfile!},
+                    onSelectionChanged: (v) {
+                      if (v.isEmpty) return;
+                      settings.applyUsageProfile(v.first);
+                      setSheet(() {});
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Estudio: respuestas cortas, sin anuncios, radio con conocidas. '
+                    'Viaje: radio con anuncios y descubrimientos. Diario: lo normal.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final listenables = <Listenable>[
       widget.controller,
       widget.assistant,
+      if (widget.assistant.settings != null) widget.assistant.settings!,
       if (widget.voice != null) widget.voice!,
     ];
     final voice = widget.voice;
@@ -81,6 +279,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Personalizar Inicio',
+            icon: const Icon(Icons.dashboard_customize_outlined),
+            onPressed: _customize,
+          ),
           ListenableBuilder(
             listenable: Listenable.merge(listenables),
             builder: (context, _) => _ConnectionPill(
@@ -108,62 +311,8 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 120),
           children: [
             if (voice != null) _MicStatus(voice: voice),
-            _NowPlaying(detection: widget.controller.detection, assistant: widget.assistant,
-                controller: widget.controller),
-            _ExtrasRow(assistant: widget.assistant),
-            if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
-            if (widget.assistant.contextSuggestion != null)
-              Card(
-                child: ListTile(
-                  leading: Icon(widget.assistant.weatherMood != null
-                      ? Icons.wb_cloudy_outlined
-                      : Icons.schedule),
-                  title: Text(widget.assistant.contextSuggestion!),
-                  trailing: TextButton(
-                    onPressed: () {
-                      final w = widget.assistant.weatherMood;
-                      if (w != null) {
-                        widget.assistant.playMood(w.mood, w.query);
-                      } else {
-                        widget.assistant.playFavorite();
-                      }
-                    },
-                    child: const Text('Sí'),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _query,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => widget.controller.search(_query.text),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      labelText: 'Buscar una canción',
-                      hintText: 'Ojalá Ryan Castro',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: 'Buscar',
-                  onPressed: widget.controller.busy
-                      ? null
-                      : () => widget.controller.search(_query.text),
-                  icon: const Icon(Icons.search),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              onPressed: widget.controller.busy ? null : widget.assistant.playFavorite,
-              icon: const Icon(Icons.favorite),
-              label: const Text('Pon algo que me guste'),
-            ),
+            for (final id in widget.assistant.settings?.homeSections ?? AppSettings.allHomeSections)
+              ..._section(id),
             if (widget.controller.lastResult != null) ...[
               const SizedBox(height: 12),
               _ResultLine(result: widget.controller.lastResult!),
@@ -191,6 +340,23 @@ class _NowPlayingState extends State<_NowPlaying> {
   DateTime _receivedAt = DateTime.now();
   int? _lastPos;
   double? _dragging;
+  Color? _artColor;
+  String? _artKey;
+
+  void _updateArtColor() {
+    final s = _status;
+    final art = s?.art;
+    final key = s?.trackKey;
+    if (key == _artKey) return;
+    _artKey = key;
+    if (art == null || !(widget.assistant.settings?.dynamicColors ?? true)) {
+      if (_artColor != null) setState(() => _artColor = null);
+      return;
+    }
+    ArtColor.of(art).then((c) {
+      if (mounted && _artKey == key) setState(() => _artColor = c);
+    });
+  }
 
   PlayerStatus? get _status {
     final d = widget.detection;
@@ -200,6 +366,7 @@ class _NowPlayingState extends State<_NowPlaying> {
   @override
   void initState() {
     super.initState();
+    _updateArtColor();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_status?.isPlaying == true && _dragging == null && mounted) setState(() {});
     });
@@ -208,6 +375,7 @@ class _NowPlayingState extends State<_NowPlaying> {
   @override
   void didUpdateWidget(covariant _NowPlaying old) {
     super.didUpdateWidget(old);
+    _updateArtColor();
     final pos = _status?.positionMs;
     if (pos != _lastPos) {
       _lastPos = pos;
@@ -254,6 +422,8 @@ class _NowPlayingState extends State<_NowPlaying> {
     final duration = s?.durationMs;
     final pos = s == null ? null : _positionNow(s);
     final busy = widget.controller.busy;
+    final compact = widget.assistant.settings?.compact ?? false;
+    final dynamicOn = widget.assistant.settings?.dynamicColors ?? true;
 
     Widget control(IconData icon, String label, MusicCommand cmd, {bool main = false}) {
       final button = main
@@ -279,13 +449,14 @@ class _NowPlayingState extends State<_NowPlaying> {
     }
 
     return NeonCard(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      tint: dynamicOn ? _artColor : null,
+      padding: EdgeInsets.fromLTRB(20, compact ? 14 : 20, 20, compact ? 6 : 12),
       child: Column(
         children: [
           // Carátula: la protagonista.
           LayoutBuilder(
             builder: (context, c) {
-              final side = c.maxWidth.clamp(0.0, 300.0).toDouble();
+              final side = c.maxWidth.clamp(0.0, compact ? 140.0 : 300.0).toDouble();
               return AnimatedSwitcher(
                 duration: const Duration(milliseconds: 450),
                 child: Container(
@@ -405,7 +576,7 @@ class _NowPlayingState extends State<_NowPlaying> {
               control(Icons.skip_next_rounded, 'Siguiente', MusicCommand.next),
             ],
           ),
-          if (s != null && (title ?? '').isNotEmpty)
+          if (s != null && (title ?? '').isNotEmpty && !compact)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -628,6 +799,16 @@ class _ExtrasRow extends StatelessWidget {
         avatar: const Icon(Icons.timer_outlined, size: 18),
         label: const Text('Apagar en…'),
         onPressed: () => _pickSleep(context),
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.directions_car_rounded, size: 18),
+        label: const Text('Modo viaje'),
+        onPressed: () => assistant.useProfile('viaje'),
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.trending_up_rounded, size: 18),
+        label: const Text('Subir la energía'),
+        onPressed: assistant.energyRamp,
       ),
       if (assistant.headphoneName != null)
         Chip(
