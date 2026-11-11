@@ -42,8 +42,9 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
     setState(() {
       _testing = false;
       _latency = ms == null
-          ? 'El reproductor no respondió. Abre «Solucionar problemas».'
-          : 'Respondió en $ms ms ${ms < 400 ? '· excelente' : ms < 1000 ? '· normal' : '· lento'}';
+          ? 'El reproductor no respondió a los controles. Abre «Solucionar problemas».'
+          : 'Los controles respondieron en $ms ms ${ms < 400 ? '· excelente' : ms < 1000 ? '· normal' : '· lento'}. '
+              '(Mide lo que tarda la app de música en obedecer, no el retraso del sonido Bluetooth.)';
     });
   }
 
@@ -63,7 +64,12 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
       listenable: settings,
       builder: (context, _) {
         final log = settings.connectionLog;
-        final unstable = settings.unstableConnection(DateTime.now());
+        final now = DateTime.now();
+        final unstable = settings.showUnstableAlert(now);
+        final recentDrops = settings
+            .realDisconnections()
+            .where((e) => now.difference(e.at) < const Duration(minutes: 15))
+            .toList();
         return NeonCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,13 +89,26 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
                     color: Neon.pink.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: Neon.pink),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text('Tus audífonos se desconectaron varias veces en 15 minutos. '
-                            'Acércalos al teléfono, revisa su batería o vuelve a emparejarlos.'),
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Neon.pink),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text('Tus audífonos se desconectaron ${recentDrops.length} veces en 15 minutos '
+                                '(${recentDrops.map((e) => _time(context, e.at)).join(', ')}). '
+                                'Acércalos al teléfono, revisa su batería o vuelve a emparejarlos.'),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => settings.dismissUnstable(DateTime.now()),
+                          child: const Text('Entendido'),
+                        ),
                       ),
                     ],
                   ),
@@ -120,7 +139,7 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
                     icon: _testing
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.speed_rounded),
-                    label: const Text('Probar respuesta'),
+                    label: const Text('Tiempo de respuesta de controles'),
                   ),
                   FilledButton.icon(
                     onPressed: () => showTroubleshooter(
@@ -143,7 +162,7 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
               if (widget.assistant.active == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text('Para probar la respuesta pon música primero.', style: theme.textTheme.bodySmall),
+                  child: Text('Para medir el tiempo de respuesta pon música primero.', style: theme.textTheme.bodySmall),
                 ),
             ],
           ),
@@ -155,11 +174,19 @@ class _ConnectivityCardState extends State<ConnectivityCard> {
 
 /// Un paso del diagnóstico.
 class _Check {
-  const _Check(this.ok, this.title, this.okText, this.fixText, {this.fix, this.fixLabel});
+  const _Check(this.ok, this.title, this.okText, this.fixText,
+      {this.meaning = '', this.fix, this.fixLabel});
   final bool ok;
   final String title;
+
+  /// Qué detectó cuando está bien.
   final String okText;
+
+  /// Qué detectó cuando falla.
   final String fixText;
+
+  /// Qué significa para ti.
+  final String meaning;
   final VoidCallback? fix;
   final String? fixLabel;
 }
@@ -172,6 +199,7 @@ Future<void> showTroubleshooter(
   required DetectedPlayerController controller,
   VoiceEngine? voice,
   Future<void> Function()? onOpenPermissions,
+  String? recheckOf,
 }) async {
   final access = (await assistant.media?.missingPermission()) == null;
   if (!context.mounted) return;
@@ -186,7 +214,8 @@ Future<void> showTroubleshooter(
       access,
       'Permiso para ver la música',
       'SmartBuds puede ver qué suena.',
-      'Sin el acceso a notificaciones SmartBuds no ve ni controla tus apps de música.',
+      'Falta el acceso a notificaciones.',
+      meaning: 'Sin ese permiso SmartBuds no ve ni controla tus apps de música.',
       fix: onOpenPermissions == null ? null : () => onOpenPermissions(),
       fixLabel: 'Dar permiso',
     ),
@@ -194,19 +223,22 @@ Future<void> showTroubleshooter(
       player != null,
       'Reproductor',
       player == null ? '' : '${player.status.appName} está abierto.',
-      'No hay música abierta. Abre tu app de música y pon una canción (aunque sea en pausa).',
+      'No hay ninguna app de música abierta.',
+      meaning: 'Los comandos no tienen a quién llegar. Abre tu app de música y pon una canción (aunque sea en pausa).',
     ),
     _Check(
       view == null || view.voiceCaps.level == ControlLevel.direct,
       'Controles',
       'Siguiente, pausa y volumen funcionan directo.',
-      'Esta app limita algunos controles. Prueba con YouTube Music o Spotify.',
+      'Esta app limita algunos controles.',
+      meaning: 'Puede que «siguiente» o el volumen no funcionen. Prueba con YouTube Music o Spotify.',
     ),
     _Check(
       voice == null || (voice.enabled && voice.error == null),
       'Micrófono',
       'SmartBuds te está escuchando.',
       voice?.error ?? 'El micrófono está apagado.',
+      meaning: 'SmartBuds no oye tus órdenes de voz.',
       fix: voice == null || voice.enabled ? null : voice.toggle,
       fixLabel: 'Encender',
     ),
@@ -214,7 +246,9 @@ Future<void> showTroubleshooter(
       assistant.headphoneName != null,
       'Audífonos',
       'Conectados: ${assistant.headphoneName ?? ''}.',
-      'No veo audífonos. Si usas Bluetooth, revisa que estén encendidos y emparejados.',
+      'No hay audífonos conectados.',
+      meaning: 'La música sale por el altavoz y los toques de audífono no funcionan. '
+          'Revisa que estén encendidos y emparejados.',
       fix: assistant.refreshHeadphone,
       fixLabel: 'Revisar otra vez',
     ),
@@ -222,11 +256,12 @@ Future<void> showTroubleshooter(
       settings == null || !settings.unstableConnection(DateTime.now()),
       'Estabilidad',
       'La conexión de los audífonos está estable.',
-      'Se desconectan seguido: acércalos, cárgalos o vuelve a emparejarlos.',
+      'Se desconectaron 3 o más veces en 15 minutos.',
+      meaning: 'La música se corta. Acércalos al teléfono, cárgalos o vuelve a emparejarlos.',
     ),
   ];
   final bad = checks.where((c) => !c.ok).length;
-  await showModalBottomSheet<void>(
+  final fixed = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
@@ -240,6 +275,16 @@ Future<void> showTroubleshooter(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Solucionar problemas', style: theme.textTheme.titleLarge),
+              if (recheckOf != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    checks.any((c) => c.title == recheckOf && c.ok)
+                        ? '✓ Revisé de nuevo: «$recheckOf» quedó resuelto.'
+                        : 'Revisé de nuevo: «$recheckOf» sigue sin resolverse.',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
               Text(bad == 0 ? 'Todo se ve bien.' : '$bad cosa${bad == 1 ? '' : 's'} por revisar.',
                   style: theme.textTheme.bodyMedium),
               const SizedBox(height: 8),
@@ -251,11 +296,15 @@ Future<void> showTroubleshooter(
                     color: c.ok ? const Color(0xFF22C55E) : Neon.pink,
                   ),
                   title: Text(c.title),
-                  subtitle: Text(c.ok ? c.okText : c.fixText),
+                  isThreeLine: !c.ok,
+                  subtitle: Text(c.ok
+                      ? c.okText
+                      : 'Detecté: ${c.fixText}\nQué significa: ${c.meaning}'
+                          '${c.fix == null ? '' : '\nQué hacer: toca «${c.fixLabel ?? 'Arreglar'}».'}'),
                   trailing: !c.ok && c.fix != null
                       ? TextButton(
                           onPressed: () {
-                            Navigator.pop(context);
+                            Navigator.pop(context, c.title);
                             c.fix!();
                           },
                           child: Text(c.fixLabel ?? 'Arreglar'),
@@ -268,6 +317,19 @@ Future<void> showTroubleshooter(
       );
     },
   );
+  // Después de arreglar algo, comprueba que de verdad quedó resuelto.
+  if (fixed != null && context.mounted) {
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    if (!context.mounted) return;
+    await showTroubleshooter(
+      context,
+      assistant: assistant,
+      controller: controller,
+      voice: voice,
+      onOpenPermissions: onOpenPermissions,
+      recheckOf: fixed,
+    );
+  }
 }
 
 /// Estrella para marcar los audífonos conectados como preferidos.

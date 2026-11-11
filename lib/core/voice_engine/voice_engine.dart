@@ -170,6 +170,8 @@ class VoiceEngine extends ChangeNotifier {
         SimilarIntent() => 'Algo parecido',
         WhyIntent() => '¿Por qué esta?',
         DurationIntent(:final minutes) => 'Lista de $minutes min',
+        UsageProfileIntent(:final profile) => 'Modo $profile',
+        EnergyRampIntent() => 'Subir la energía',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -404,6 +406,8 @@ class VoiceEngine extends ChangeNotifier {
             SimilarIntent() ||
             WhyIntent() ||
             DurationIntent() ||
+            UsageProfileIntent() ||
+            EnergyRampIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||
