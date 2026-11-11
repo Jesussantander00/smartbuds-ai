@@ -145,8 +145,9 @@ begin
   if fails >= 10 then raise exception 'Demasiados intentos. Prueba en una hora.'; end if;
   select * into p from public.shared_playlists where invite_code = upper(trim(code));
   if p.id is null then
+    -- Sin «raise»: así el intento fallido queda guardado (un error lo desharía).
     insert into public.join_attempts (user_id, ok) values (auth.uid(), false);
-    raise exception 'Código no válido';
+    return null; -- la app muestra «Código no válido»
   end if;
   select count(*) into members from public.playlist_members where playlist_id = p.id;
   if members >= 50 then raise exception 'La lista ya está llena (50 personas).'; end if;

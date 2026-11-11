@@ -273,7 +273,9 @@ class SocialService extends ChangeNotifier {
       });
 
   Future<SharedPlaylist?> joinPlaylist(String code) => _guard(() async {
-        final m = await _call('POST', '/rest/v1/rpc/join_playlist', {'code': code.trim().toUpperCase()}) as Map;
+        final r = await _call('POST', '/rest/v1/rpc/join_playlist', {'code': code.trim().toUpperCase()});
+        final m = r is List ? (r.isEmpty ? null : r.first) : r;
+        if (m is! Map || m['id'] == null) throw const SocialException('Código no válido.');
         await _loadPlaylists();
         return SharedPlaylist(m['id'] as String, m['name'] as String, m['invite_code'] as String, m['owner'] == _uid);
       });
