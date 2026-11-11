@@ -8,6 +8,7 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
 import '../privacy/changelog.dart';
+import '../social/social_service.dart';
 
 /// Una sección de la app en la barra lateral.
 class SidebarItem {
@@ -21,6 +22,7 @@ const sidebarItems = [
   SidebarItem('Inicio', Icons.home_rounded, AppColors.home),
   SidebarItem('Asistente', Icons.mic_rounded, AppColors.assistant),
   SidebarItem('Mi música', Icons.favorite_rounded, AppColors.music),
+  SidebarItem('Amigos', Icons.group_rounded, AppColors.radio),
   SidebarItem('Dispositivos', Icons.headphones_rounded, AppColors.devices),
   SidebarItem('Privacidad y ayuda', Icons.shield_rounded, AppColors.stats),
 ];
@@ -38,7 +40,10 @@ class GlassSidebar extends StatelessWidget {
     required this.controller,
     required this.settings,
     this.voice,
+    this.social,
   });
+
+  final SocialService? social;
 
   final bool expanded;
   final VoidCallback onToggle;
@@ -55,7 +60,8 @@ class GlassSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([assistant, controller, settings, if (voice != null) voice!]),
+      listenable: Listenable.merge(
+          [assistant, controller, settings, if (voice != null) voice!, if (social != null) social!]),
       builder: (context, _) => AnimatedContainer(
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
@@ -193,11 +199,12 @@ class GlassSidebar extends StatelessWidget {
                     child: AppIcon(
                       sidebarItems[i].icon,
                       colors: sidebarItems[i].colors,
-                      badge: i == 0
-                          ? assistant.queue.length
-                          : i == 4
-                              ? _unseen
-                              : null,
+                      badge: switch (i) {
+                        0 => assistant.queue.length,
+                        3 => social?.unseen,
+                        5 => _unseen,
+                        _ => null,
+                      },
                     ),
                   ),
                 ),
@@ -315,8 +322,9 @@ class GlassSidebar extends StatelessWidget {
             trailing: switch (i) {
               0 => assistant.queue.isEmpty ? null : _Count(assistant.queue.length),
               1 => _listening ? const _Pill('Escuchando', dot: true) : null,
-              3 => assistant.headphoneName == null ? null : const Icon(Icons.bluetooth_connected, size: 18),
-              4 => settings.privateMode
+              3 => (social?.unseen ?? 0) > 0 ? _Count(social!.unseen) : null,
+              4 => assistant.headphoneName == null ? null : const Icon(Icons.bluetooth_connected, size: 18),
+              5 => settings.privateMode
                   ? const _Pill('Privado')
                   : _unseen > 0
                       ? const _Pill('Nuevo', dot: true)

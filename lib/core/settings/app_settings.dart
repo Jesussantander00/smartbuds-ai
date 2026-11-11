@@ -72,6 +72,26 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
 
+  // ------------------------------------------------- Amigos
+
+  /// Amigos agregados por código: código → (nombre, id).
+  List<({String code, String name, String userId})> friends = [];
+
+  void addFriend(String code, String name, String userId) {
+    friends = [
+      ...friends.where((f) => f.userId != userId),
+      (code: code.toUpperCase(), name: name, userId: userId),
+    ];
+    _persist();
+    notifyListeners();
+  }
+
+  void removeFriend(String userId) {
+    friends = friends.where((f) => f.userId != userId).toList();
+    _persist();
+    notifyListeners();
+  }
+
   // ------------------------------------------------- Privacidad
 
   /// Modo privado: lo que suene no se guarda ni cambia tus recomendaciones.
@@ -316,6 +336,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (qc != null && qc.isNotEmpty) quickCommands = qc;
     compact = d['compact'] == true;
     privateMode = d['privateMode'] == true;
+    friends = [
+      for (final f in (d['friends'] as List?) ?? const [])
+        if (f is Map && f['id'] is String)
+          (code: (f['code'] as String?) ?? '', name: (f['name'] as String?) ?? 'Amigo', userId: f['id'] as String),
+    ];
     lastSeenChangelog = (d['lastSeenChangelog'] as num?)?.toInt() ?? 0;
     dynamicColors = d['dynamicColors'] != false;
     usageProfile = d['usageProfile'] as String?;
@@ -446,6 +471,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'quickCommands': quickCommands,
         'compact': compact,
         'privateMode': privateMode,
+        'friends': [for (final f in friends) {'code': f.code, 'name': f.name, 'id': f.userId}],
         'lastSeenChangelog': lastSeenChangelog,
         'dynamicColors': dynamicColors,
         'usageProfile': usageProfile,
