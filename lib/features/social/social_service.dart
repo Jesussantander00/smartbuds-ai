@@ -313,7 +313,7 @@ class SocialService extends ChangeNotifier {
       false;
 
   /// Cambia el código de invitación (si se compartió con quien no debía).
-  Future<String?> rotateInvite(SharedPlaylist p) => _guard(() async {
+  Future<String?> rotateInvite(SharedPlaylist p) => _guard<String?>(() async {
         final r = await _call('POST', '/rest/v1/rpc/rotate_invite', {'pid': p.id});
         await _loadPlaylists();
         return r as String?;
