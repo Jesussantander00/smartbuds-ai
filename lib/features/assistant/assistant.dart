@@ -246,6 +246,11 @@ class Assistant extends ChangeNotifier {
         await useProfile(profile);
       case EnergyRampIntent():
         await energyRamp();
+      case PrivateModeIntent(:final on):
+        settings?.setPrivateMode(on);
+        await _say(on
+            ? 'Modo privado: no guardo lo que escuches.'
+            : 'Listo, vuelvo a aprender de lo que escuchas.');
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);

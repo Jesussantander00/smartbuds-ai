@@ -190,6 +190,12 @@ class EnergyRampIntent extends VoiceIntent {
   const EnergyRampIntent();
 }
 
+/// «Modo privado» / «Sal del modo privado»: dejar de aprender lo que suena.
+class PrivateModeIntent extends VoiceIntent {
+  const PrivateModeIntent(this.on);
+  final bool on;
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -414,6 +420,7 @@ class CommandParser {
     'pon favoritas olvidadas', 'mis favoritas olvidadas', 'algo que no escucho hace rato',
     'comparte mi semana',
     'modo estudio', 'modo viaje', 'modo diario', 'modo normal',
+    'modo privado', 'modo incógnito', 'sal del modo privado', 'quita el modo privado',
     'sube la energía poco a poco', 'sube la energía',
     'pon media hora de música', 'pon una hora de música', 'pon quince minutos de música',
     'pon treinta minutos de música', 'pon diez minutos de música',
@@ -457,6 +464,10 @@ class CommandParser {
     if (_forgotten.contains(text)) return const ForgottenIntent();
     if (_shareWeek.contains(text)) return const ShareWeekIntent();
     if (_similar.contains(text)) return const SimilarIntent();
+    if (text == 'modo privado' || text == 'modo incognito') return const PrivateModeIntent(true);
+    if (text == 'sal del modo privado' || text == 'quita el modo privado') {
+      return const PrivateModeIntent(false);
+    }
     final prof = _profiles[text];
     if (prof != null) return UsageProfileIntent(prof);
     if (_energy.contains(text)) return const EnergyRampIntent();

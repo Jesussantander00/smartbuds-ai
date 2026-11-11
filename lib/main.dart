@@ -152,6 +152,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       weather: WeatherService(),
     );
     widget.profile.isBlocked = widget.settings.isBlocked;
+    widget.profile.isPrivate = () => widget.settings.privateMode;
 
     // Cada cambio del reproductor: perfil, asistente (radio, anuncios…) y
     // modo de escucha (abierta si no suena nada).

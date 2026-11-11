@@ -7,6 +7,7 @@ import '../../core/voice_engine/command_parser.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
+import '../privacy/changelog.dart';
 
 /// Una sección de la app en la barra lateral.
 class SidebarItem {
@@ -21,6 +22,7 @@ const sidebarItems = [
   SidebarItem('Asistente', Icons.mic_rounded, AppColors.assistant),
   SidebarItem('Mi música', Icons.favorite_rounded, AppColors.music),
   SidebarItem('Dispositivos', Icons.headphones_rounded, AppColors.devices),
+  SidebarItem('Privacidad y ayuda', Icons.shield_rounded, AppColors.stats),
 ];
 
 /// Barra lateral de vidrio: compacta (solo iconos) o abierta (con nombres,
@@ -108,6 +110,9 @@ class GlassSidebar extends StatelessWidget {
   }
 
   PlayerStatus? get _status => assistant.active;
+
+  /// Novedades que aún no has visto.
+  int get _unseen => changelog.where((c) => c.version > settings.lastSeenChangelog).length;
   bool get _listening => (voice?.enabled ?? false) && (voice?.listening ?? false) && !(voice?.paused ?? false);
 
   Future<void> _search(BuildContext context) async {
@@ -188,7 +193,11 @@ class GlassSidebar extends StatelessWidget {
                     child: AppIcon(
                       sidebarItems[i].icon,
                       colors: sidebarItems[i].colors,
-                      badge: i == 0 ? assistant.queue.length : null,
+                      badge: i == 0
+                          ? assistant.queue.length
+                          : i == 4
+                              ? _unseen
+                              : null,
                     ),
                   ),
                 ),
@@ -307,6 +316,11 @@ class GlassSidebar extends StatelessWidget {
               0 => assistant.queue.isEmpty ? null : _Count(assistant.queue.length),
               1 => _listening ? const _Pill('Escuchando', dot: true) : null,
               3 => assistant.headphoneName == null ? null : const Icon(Icons.bluetooth_connected, size: 18),
+              4 => settings.privateMode
+                  ? const _Pill('Privado')
+                  : _unseen > 0
+                      ? const _Pill('Nuevo', dot: true)
+                      : null,
               _ => null,
             },
           ),

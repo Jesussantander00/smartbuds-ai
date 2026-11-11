@@ -29,12 +29,27 @@ class ErrorReporter {
   int _sent = 0;
   final Set<String> _seen = {};
 
+  /// Últimos errores en este teléfono (para el Centro de diagnóstico).
+  /// Se guardan aunque los reportes estén apagados; nunca salen sin permiso.
+  final List<({DateTime at, String kind, String message})> recent = [];
+
   Future<void> report(String kind, Object message) async {
-    if (!enabled() || _sent >= maxPerSession) return;
     final text = '$message';
     final short = text.length > 500 ? text.substring(0, 500) : text;
+    recent.insert(0, (at: DateTime.now(), kind: kind, message: short));
+    if (recent.length > 30) recent.removeLast();
+    if (!enabled() || _sent >= maxPerSession) return;
     if (!_seen.add('$kind|$short')) return; // el mismo error una vez por sesión
     _sent++;
+    await _send(kind, short);
+  }
+
+  /// Reporte que la persona decide enviar desde la app (con su permiso
+  /// explícito, aunque los reportes automáticos estén apagados).
+  Future<bool> sendUserReport(String summary) =>
+      _send('user_report', summary.length > 500 ? summary.substring(0, 500) : summary);
+
+  Future<bool> _send(String kind, String short) async {
     try {
       final req = await _client
           .postUrl(Uri.parse('$url/rest/v1/app_errors'))
@@ -53,8 +68,10 @@ class ErrorReporter {
       })));
       final res = await req.close().timeout(const Duration(seconds: 6));
       await res.drain<void>();
+      return res.statusCode < 300;
     } catch (_) {
       // Sin internet: el reporte se pierde, no pasa nada.
+      return false;
     }
   }
 }
