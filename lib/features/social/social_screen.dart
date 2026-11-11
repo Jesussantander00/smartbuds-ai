@@ -217,7 +217,6 @@ class _SocialScreenState extends State<SocialScreen> {
   // ------------------------------------------------------------ Amigos
 
   Widget _friends(SocialService s) {
-    final settings = assistant.settings!;
     return _Section(
       title: 'Tus amigos',
       icon: Icons.group_rounded,
@@ -225,40 +224,36 @@ class _SocialScreenState extends State<SocialScreen> {
         onPressed: () async {
           final code = await _ask('Código de tu amigo', hint: 'Ej.: K7M2QX', caps: TextCapitalization.characters);
           if (code == null) return;
-          final f = await s.findByCode(code);
-          if (f == null) return;
-          if (f.userId == settings.authUserId) {
-            _snack('Ese es tu propio código 🙂');
-            return;
-          }
-          settings.addFriend(code, f.name, f.userId);
-          final c = assistant.profile.compareArtists(f.topArtists);
-          _snack('Agregaste a ${f.name}: ${c.percent} % de afinidad.');
+          final r = await s.addContact(code);
+          if (r == null) return;
+          _snack(r.mutual
+              ? '¡${r.name} y tú ya son amigos! Pueden enviarse canciones.'
+              : 'Agregaste a ${r.name}. Cuando te agregue también, podrán enviarse canciones.');
         },
         icon: const Icon(Icons.person_add_alt_1_rounded),
         label: const Text('Agregar'),
       ),
       children: [
-        if (settings.friends.isEmpty)
-          const ListTile(dense: true, title: Text('Agrega amigos con su código para enviarles canciones.')),
-        for (final f in settings.friends)
+        if (s.contacts.isEmpty)
+          const ListTile(
+            dense: true,
+            title: Text('Agrega amigos con su código. Cuando los dos se agreguen, podrán enviarse canciones.'),
+          ),
+        for (final f in s.contacts)
           ListTile(
             leading: CircleAvatar(child: Text(f.name.isEmpty ? '?' : f.name[0].toUpperCase())),
             title: Text(f.name),
-            subtitle: Text('Código ${f.code}'),
+            subtitle: Text(f.mutual ? 'Amigos · código ${f.code}' : 'Pendiente: falta que te agregue'),
             onTap: () => _friendSheet(s, f),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: Icon(f.mutual ? Icons.chevron_right : Icons.hourglass_top_rounded),
           ),
       ],
     );
   }
 
-  Future<void> _friendSheet(SocialService s, ({String code, String name, String userId}) f) async {
-    final info = await s.findByCode(f.code);
-    if (!mounted) return;
-    final theirs = info?.topArtists ?? const <String>[];
-    final c = assistant.profile.compareArtists(theirs);
-    final discover = assistant.profile.newFromFriend(theirs);
+  Future<void> _friendSheet(SocialService s, Contact f) async {
+    final c = assistant.profile.compareArtists(f.topArtists);
+    final discover = assistant.profile.newFromFriend(f.topArtists);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -274,66 +269,71 @@ class _SocialScreenState extends State<SocialScreen> {
               children: [
                 Text(f.name, style: theme.textTheme.titleLarge),
                 const SizedBox(height: 8),
-                // Compatibilidad musical.
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 64,
-                      height: 64,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: c.percent / 100,
-                            strokeWidth: 6,
-                            color: Neon.cyan,
-                            backgroundColor: Neon.ink.withValues(alpha: .1),
-                          ),
-                          Text('${c.percent}%', style: const TextStyle(fontWeight: FontWeight.w800)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(c.shared.isEmpty
-                          ? 'No tienen artistas en común… ¡aún!'
-                          : 'En común: ${c.shared.join(', ')}'),
-                    ),
-                  ],
-                ),
-                if (discover.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text('Descubre por ${f.name}', style: theme.textTheme.titleSmall),
-                  Wrap(
-                    spacing: 8,
+                if (!f.mutual)
+                  Text('${f.name} aún no te ha agregado. Pásale tu código para que puedan '
+                      'compararse y enviarse canciones.')
+                else ...[
+                  // Compatibilidad musical.
+                  Row(
                     children: [
-                      for (final a in discover.take(6))
-                        ActionChip(
-                          avatar: const Icon(Icons.play_arrow_rounded, size: 18),
-                          label: Text(a),
-                          onPressed: () {
-                            Navigator.pop(context);
-                            assistant.handleSearch(SearchRequest(a));
-                          },
+                      SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              value: c.percent / 100,
+                              strokeWidth: 6,
+                              color: Neon.cyan,
+                              backgroundColor: Neon.ink.withValues(alpha: .1),
+                            ),
+                            Text('${c.percent}%', style: const TextStyle(fontWeight: FontWeight.w800)),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(c.shared.isEmpty
+                            ? 'No tienen artistas en común… ¡aún!'
+                            : 'En común: ${c.shared.join(', ')}'),
+                      ),
                     ],
                   ),
+                  if (discover.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('Descubre por ${f.name}', style: theme.textTheme.titleSmall),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final a in discover.take(6))
+                          ActionChip(
+                            avatar: const Icon(Icons.play_arrow_rounded, size: 18),
+                            label: Text(a),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              assistant.handleSearch(SearchRequest(a));
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _sendTo(s, f.userId, f.name);
+                    },
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Enviarle una canción'),
+                  ),
                 ],
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _sendTo(s, f.userId, f.name);
-                  },
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Enviarle una canción'),
-                ),
                 TextButton(
                   onPressed: () {
-                    assistant.settings?.removeFriend(f.userId);
+                    s.removeContact(f.userId);
                     Navigator.pop(context);
                   },
-                  child: const Text('Quitar de mis amigos'),
+                  child: const Text('Quitar de mis amigos (deja de recibir sus canciones nuevas)'),
                 ),
               ],
             ),
@@ -471,6 +471,15 @@ class _SocialScreenState extends State<SocialScreen> {
                             if (!ok) await Clipboard.setData(ClipboardData(text: p.inviteCode));
                           },
                         ),
+                        if (p.isMine)
+                          IconButton(
+                            tooltip: 'Cambiar código de invitación',
+                            icon: const Icon(Icons.key_rounded),
+                            onPressed: () async {
+                              final c = await s.rotateInvite(p);
+                              if (c != null) _snack('Nuevo código: $c. El anterior ya no sirve.');
+                            },
+                          ),
                         IconButton(
                           tooltip: p.isMine ? 'Borrar lista' : 'Salir de la lista',
                           icon: const Icon(Icons.logout_rounded),

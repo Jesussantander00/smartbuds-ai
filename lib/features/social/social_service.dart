@@ -40,6 +40,20 @@ class InboxSong {
   final DateTime at;
 }
 
+/// Un amigo agregado por código.
+class Contact {
+  const Contact(this.userId, this.name, this.code, this.topArtists, this.mutual);
+  final String userId;
+  final String name;
+  final String code;
+
+  /// Solo llegan cuando la amistad es mutua.
+  final List<String> topArtists;
+
+  /// Los dos se agregaron: ya pueden enviarse canciones.
+  final bool mutual;
+}
+
 /// Mi perfil social.
 class SocialProfile {
   const SocialProfile(this.name, this.friendCode, this.isPublic);
@@ -68,6 +82,7 @@ class SocialService extends ChangeNotifier {
   SocialProfile? profile;
   List<InboxSong> inbox = [];
   List<SharedPlaylist> playlists = [];
+  List<Contact> contacts = [];
   bool loading = false;
   String? error;
 
@@ -138,6 +153,7 @@ class SocialService extends ChangeNotifier {
           : SocialProfile(row['display_name'] as String, row['friend_code'] as String, row['is_public'] == true);
       await _loadInbox();
       await _loadPlaylists();
+      await _loadContacts();
     });
     loading = false;
     notifyListeners();
@@ -163,17 +179,34 @@ class SocialService extends ChangeNotifier {
     return ok ?? false;
   }
 
-  /// Busca a alguien por su código de amigo.
-  Future<({String userId, String name, List<String> topArtists})?> findByCode(String code) =>
-      _guard(() async {
-        final r = await _call('POST', '/rest/v1/rpc/profile_by_code', {'code': code.trim().toUpperCase()});
+  // ---------------------------------------------------------- Amigos
+
+  Future<void> _loadContacts() async {
+    final r = await _call('POST', '/rest/v1/rpc/my_contacts', const {});
+    contacts = [
+      for (final m in (r as List? ?? const []).cast<Map>())
+        Contact(
+          m['user_id'] as String,
+          m['display_name'] as String,
+          (m['friend_code'] as String?) ?? '',
+          ((m['top_artists'] as List?) ?? const []).cast<String>(),
+          m['mutual'] == true,
+        ),
+    ];
+  }
+
+  /// Agrega a alguien por su código. Devuelve su nombre y si ya es mutuo.
+  Future<({String name, bool mutual})?> addContact(String code) => _guard(() async {
+        final r = await _call('POST', '/rest/v1/rpc/add_contact', {'code': code.trim().toUpperCase()});
         if (r is! List || r.isEmpty) throw const SocialException('No encontré ese código.');
         final m = r.first as Map;
-        return (
-          userId: m['user_id'] as String,
-          name: m['display_name'] as String,
-          topArtists: ((m['top_artists'] as List?) ?? const []).cast<String>(),
-        );
+        await _loadContacts();
+        return (name: m['display_name'] as String, mutual: m['mutual'] == true);
+      });
+
+  Future<void> removeContact(String userId) => _guard(() async {
+        await _call('DELETE', '/rest/v1/contacts?user_id=eq.$_uid&contact_id=eq.$userId');
+        await _loadContacts();
       });
 
   // ------------------------------------------------- Canciones enviadas
@@ -211,13 +244,12 @@ class SocialService extends ChangeNotifier {
     bool anonymous = false,
   }) async {
     final ok = await _guard(() async {
-      await _call('POST', '/rest/v1/song_shares', {
-        'from_user': _uid,
-        'to_user': toUserId,
-        'title': title,
-        'artist': artist,
-        'message': (message ?? '').trim().isEmpty ? null : message!.trim(),
-        'anonymous': anonymous,
+      await _call('POST', '/rest/v1/rpc/send_song', {
+        'to_id': toUserId,
+        'song_title': title,
+        'song_artist': artist,
+        'note': (message ?? '').trim().isEmpty ? null : message!.trim(),
+        'is_anonymous': anonymous,
       });
       return true;
     });
@@ -241,7 +273,9 @@ class SocialService extends ChangeNotifier {
       });
 
   Future<SharedPlaylist?> joinPlaylist(String code) => _guard(() async {
-        final m = await _call('POST', '/rest/v1/rpc/join_playlist', {'code': code.trim().toUpperCase()}) as Map;
+        final r = await _call('POST', '/rest/v1/rpc/join_playlist', {'code': code.trim().toUpperCase()});
+        final m = r is List ? (r.isEmpty ? null : r.first) : r;
+        if (m is! Map || m['id'] == null) throw const SocialException('Código no válido.');
         await _loadPlaylists();
         return SharedPlaylist(m['id'] as String, m['name'] as String, m['invite_code'] as String, m['owner'] == _uid);
       });
@@ -269,16 +303,21 @@ class SocialService extends ChangeNotifier {
 
   Future<bool> addItem(String playlistId, String title, String? artist) async =>
       await _guard(() async {
-        await _call('POST', '/rest/v1/playlist_items', {
-          'playlist_id': playlistId,
-          'added_by': _uid,
-          'added_by_name': profile?.name,
-          'title': title,
-          'artist': artist,
+        await _call('POST', '/rest/v1/rpc/add_playlist_item', {
+          'pid': playlistId,
+          'song_title': title,
+          'song_artist': artist,
         });
         return true;
       }) ??
       false;
+
+  /// Cambia el código de invitación (si se compartió con quien no debía).
+  Future<String?> rotateInvite(SharedPlaylist p) => _guard<String?>(() async {
+        final r = await _call('POST', '/rest/v1/rpc/rotate_invite', {'pid': p.id});
+        await _loadPlaylists();
+        return r as String?;
+      });
 
   Future<void> removeItem(int id) => _guard(() => _call('DELETE', '/rest/v1/playlist_items?id=eq.$id'));
 
