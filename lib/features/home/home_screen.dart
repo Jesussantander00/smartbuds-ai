@@ -6,6 +6,7 @@ import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../music_profile/insights.dart';
+import '../brain/music_brain.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/ui/art_color.dart';
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 assistant: widget.assistant,
                 controller: widget.controller),
           ],
+        'foryou' => [_ForYou(assistant: widget.assistant)],
         'extras' => [_ExtrasRow(assistant: widget.assistant)],
         'queue' => [
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
@@ -117,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (settings == null) return;
     const names = {
       'now': ('Sonando ahora', Icons.album_rounded),
+      'foryou': ('Para ti ahora', Icons.auto_awesome_rounded),
       'extras': ('Accesos rápidos', Icons.bolt_rounded),
       'queue': ('Cola', Icons.queue_music_rounded),
       'suggestion': ('Sugerencias', Icons.lightbulb_outline_rounded),
@@ -692,6 +695,88 @@ class _ConnectionPill extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// «Para ti ahora»: lo que el cerebro musical cree que quieres escuchar,
+/// con el porqué. Solo suena si lo tocas.
+class _ForYou extends StatelessWidget {
+  const _ForYou({required this.assistant});
+  final Assistant assistant;
+
+  static const _icons = {
+    RecKind.favorite: Icons.favorite_rounded,
+    RecKind.rediscover: Icons.history_rounded,
+    RecKind.rising: Icons.trending_up_rounded,
+    RecKind.mood: Icons.mood_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final recs = assistant.forYou(n: 6);
+    if (recs.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+          child: Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, size: 18, color: Neon.cyan),
+              const SizedBox(width: 6),
+              Text('Para ti ahora', style: theme.textTheme.titleMedium),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 128,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: recs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final r = recs[i];
+              return SizedBox(
+                width: 210,
+                child: Glass(
+                  radius: 20,
+                  padding: const EdgeInsets.all(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => assistant.playRecommendation(r),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(_icons[r.kind], size: 16, color: Neon.cyan),
+                            const Spacer(),
+                            const Icon(Icons.play_circle_fill_rounded, color: Neon.cyan),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(r.track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(r.track.artist ?? '',
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+                        const Spacer(),
+                        Text(r.reasons.first,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

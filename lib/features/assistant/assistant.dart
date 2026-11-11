@@ -13,6 +13,7 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/telemetry/error_reporter.dart';
+import '../brain/music_brain.dart';
 import '../devices/detected_player_controller.dart';
 import '../music_profile/music_profile.dart';
 
@@ -43,6 +44,58 @@ class Assistant extends ChangeNotifier {
   final SimilarArtistsFinder? similar;
   final Random _random;
   final DateTime Function() _clock;
+
+  /// Cerebro musical: decide qué recomendar y aprende de lo que pasa.
+  late final MusicBrain brain = MusicBrain(profile: profile, settings: settings, similar: similar, clock: _clock);
+
+  /// Recomendación del cerebro que está sonando (para aprender si acertó).
+  /// [key] es la canción que de verdad empezó a sonar (la app puede llamarla distinto).
+  ({String? key, RecKind kind, DateTime at})? _pendingRec;
+
+  /// El momento según el cerebro: hora, ambiente reciente, perfil de uso y saltos.
+  BrainContext get brainContext => BrainContext(
+        now: _clock(),
+        mood: profile.currentMood,
+        usageProfile: settings?.usageProfile,
+        sessionSkips: profile.recentSkipStreak(),
+      );
+
+  /// «Para ti ahora»: sugerencias (no suenan solas).
+  List<Recommendation> forYou({int n = 5}) => brain.recommend(brainContext, n: n);
+
+  /// Pone una recomendación (porque la tocaste o la pediste) y aprende del resultado.
+  Future<void> playRecommendation(Recommendation r) async {
+    _pendingRec = (key: null, kind: r.kind, at: _clock());
+    await handleSearch(SearchRequest(r.query));
+  }
+
+  /// Revisa si la última recomendación se terminó (acierto) o se saltó (fallo).
+  void _evaluatePending(String? currentKey) {
+    final p = _pendingRec;
+    if (p == null || currentKey == null) return;
+    if (p.key == null) {
+      // Primera canción que suena después de recomendar: es la recomendada.
+      if (_clock().difference(p.at) < const Duration(seconds: 45)) {
+        _pendingRec = (key: currentKey, kind: p.kind, at: p.at);
+      } else {
+        _pendingRec = null;
+      }
+      return;
+    }
+    if (currentKey == p.key) return;
+    for (final e in profile.history.reversed.take(30)) {
+      if (e.key != p.key) continue;
+      if (e.type == ListenEventType.complete || e.type == ListenEventType.like || e.type == ListenEventType.repeat) {
+        brain.learn(p.kind, liked: true);
+        break;
+      }
+      if (e.type == ListenEventType.skip || e.type == ListenEventType.dislike) {
+        brain.learn(p.kind, liked: false);
+        break;
+      }
+    }
+    _pendingRec = null;
+  }
   VoiceEngine? voice;
 
   /// Canal nativo (saltar en la canción, compartir). Null en pruebas.
@@ -431,6 +484,15 @@ class Assistant extends ChangeNotifier {
   /// «Pon algo para entrenar»: tu lista automática si ya existe, si no, búsqueda.
   Future<void> playMood(String mood, String query) async {
     profile.setMood(mood);
+    if (mood == 'nostálgica') {
+      // Nostalgia de verdad: tus favoritas que hace tiempo no suenan.
+      final old = forYou(n: 10).where((r) => r.kind == RecKind.rediscover).toList();
+      if (old.isNotEmpty) {
+        await _say('Te pongo una que hace rato no escuchas.');
+        await playRecommendation(old[_random.nextInt(min(3, old.length))]);
+        return;
+      }
+    }
     final pick = profile.pickMood(mood, random: _random);
     if (pick != null && _random.nextDouble() < 0.7) {
       await _say('Tu mezcla $mood.');
@@ -655,6 +717,7 @@ class Assistant extends ChangeNotifier {
 
     // Canción nueva.
     if (playing && key != null && key != _lastKey) {
+      _evaluatePending(key);
       final changed = _lastKey != null;
       _lastKey = key;
       if (settings?.isBlocked(status!.title, status.artist) ?? false) {
@@ -773,6 +836,13 @@ class Assistant extends ChangeNotifier {
 
   /// «Pon algo que me guste»: elige de tu perfil y lo busca.
   Future<bool> playFavorite() async {
+    final recs = forYou(n: 3);
+    if (recs.isNotEmpty) {
+      // Un poco de azar entre las 3 mejores para no repetir siempre la misma.
+      final r = recs[_random.nextInt(recs.length)];
+      await playRecommendation(r);
+      return true;
+    }
     final pick = profile.pickFavorite();
     if (pick == null) {
       await _say('Todavía estoy aprendiendo tus gustos. '
