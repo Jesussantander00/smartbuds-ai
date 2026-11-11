@@ -114,6 +114,8 @@ begin
   if list_name is null or char_length(trim(list_name)) not between 1 and 60 then
     raise exception 'El nombre debe tener entre 1 y 60 letras';
   end if;
+  -- Candado por usuario: las solicitudes simultáneas esperan su turno (los límites no se pueden saltar).
+  perform pg_advisory_xact_lock(hashtextextended('list:' || auth.uid()::text, 0));
   if (select count(*) from public.shared_playlists where owner = auth.uid()) >= 20 then
     raise exception 'Ya tienes 20 listas. Borra alguna para crear otra.';
   end if;
@@ -139,10 +141,15 @@ returns public.shared_playlists language plpgsql security definer set search_pat
 declare p public.shared_playlists; fails int; members int;
 begin
   if auth.uid() is null then raise exception 'Necesitas una cuenta'; end if;
-  if code is null or char_length(trim(code)) not between 6 and 16 then raise exception 'Código no válido'; end if;
+  -- Candado por usuario: las solicitudes simultáneas esperan su turno (los límites no se pueden saltar).
+  perform pg_advisory_xact_lock(hashtextextended('join:' || auth.uid()::text, 0));
   select count(*) into fails from public.join_attempts
     where user_id = auth.uid() and not ok and at > now() - interval '1 hour';
   if fails >= 10 then raise exception 'Demasiados intentos. Prueba en una hora.'; end if;
+  if code is null or char_length(trim(code)) not between 6 and 16 then
+    insert into public.join_attempts (user_id, ok) values (auth.uid(), false);
+    return null; -- también cuenta como intento fallido
+  end if;
   select * into p from public.shared_playlists where invite_code = upper(trim(code));
   if p.id is null then
     -- Sin «raise»: así el intento fallido queda guardado (un error lo desharía).
@@ -222,6 +229,9 @@ create or replace function public.add_playlist_item(pid uuid, song_title text, s
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   if not public.is_playlist_member(pid) then raise exception 'No eres parte de esa lista'; end if;
+  -- Candado por usuario: las solicitudes simultáneas esperan su turno (los límites no se pueden saltar).
+  perform pg_advisory_xact_lock(hashtextextended('item:' || auth.uid()::text, 0));
+
   if song_title is null or char_length(trim(song_title)) not between 1 and 200
      or char_length(coalesce(song_artist, '')) > 200 then
     raise exception 'Canción no válida';
@@ -276,6 +286,8 @@ begin
   select p.user_id into other from public.social_profiles p where p.friend_code = upper(trim(code));
   if other is null then raise exception 'No encontré ese código'; end if;
   if other = auth.uid() then raise exception 'Ese es tu propio código'; end if;
+  -- Candado por usuario: las solicitudes simultáneas esperan su turno (los límites no se pueden saltar).
+  perform pg_advisory_xact_lock(hashtextextended('contact:' || auth.uid()::text, 0));
   select count(*) into n from public.contacts c where c.user_id = auth.uid();
   if n >= 200 then raise exception 'Llegaste al máximo de 200 amigos'; end if;
   insert into public.contacts (user_id, contact_id) values (auth.uid(), other) on conflict do nothing;
@@ -304,6 +316,8 @@ create or replace function public.send_song(to_id uuid, song_title text, song_ar
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   if auth.uid() is null then raise exception 'Necesitas una cuenta'; end if;
+  -- Candado por usuario: las solicitudes simultáneas esperan su turno (los límites no se pueden saltar).
+  perform pg_advisory_xact_lock(hashtextextended('send:' || auth.uid()::text, 0));
   if not public.are_friends(auth.uid(), to_id) then
     raise exception 'Solo puedes enviar a amigos que también te agregaron';
   end if;
@@ -338,4 +352,9 @@ grant select, delete on public.contacts to authenticated;
 revoke insert, update on public.shared_playlists, public.playlist_members, public.playlist_items,
   public.song_shares, public.contacts, public.join_attempts from authenticated, anon;
 revoke all on public.join_attempts from authenticated, anon;
+-- Nadie modifica ni borra envíos desde la app (ni el remitente): solo se marcan vistos con mark_inbox_seen().
+revoke update, delete on public.song_shares from authenticated, anon;
+-- Sin cuenta no se toca ninguna tabla social.
+revoke all on public.social_profiles, public.shared_playlists, public.playlist_members,
+  public.playlist_items, public.song_shares, public.contacts from anon;
 grant usage, select on all sequences in schema public to authenticated;
