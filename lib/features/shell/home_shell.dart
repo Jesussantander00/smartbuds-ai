@@ -12,6 +12,7 @@ import '../music_profile/music_profile.dart';
 import '../music_profile/my_music_screen.dart';
 import '../music_profile/supabase_sync.dart';
 import 'glass_sidebar.dart';
+import '../privacy/privacy_screen.dart';
 
 /// Navegación principal: Inicio · Asistente · Mi música · Dispositivos.
 class HomeShell extends StatefulWidget {
@@ -70,6 +71,11 @@ class _HomeShellState extends State<HomeShell> {
         onOpenPermissions: widget.onOpenNotificationAccess,
         platformNote: widget.platformNote,
         assistant: widget.assistant,
+      ),
+      PrivacyScreen(
+        assistant: widget.assistant,
+        controller: widget.controller,
+        onOpenPermissions: widget.onOpenNotificationAccess,
       ),
     ];
     final media = MediaQuery.of(context);

@@ -200,6 +200,9 @@ class MusicProfile extends ChangeNotifier {
   final Map<String, TrackStats> tracks = {};
   final List<ListenEvent> history = [];
 
+  /// Modo privado: mientras devuelva true, nada de lo que suena se aprende.
+  bool Function()? isPrivate;
+
   /// Canciones bloqueadas («Nunca más esta»): no se eligen nunca.
   bool Function(String title, String? artist)? isBlocked;
 
@@ -407,6 +410,10 @@ class MusicProfile extends ChangeNotifier {
 
   /// Llamado cada vez que cambia el estado del reproductor activo.
   void observe(PlayerStatus? status) {
+    if (isPrivate?.call() ?? false) {
+      _current = null; // al salir del modo privado no se le acredita nada
+      return;
+    }
     if (status == null || !status.isPlaying || (status.title ?? '').isEmpty) {
       return;
     }
@@ -731,6 +738,73 @@ class MusicProfile extends ChangeNotifier {
     final now = _clock();
     final h = now.weekday >= DateTime.saturday ? p.weekendStart : p.weekdayStart;
     return h != null && (now.hour == h || now.hour == (h + 23) % 24);
+  }
+
+  // ==================================================== Tus datos
+
+  /// Borra lo que escuchaste entre [from] y [to] (y descuenta sus estadísticas).
+  /// Devuelve cuántos registros quitó.
+  int deleteRange(DateTime from, DateTime to) {
+    var removed = 0;
+    history.removeWhere((e) {
+      if (e.at.isBefore(from) || !e.at.isBefore(to)) return false;
+      final t = tracks[e.key];
+      if (t != null) {
+        switch (e.type) {
+          case ListenEventType.play:
+            t.plays = max(0, t.plays - 1);
+          case ListenEventType.complete:
+            t.completes = max(0, t.completes - 1);
+          case ListenEventType.skip:
+            t.skips = max(0, t.skips - 1);
+          case ListenEventType.like:
+            t.likes = max(0, t.likes - 1);
+          case ListenEventType.dislike:
+            t.dislikes = max(0, t.dislikes - 1);
+          case ListenEventType.repeat:
+            t.repeats = max(0, t.repeats - 1);
+        }
+        if (e.type == ListenEventType.complete ||
+            e.type == ListenEventType.like ||
+            e.type == ListenEventType.repeat) {
+          final d = Daypart.of(e.at);
+          t.positiveByDaypart[d] = max(0, (t.positiveByDaypart[d] ?? 0) - 1);
+        }
+      }
+      removed++;
+      return true;
+    });
+    tracks.removeWhere((k, t) => t.plays <= 0 && t.likes <= 0 && t.completes <= 0);
+    if (removed > 0) {
+      _current = null;
+      _scheduleSave();
+      notifyListeners();
+    }
+    return removed;
+  }
+
+  /// Tu historial en formato de tabla (CSV) para abrirlo en Excel o Sheets.
+  String exportCsv({int maxRows = 3000}) {
+    String esc(String? v) => '"${(v ?? '').replaceAll('"', '""')}"';
+    const names = {
+      ListenEventType.play: 'reproducida',
+      ListenEventType.complete: 'completa',
+      ListenEventType.skip: 'saltada',
+      ListenEventType.like: 'me gusta',
+      ListenEventType.dislike: 'no me gusta',
+      ListenEventType.repeat: 'repetida',
+    };
+    final rows = ['fecha,cancion,artista,evento'];
+    for (final e in history.reversed.take(maxRows)) {
+      final t = tracks[e.key];
+      rows.add([
+        e.at.toIso8601String().substring(0, 19).replaceFirst('T', ' '),
+        esc(t?.title ?? e.key),
+        esc(t?.artist),
+        names[e.type],
+      ].join(','));
+    }
+    return rows.join('\n');
   }
 
   // ============================================ Organización de tus listas

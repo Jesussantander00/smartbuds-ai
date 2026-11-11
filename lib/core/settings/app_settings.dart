@@ -72,6 +72,27 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
 
+  // ------------------------------------------------- Privacidad
+
+  /// Modo privado: lo que suene no se guarda ni cambia tus recomendaciones.
+  bool privateMode = false;
+
+  /// Última versión de «Novedades» que viste (para la insignia).
+  int lastSeenChangelog = 0;
+
+  void setPrivateMode(bool on) {
+    privateMode = on;
+    _persist();
+    notifyListeners();
+  }
+
+  void markChangelogSeen(int version) {
+    if (version <= lastSeenChangelog) return;
+    lastSeenChangelog = version;
+    _persist();
+    notifyListeners();
+  }
+
   // ------------------------------------------------- Personalización
 
   /// Secciones de Inicio en orden; las que no están, ocultas.
@@ -294,6 +315,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     final qc = (d['quickCommands'] as List?)?.cast<String>();
     if (qc != null && qc.isNotEmpty) quickCommands = qc;
     compact = d['compact'] == true;
+    privateMode = d['privateMode'] == true;
+    lastSeenChangelog = (d['lastSeenChangelog'] as num?)?.toInt() ?? 0;
     dynamicColors = d['dynamicColors'] != false;
     usageProfile = d['usageProfile'] as String?;
     connectionLog = [
@@ -422,6 +445,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'homeSections': homeSections,
         'quickCommands': quickCommands,
         'compact': compact,
+        'privateMode': privateMode,
+        'lastSeenChangelog': lastSeenChangelog,
         'dynamicColors': dynamicColors,
         'usageProfile': usageProfile,
         'connectionLog': [
