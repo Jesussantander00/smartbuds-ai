@@ -351,20 +351,31 @@ class MusicProfile extends ChangeNotifier {
       final theirs = (jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(payload))))
               as List)
           .cast<String>();
-      final mine = topArtists(15).map((e) => e.$1).toList();
-      if (theirs.isEmpty || mine.isEmpty) return (percent: 0, shared: <String>[]);
-      final mineLow = {for (final m in mine) m.toLowerCase(): m};
-      final shared = [
-        for (final t in theirs)
-          if (mineLow.containsKey(t.toLowerCase())) mineLow[t.toLowerCase()]!,
-      ];
-      final union = {...mineLow.keys, ...theirs.map((t) => t.toLowerCase())}.length;
-      // Jaccard suavizado: compartir 5 de 15 ya es mucha afinidad.
-      final pct = (100 * (shared.length / union) * 2.2).clamp(0, 100).round();
-      return (percent: pct, shared: shared);
+      return compareArtists(theirs);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Afinidad con la lista de artistas favoritos de otra persona.
+  ({int percent, List<String> shared}) compareArtists(List<String> theirs) {
+    final mine = topArtists(15).map((e) => e.$1).toList();
+    if (theirs.isEmpty || mine.isEmpty) return (percent: 0, shared: <String>[]);
+    final mineLow = {for (final m in mine) m.toLowerCase(): m};
+    final shared = [
+      for (final t in theirs)
+        if (mineLow.containsKey(t.toLowerCase())) mineLow[t.toLowerCase()]!,
+    ];
+    final union = {...mineLow.keys, ...theirs.map((t) => t.toLowerCase())}.length;
+    // Jaccard suavizado: compartir 5 de 15 ya es mucha afinidad.
+    final pct = (100 * (shared.length / union) * 2.2).clamp(0, 100).round();
+    return (percent: pct, shared: shared);
+  }
+
+  /// Artistas de un amigo que tú aún no escuchas (para descubrir por amigos).
+  List<String> newFromFriend(List<String> theirs) {
+    final known = {for (final t in tracks.values) (t.artist ?? '').toLowerCase()};
+    return [for (final a in theirs) if (!known.contains(a.toLowerCase())) a];
   }
 
   /// Une canciones traídas de la nube (otra instalación u otro teléfono).
