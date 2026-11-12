@@ -24,6 +24,6 @@ void main() {
         child: LiveArt(playing: true, child: SizedBox(width: 10, height: 10, key: Key('art'))),
       ),
     ));
-    expect(find.byType(Transform), findsNothing);
+    expect(find.ancestor(of: find.byKey(const Key('art')), matching: find.byType(AnimatedBuilder)), findsNothing);
   });
 }
