@@ -3,6 +3,8 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import 'live_visuals.dart';
+
 /// Identidad «vidrio cálido» de SmartBuds: paneles de vidrio esmerilado sobre
 /// un fondo beige con luz suave, iconos de colores tipo app y un naranja
 /// cálido para la acción principal (reproducir).
@@ -172,19 +174,30 @@ class SpaceBackground extends StatelessWidget {
               : const [Color(0xFFEFE8E1), Color(0xFFDCD0C5)],
         ),
       ),
-      child: Stack(
-        children: [
-          _Light(alignment: const Alignment(-.9, -.8), color: dark ? const Color(0xFF6B4A2E) : Colors.white),
-          _Light(alignment: const Alignment(1, .5), color: dark ? const Color(0xFF4A3424) : const Color(0xFFFFE3C4)),
-          Positioned.fill(child: child),
-        ],
+      child: ValueListenableBuilder<Color?>(
+        // Ambiente visual automático: la luz de fondo toma el color de la carátula.
+        valueListenable: ArtAmbient.color,
+        builder: (context, art, _) => Stack(
+          children: [
+            _Light(alignment: const Alignment(-.9, -.8), color: dark ? const Color(0xFF6B4A2E) : Colors.white),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 900),
+              child: _Light(
+                key: ValueKey(art),
+                alignment: const Alignment(1, .5),
+                color: art ?? (dark ? const Color(0xFF4A3424) : const Color(0xFFFFE3C4)),
+              ),
+            ),
+            Positioned.fill(child: child),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _Light extends StatelessWidget {
-  const _Light({required this.alignment, required this.color});
+  const _Light({super.key, required this.alignment, required this.color});
   final Alignment alignment;
   final Color color;
 
