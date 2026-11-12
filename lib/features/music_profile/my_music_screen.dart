@@ -9,6 +9,7 @@ import 'music_profile.dart';
 import 'supabase_sync.dart';
 import 'year_in_music_screen.dart';
 import 'insights.dart';
+import '../audio/playback_analysis_screen.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 
@@ -108,6 +109,13 @@ class MyMusicScreen extends StatelessWidget {
                     avatar: const Icon(Icons.ios_share, size: 18),
                     label: const Text('Compartir mi semana'),
                     onPressed: () => assistant.shareSummary(days: 7),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.analytics_outlined, size: 18),
+                    label: const Text('Análisis de reproducción'),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => PlaybackAnalysisScreen(profile: profile),
+                    )),
                   ),
                   ActionChip(
                     avatar: const Icon(Icons.auto_awesome, size: 18),

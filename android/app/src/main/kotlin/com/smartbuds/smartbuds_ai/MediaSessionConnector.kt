@@ -139,6 +139,15 @@ class MediaSessionConnector(
                     taps.enabled = call.argument<Boolean>("enabled") != false
                     result.success(true)
                 }
+                "openSystemEqualizer" -> result.success(openSystemEqualizer())
+                "audioOutputInfo" -> result.success(audioOutputInfo())
+                "fadeVolume" -> {
+                    fadeVolume(
+                        call.argument<Number>("to")?.toInt() ?: 0,
+                        call.argument<Number>("ms")?.toLong() ?: 2000L,
+                    )
+                    result.success(true)
+                }
                 "setVolumePercent" -> result.success(
                     setVolumePercent(call.argument<Number>("percent")?.toInt() ?: 50)
                 )
@@ -339,6 +348,79 @@ class MediaSessionConnector(
         } catch (_: Exception) {
             // Sin permiso para volver al frente: la música sigue igual.
         }
+    }
+
+    // --------------------------------------------- Herramientas de audio
+
+    /**
+     * Abre el ecualizador del teléfono (Samsung, Dolby, Xiaomi…), que sí puede
+     * cambiar el sonido de todas las apps. Una app normal no puede ecualizar el
+     * audio de otras apps en Android moderno.
+     */
+    private fun openSystemEqualizer(): Boolean {
+        val intent = Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+            .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE,
+                android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+            .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            if (intent.resolveActivity(context.packageManager) == null) return false
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** Lo que Android informa de la salida de audio actual (sin permisos extra). */
+    private fun audioOutputInfo(): Map<String, Any?> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return mapOf("available" to false)
+        val outs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        val preferred = listOf(
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+        )
+        val d = preferred.firstNotNullOfOrNull { t -> outs.firstOrNull { it.type == t } } ?: outs.firstOrNull()
+            ?: return mapOf("available" to false)
+        val type = when (d.type) {
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "Bluetooth"
+            AudioDeviceInfo.TYPE_USB_HEADSET -> "USB"
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Cable"
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Altavoz del teléfono"
+            else -> "Otro"
+        }
+        return mapOf(
+            "available" to true,
+            "name" to d.productName?.toString(),
+            "type" to type,
+            "sampleRates" to d.sampleRates.toList(),
+            "channelCounts" to d.channelCounts.toList(),
+            "nativeSampleRate" to audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE),
+            "framesPerBuffer" to audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER),
+            "volumePercent" to volumePercent(),
+        )
+    }
+
+    private var fadeRunnable: Runnable? = null
+
+    /** Lleva el volumen de música al [to] % en [ms] milisegundos, en pasos suaves. */
+    private fun fadeVolume(to: Int, ms: Long) {
+        fadeRunnable?.let { main.removeCallbacks(it) }
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val start = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val end = Math.round(max * to.coerceIn(0, 100) / 100f)
+        val steps = kotlin.math.abs(end - start)
+        if (steps == 0) return
+        val stepMs = (ms / steps).coerceAtLeast(30L)
+        var current = start
+        val r = object : Runnable {
+            override fun run() {
+                current += if (end > current) 1 else -1
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, current, 0)
+                if (current != end) main.postDelayed(this, stepMs)
+            }
+        }
+        fadeRunnable = r
+        main.postDelayed(r, stepMs)
     }
 
     // ------------------------------------------------- Volumen, salida, batería

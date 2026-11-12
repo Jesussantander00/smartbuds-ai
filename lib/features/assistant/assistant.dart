@@ -196,10 +196,27 @@ class Assistant extends ChangeNotifier {
 
   /// «Cambia», «Pausa»… Responde con voz solo si algo salió mal:
   /// cuando funciona, la música misma es la respuesta.
+  /// Transición suave: baja el volumen, hace [action] y lo vuelve a subir.
+  /// Solo Android (iOS no deja cambiar el volumen de otras apps).
+  Future<T> _smooth<T>(Future<T> Function() action) async {
+    final m = media;
+    if (!(settings?.smoothTransitions ?? false) || m == null) return action();
+    final before = await m.volumePercent();
+    if (before == null || before < 10) return action();
+    await m.fadeVolume((before * .3).round(), ms: 1200);
+    await Future<void>.delayed(const Duration(milliseconds: 1300));
+    final r = await action();
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    await m.fadeVolume(before, ms: 1500);
+    return r;
+  }
+
   Future<void> handleCommand(MusicCommand command) async {
     if (command == MusicCommand.next) _rememberForUndo();
     profile.noteCommand(command);
-    final r = await controller.sendVoice(command);
+    final r = command == MusicCommand.next || command == MusicCommand.previous
+        ? await _smooth(() => controller.sendVoice(command))
+        : await controller.sendVoice(command);
     if (r == null) return;
     if (r.outcome == CommandOutcome.failed) {
       unawaited(errors?.report('comando_${command.name}', r.message) ?? Future.value());
@@ -417,6 +434,12 @@ class Assistant extends ChangeNotifier {
   // --------------------------------------------------- Volumen exacto
 
   Future<void> setVolume(int percent) async {
+    // Perfil de sonido: respeta el límite de volumen de estos audífonos.
+    final cap = headphoneName == null ? null : settings?.volumeCaps[headphoneName];
+    if (cap != null && percent > cap) {
+      percent = cap;
+      await _say('Lo dejo en $cap %, el límite que pusiste para estos audífonos.');
+    }
     final ok = await media?.setVolumePercent(percent) ?? false;
     if (!ok) {
       await _say('Aquí no puedo fijar el volumen exacto. Usa los botones del teléfono.');
@@ -456,7 +479,7 @@ class Assistant extends ChangeNotifier {
     if (queue.isEmpty) return false;
     final q = queue.removeAt(0);
     notifyListeners();
-    await handleSearch(SearchRequest(q));
+    await _smooth(() => handleSearch(SearchRequest(q)));
     return true;
   }
 
@@ -781,7 +804,13 @@ class Assistant extends ChangeNotifier {
     if (preferred != null && headphoneName != null && headphoneName != preferred) return;
     // Perfil por audífono: su volumen preferido.
     final saved = settings?.headphoneVolumes[headphoneName];
-    if (saved != null) await media?.setVolumePercent(saved);
+    final cap = settings?.volumeCaps[headphoneName];
+    if (saved != null) {
+      await media?.setVolumePercent(cap == null ? saved : min(saved, cap));
+    } else if (cap != null) {
+      final now = await media?.volumePercent();
+      if (now != null && now > cap) await media?.setVolumePercent(cap);
+    }
     if (!(settings?.resumeOnHeadphones ?? true)) return;
     final a = active;
     if (a == null || a.isPlaying) return;

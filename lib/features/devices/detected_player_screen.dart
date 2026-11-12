@@ -7,6 +7,7 @@ import '../../core/ui/futuristic.dart';
 import '../assistant/assistant.dart';
 import 'detected_player_controller.dart';
 import 'connectivity.dart';
+import '../audio/audio_tools_screen.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
   const DetectedPlayerScreen({
@@ -92,6 +93,17 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 ),
               if (widget.assistant != null) ...[
                 _HeadphonesCard(assistant: widget.assistant!),
+                Card(
+                  child: ListTile(
+                    leading: const AppIcon(Icons.equalizer_rounded, colors: AppColors.home, size: 36),
+                    title: const Text('Herramientas de audio'),
+                    subtitle: const Text('Ecualizador, calidad, transiciones y perfil de sonido'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => AudioToolsScreen(assistant: widget.assistant!),
+                    )),
+                  ),
+                ),
                 ConnectivityCard(
                   assistant: widget.assistant!,
                   controller: c,

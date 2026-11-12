@@ -97,6 +97,34 @@ class TrackStats {
       );
 }
 
+/// Una sesión de escucha, con sus números.
+class SessionReport {
+  const SessionReport({
+    required this.start,
+    required this.end,
+    required this.songs,
+    required this.completes,
+    required this.skips,
+    required this.listened,
+    required this.longestStreak,
+    required this.artists,
+  });
+  final DateTime start;
+  final DateTime end;
+  final int songs;
+  final int completes;
+  final int skips;
+
+  /// Tiempo realmente escuchado (estimado).
+  final Duration listened;
+
+  /// Racha más larga de canciones terminadas sin saltar.
+  final int longestStreak;
+  final int artists;
+
+  int get skipRate => songs == 0 ? 0 : (skips / songs * 100).round();
+}
+
 /// Cuándo sueles escuchar música.
 class ListeningPattern {
   const ListeningPattern({
@@ -816,6 +844,56 @@ class MusicProfile extends ChangeNotifier {
       ].join(','));
     }
     return rows.join('\n');
+  }
+
+  // ============================================ Análisis de reproducción
+
+  /// Tus sesiones (30 min sin música las separa), de la más reciente a la más antigua.
+  List<SessionReport> sessionReports({int max = 30}) {
+    final events = [...history]..sort((a, b) => a.at.compareTo(b.at));
+    final groups = <List<ListenEvent>>[];
+    for (final e in events) {
+      if (groups.isEmpty || e.at.difference(groups.last.last.at) > const Duration(minutes: 30)) {
+        groups.add([e]);
+      } else {
+        groups.last.add(e);
+      }
+    }
+    final out = <SessionReport>[];
+    for (final g in groups.reversed.take(max)) {
+      final plays = g.where((e) => e.type == ListenEventType.play).toList();
+      if (plays.isEmpty) continue;
+      final skips = g.where((e) => e.type == ListenEventType.skip).length;
+      final completes = g.where((e) => e.type == ListenEventType.complete).length;
+      // Tiempo real escuchado: entre una canción y la siguiente (máx. 8 min cada una).
+      var listened = Duration.zero;
+      for (var i = 0; i < plays.length; i++) {
+        final end = i + 1 < plays.length ? plays[i + 1].at : g.last.at;
+        final d = end.difference(plays[i].at);
+        listened += d > const Duration(minutes: 8) ? const Duration(minutes: 8) : d;
+      }
+      // Continuidad: la racha más larga de canciones seguidas sin saltar.
+      var run = 0, best = 0;
+      for (final e in g) {
+        if (e.type == ListenEventType.complete) {
+          run++;
+          if (run > best) best = run;
+        } else if (e.type == ListenEventType.skip) {
+          run = 0;
+        }
+      }
+      out.add(SessionReport(
+        start: g.first.at,
+        end: g.last.at,
+        songs: plays.length,
+        completes: completes,
+        skips: skips,
+        listened: listened,
+        longestStreak: best,
+        artists: {for (final p in plays) tracks[p.key]?.artist ?? p.key}.length,
+      ));
+    }
+    return out;
   }
 
   // ============================================ Organización de tus listas

@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 17;
+const latestChangelog = 18;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 18,
+    title: 'Herramientas de audio',
+    items: [
+      'Dispositivos → Herramientas de audio: abre el ecualizador de tu teléfono y mira la calidad de la salida.',
+      'Transiciones suaves (Android): baja y sube el volumen al cambiar de canción.',
+      'Límite de volumen por audífono y análisis de cada sesión en Mi música.',
+    ],
+  ),
   (
     version: 17,
     title: 'Escuchar juntos',

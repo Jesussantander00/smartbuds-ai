@@ -256,6 +256,19 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Transición suave: baja el volumen antes de cambiar de canción y lo sube después.
+  bool smoothTransitions = false;
+
+  /// Límite de volumen por audífono (%) para cuidar los oídos. Nombre → límite.
+  Map<String, int> volumeCaps = {};
+
+  void setVolumeCap(String device, int? cap) {
+    volumeCaps = {...volumeCaps}..remove(device);
+    if (cap != null) volumeCaps[device] = cap.clamp(20, 100);
+    _persist();
+    notifyListeners();
+  }
+
   /// Últimos audífonos usados (nombre).
   String? lastHeadphone;
 
@@ -356,6 +369,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     shortReplies = d['shortReplies'] == true;
     gradualDiscovery = d['gradualDiscovery'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
+    smoothTransitions = d['smoothTransitions'] == true;
+    volumeCaps = {
+      for (final e in ((d['volumeCaps'] as Map?) ?? const {}).entries) e.key as String: (e.value as num).toInt(),
+    };
     preferredHeadphone = d['preferredHeadphone'] as String?;
     final hs = (d['homeSections'] as List?)?.cast<String>();
     if (hs != null) {
@@ -435,6 +452,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? shortReplies,
     bool? gradualDiscovery,
     bool? compact,
+    bool? smoothTransitions,
     bool? liveArt,
     bool? realVisualizer,
     bool? dynamicColors,
@@ -447,6 +465,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
     if (compact != null) this.compact = compact;
+    if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (liveArt != null) this.liveArt = liveArt;
     if (realVisualizer != null) this.realVisualizer = realVisualizer;
     if (dynamicColors != null) this.dynamicColors = dynamicColors;
@@ -514,6 +533,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'shortReplies': shortReplies,
         'gradualDiscovery': gradualDiscovery,
         'lastHeadphone': lastHeadphone,
+        'smoothTransitions': smoothTransitions,
+        'volumeCaps': volumeCaps,
         'preferredHeadphone': preferredHeadphone,
         'homeSections': homeSections,
         'hasForYou': true,
