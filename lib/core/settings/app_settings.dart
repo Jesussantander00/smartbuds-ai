@@ -92,6 +92,16 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  // ------------------------------------------------- Cerebro musical
+
+  /// Cuánto confía el cerebro en cada fuente de recomendaciones (aprendido).
+  Map<String, double> brainWeights = {};
+
+  void setBrainWeight(String kind, double value) {
+    brainWeights = {...brainWeights, kind: value};
+    _persist();
+  }
+
   // ------------------------------------------------- Privacidad
 
   /// Modo privado: lo que suene no se guarda ni cambia tus recomendaciones.
@@ -116,7 +126,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   // ------------------------------------------------- Personalización
 
   /// Secciones de Inicio en orden; las que no están, ocultas.
-  static const allHomeSections = ['now', 'extras', 'queue', 'suggestion', 'search', 'favorite'];
+  static const allHomeSections = ['now', 'foryou', 'extras', 'queue', 'suggestion', 'search', 'favorite'];
   List<String> homeSections = [...allHomeSections];
 
   void setHomeSections(List<String> sections) {
@@ -331,7 +341,18 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     lastHeadphone = d['lastHeadphone'] as String?;
     preferredHeadphone = d['preferredHeadphone'] as String?;
     final hs = (d['homeSections'] as List?)?.cast<String>();
-    if (hs != null) homeSections = hs.where(allHomeSections.contains).toList();
+    if (hs != null) {
+      homeSections = hs.where(allHomeSections.contains).toList();
+      // Sección nueva «Para ti ahora»: se agrega una vez después de «Sonando ahora».
+      if (d['hasForYou'] != true && !homeSections.contains('foryou')) {
+        final i = homeSections.indexOf('now');
+        homeSections.insert(i < 0 ? 0 : i + 1, 'foryou');
+      }
+    }
+    brainWeights = {
+      for (final e in ((d['brainWeights'] as Map?) ?? const {}).entries)
+        e.key as String: (e.value as num).toDouble(),
+    };
     final qc = (d['quickCommands'] as List?)?.cast<String>();
     if (qc != null && qc.isNotEmpty) quickCommands = qc;
     compact = d['compact'] == true;
@@ -468,6 +489,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'lastHeadphone': lastHeadphone,
         'preferredHeadphone': preferredHeadphone,
         'homeSections': homeSections,
+        'hasForYou': true,
+        'brainWeights': brainWeights,
         'quickCommands': quickCommands,
         'compact': compact,
         'privateMode': privateMode,

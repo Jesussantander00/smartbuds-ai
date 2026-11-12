@@ -215,3 +215,77 @@ class InsightsSection extends StatelessWidget {
     );
   }
 }
+
+/// Cerebro musical en «Mi música»: tus sesiones y el radar de artistas nuevos.
+class BrainSection extends StatefulWidget {
+  const BrainSection({super.key, required this.assistant});
+  final Assistant assistant;
+
+  @override
+  State<BrainSection> createState() => _BrainSectionState();
+}
+
+class _BrainSectionState extends State<BrainSection> {
+  // El radar consulta internet: se pide una vez al abrir la pantalla.
+  late final Future<List<({String artist, String because, int? fans, String? picture, String? topTrack})>> _radar =
+      widget.assistant.brain.radar();
+
+  Assistant get assistant => widget.assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final insight = assistant.brain.sessionInsight();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (insight != null)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.insights_rounded, color: Neon.cyan),
+              title: const Text('Tus mejores sesiones'),
+              subtitle: Text('${insight.summary} (de ${insight.sessions} sesiones)'),
+            ),
+          ),
+        FutureBuilder(
+          future: _radar,
+          builder: (context, snap) {
+            final list = snap.data ?? const [];
+            if (list.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                Text('Radar de descubrimiento', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Card(
+                  child: Column(
+                    children: [
+                      for (final a in list.take(6))
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: theme.colorScheme.secondaryContainer,
+                            backgroundImage: a.picture == null ? null : NetworkImage(a.picture!),
+                            child: a.picture == null ? const Icon(Icons.person) : null,
+                          ),
+                          title: Text(a.artist),
+                          subtitle: Text('En común contigo: se parece a ${a.because}'
+                              '${a.fans == null ? '' : ' · ${_fans(a.fans!)} seguidores'}'),
+                          trailing: const Icon(Icons.play_circle_fill_rounded, color: Neon.cyan),
+                          onTap: () => assistant.handleSearch(
+                              SearchRequest(a.topTrack == null ? a.artist : '${a.topTrack} ${a.artist}')),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  static String _fans(int n) =>
+      n >= 1000000 ? '${(n / 1000000).toStringAsFixed(1)} M' : n >= 1000 ? '${(n / 1000).round()} mil' : '$n';
+}

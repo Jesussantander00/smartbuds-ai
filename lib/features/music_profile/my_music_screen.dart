@@ -57,6 +57,7 @@ class MyMusicScreen extends StatelessWidget {
               ],
               _IdentityCard(profile: profile),
               InsightsSection(profile: profile, assistant: assistant),
+              BrainSection(assistant: assistant),
               const SizedBox(height: 12),
               WeeklyStatsCard(profile: profile),
               const SizedBox(height: 12),

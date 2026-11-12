@@ -308,7 +308,46 @@ class CommandParser {
     'alegre': ('alegre', 'musica alegre'),
     'feliz': ('alegre', 'musica alegre'),
     'triste': ('triste', 'canciones tristes'),
+    // Más formas de decirlo (reconocimiento de ambiente).
+    'relajado': ('tranquila', 'musica tranquila relajante'),
+    'relajada': ('tranquila', 'musica tranquila relajante'),
+    'calmado': ('tranquila', 'musica tranquila relajante'),
+    'calmada': ('tranquila', 'musica tranquila relajante'),
+    'chill': ('tranquila', 'musica chill'),
+    'cansado': ('tranquila', 'musica tranquila relajante'),
+    'cansada': ('tranquila', 'musica tranquila relajante'),
+    'nostalgico': ('nostálgica', 'clasicos que marcaron epoca'),
+    'nostalgica': ('nostálgica', 'clasicos que marcaron epoca'),
+    'nostalgia': ('nostálgica', 'clasicos que marcaron epoca'),
+    'recuerdos': ('nostálgica', 'clasicos que marcaron epoca'),
+    'energia': ('con energía', 'musica con energia motivacion'),
+    'energetico': ('con energía', 'musica con energia motivacion'),
+    'energetica': ('con energía', 'musica con energia motivacion'),
+    'motivado': ('con energía', 'musica con energia motivacion'),
+    'motivada': ('con energía', 'musica con energia motivacion'),
+    'animado': ('alegre', 'musica alegre'),
+    'animada': ('alegre', 'musica alegre'),
+    'contento': ('alegre', 'musica alegre'),
+    'contenta': ('alegre', 'musica alegre'),
+    'enamorado': ('romántica', 'canciones romanticas'),
+    'enamorada': ('romántica', 'canciones romanticas'),
+    'despecho': ('de despecho', 'canciones de despecho'),
+    'melancolico': ('triste', 'canciones tristes'),
+    'melancolica': ('triste', 'canciones tristes'),
   };
+
+  /// «estoy nostálgico», «me siento con energía», «ando relajado»…
+  static const _feelingPrefixes = ['estoy ', 'me siento ', 'ando ', 'tengo ganas de algo ', 'quiero algo '];
+
+  /// Reconoce el ambiente en una frase libre, o null.
+  static (String, String)? detectMood(String heard) {
+    final text = normalize(heard);
+    for (final word in text.split(' ')) {
+      final m = _moods[word];
+      if (m != null) return m;
+    }
+    return null;
+  }
 
   /// Palabra de activación. Debe existir en el vocabulario de Vosk en español.
   static const wakePhrases = {'oye musica', 'hola musica'};
@@ -433,6 +472,9 @@ class CommandParser {
     'pon el volumen al máximo', 'pon el volumen al cincuenta',
     'cambia y sube', 'cambia y baja', 'pausa y baja', 'siguiente y sube',
     'cambia y me gusta', 'me gusta y cambia', 'sube y cambia', 'baja y cambia',
+    'estoy relajado', 'estoy cansado', 'estoy triste', 'estoy feliz', 'estoy nostálgico',
+    'me siento nostálgico', 'me siento con energía', 'estoy enamorado', 'pon algo nostálgico',
+    'pon algo con energía', 'pon algo relajado',
     'apaga en cinco minutos', 'apaga en diez minutos', 'apaga en quince minutos',
     'apaga en veinte minutos', 'apaga en treinta minutos',
     'apaga en cuarenta y cinco minutos', 'apaga en sesenta minutos', 'apaga en una hora',
@@ -500,6 +542,10 @@ class CommandParser {
     if (_favorites.contains(text)) return const FavoriteIntent();
     if (_discover.contains(text)) return const DiscoverIntent();
     if (_artistPrompts.contains(text)) return const ArtistPromptIntent();
+    if (_feelingPrefixes.any(text.startsWith)) {
+      final m = detectMood(text);
+      if (m != null) return MoodIntent(m.$1, m.$2);
+    }
     if (text.startsWith('pon ') || text.startsWith('algo ') || text.startsWith('quiero ')) {
       for (final word in text.split(' ')) {
         final mood = _moods[word];
