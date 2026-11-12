@@ -2,6 +2,8 @@
 
     <!-- Voice Engine: escuchar los comandos de voz mientras la app esta abierta. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Visualizador que responde al audio (Visualizer de Android). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Reproductor propio: buscar y reproducir canciones del catálogo (Audius). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Escucha con pantalla apagada: servicio en primer plano de tipo micrófono. -->

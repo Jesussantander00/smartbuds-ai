@@ -151,6 +151,12 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Interfaz compacta (pantallas pequeñas).
   bool compact = false;
 
+  /// Carátulas vivas (respiran y brillan mientras suena).
+  bool liveArt = true;
+
+  /// Visualizador que sigue el audio real (Android; si el teléfono lo permite).
+  bool realVisualizer = true;
+
   /// Colorear la tarjeta de Inicio con los colores de la carátula.
   bool dynamicColors = true;
 
@@ -356,6 +362,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     final qc = (d['quickCommands'] as List?)?.cast<String>();
     if (qc != null && qc.isNotEmpty) quickCommands = qc;
     compact = d['compact'] == true;
+    liveArt = d['liveArt'] != false;
+    realVisualizer = d['realVisualizer'] != false;
     privateMode = d['privateMode'] == true;
     friends = [
       for (final f in (d['friends'] as List?) ?? const [])
@@ -412,6 +420,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? shortReplies,
     bool? gradualDiscovery,
     bool? compact,
+    bool? liveArt,
+    bool? realVisualizer,
     bool? dynamicColors,
     int? discoveryLevel,
     bool? pauseOnUnplug,
@@ -422,6 +432,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
     if (compact != null) this.compact = compact;
+    if (liveArt != null) this.liveArt = liveArt;
+    if (realVisualizer != null) this.realVisualizer = realVisualizer;
     if (dynamicColors != null) this.dynamicColors = dynamicColors;
     if (discoveryLevel != null) this.discoveryLevel = discoveryLevel;
     if (pauseOnUnplug != null) this.pauseOnUnplug = pauseOnUnplug;
@@ -493,6 +505,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'brainWeights': brainWeights,
         'quickCommands': quickCommands,
         'compact': compact,
+        'liveArt': liveArt,
+        'realVisualizer': realVisualizer,
         'privateMode': privateMode,
         'friends': [for (final f in friends) {'code': f.code, 'name': f.name, 'id': f.userId}],
         'lastSeenChangelog': lastSeenChangelog,

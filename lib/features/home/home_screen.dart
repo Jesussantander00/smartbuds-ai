@@ -7,6 +7,8 @@ import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../music_profile/insights.dart';
 import '../brain/music_brain.dart';
+import '../../core/ui/live_visuals.dart';
+import 'immersive_screen.dart';
 import '../../core/voice_engine/voice_engine.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/ui/art_color.dart';
@@ -198,11 +200,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
+                    title: const Text('Carátulas vivas'),
+                    subtitle: const Text('La portada respira y brilla suavemente mientras suena.'),
+                    value: settings.liveArt,
+                    onChanged: (v) {
+                      settings.update(liveArt: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Visualizador con el audio real'),
+                    subtitle: const Text('En Android, si el teléfono lo permite; si no, animación normal.'),
+                    value: settings.realVisualizer,
+                    onChanged: (v) {
+                      settings.update(realVisualizer: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
                     title: const Text('Colores de la carátula'),
-                    subtitle: const Text('La tarjeta de la canción toma el color de su portada.'),
+                    subtitle: const Text('La tarjeta y el fondo toman el color de la portada.'),
                     value: settings.dynamicColors,
                     onChanged: (v) {
                       settings.update(dynamicColors: v);
+                      if (!v) ArtAmbient.color.value = null;
                       setSheet(() {});
                     },
                   ),
@@ -354,10 +377,12 @@ class _NowPlayingState extends State<_NowPlaying> {
     _artKey = key;
     if (art == null || !(widget.assistant.settings?.dynamicColors ?? true)) {
       if (_artColor != null) setState(() => _artColor = null);
+      ArtAmbient.color.value = null;
       return;
     }
     ArtColor.of(art).then((c) {
       if (mounted && _artKey == key) setState(() => _artColor = c);
+      ArtAmbient.color.value = c; // ambiente visual automático
     });
   }
 
@@ -460,7 +485,16 @@ class _NowPlayingState extends State<_NowPlaying> {
           LayoutBuilder(
             builder: (context, c) {
               final side = c.maxWidth.clamp(0.0, compact ? 140.0 : 300.0).toDouble();
-              return AnimatedSwitcher(
+              return GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  fullscreenDialog: true,
+                  builder: (_) => ImmersiveScreen(assistant: widget.assistant, controller: widget.controller),
+                )),
+                child: LiveArt(
+                playing: playing,
+                enabled: widget.assistant.settings?.liveArt ?? true,
+                glow: _artColor,
+                child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 450),
                 child: Container(
                   key: ValueKey(s?.trackKey ?? 'none'),
@@ -496,6 +530,8 @@ class _NowPlayingState extends State<_NowPlaying> {
                                   size: 96, color: Colors.white.withValues(alpha: .9)),
                         ),
                 ),
+              ),
+              ),
               );
             },
           ),
@@ -520,7 +556,12 @@ class _NowPlayingState extends State<_NowPlaying> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (playing) ...[
-                const NeonEqualizer(playing: true, height: 14),
+                LiveVisualizer(
+                  playing: true,
+                  height: 16,
+                  enabled: widget.assistant.settings?.realVisualizer ?? true,
+                  color: _artColor,
+                ),
                 const SizedBox(width: 8),
               ],
               Text(
@@ -592,6 +633,14 @@ class _NowPlayingState extends State<_NowPlaying> {
                   tooltip: 'Nunca más esta',
                   icon: const Icon(Icons.block_rounded),
                   onPressed: () => widget.assistant.blockCurrent(),
+                ),
+                IconButton(
+                  tooltip: 'Modo inmersivo',
+                  icon: const Icon(Icons.fullscreen_rounded),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    fullscreenDialog: true,
+                    builder: (_) => ImmersiveScreen(assistant: widget.assistant, controller: widget.controller),
+                  )),
                 ),
                 IconButton(
                   tooltip: 'Parecidas a esta',

@@ -20,5 +20,8 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Amigos y listas compartidas | Sí | Sí | No (aún) | Cuenta | Supabase |
 | Datos del sonido (ritmo, energía) | **No** | **No** | **No** | — | Ninguna app de música los comparte |
 | Ecualizador del sistema | Por evaluar | No (iOS no lo permite) | No | — | Depende del fabricante |
-| Letras sincronizadas | Por evaluar | Por evaluar | Por evaluar | — | Requiere licencia de un proveedor de letras |
+| Modo inmersivo y carátulas vivas | Sí | Sí | No | Ninguno | Carátula que comparta la app de música |
+| Visualizador con el audio real | Sí (si el fabricante lo permite) | No (iOS no deja leer el audio de otras apps): animación | No | Micrófono (ya concedido) + ajustes de audio | Visualizer de Android (sesión 0) |
+| Fondo con el color de la carátula | Sí | Sí | No | Ninguno | Carátula |
+| Letras sincronizadas | **No por ahora** | **No por ahora** | **No por ahora** | — | Requiere un proveedor con licencia (p. ej. API comercial de Musixmatch); las fuentes gratuitas no tienen permiso de los autores |
 | Escucha sincronizada | Por evaluar | Por evaluar | Por evaluar | Cuenta | Cada persona necesita poder controlar su propia app |

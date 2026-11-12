@@ -1,8 +1,26 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 14;
+const latestChangelog = 16;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 16,
+    title: 'Experiencia inmersiva',
+    items: [
+      'Toca la carátula: modo inmersivo a pantalla completa (desliza hacia abajo para salir).',
+      'Carátulas vivas y fondo que toma el color de la portada.',
+      'En Android, el visualizador sigue el audio real si el teléfono lo permite.',
+    ],
+  ),
+  (
+    version: 15,
+    title: 'Cerebro musical',
+    items: [
+      '«Para ti ahora»: sugerencias con su porqué que aprenden de lo que terminas o saltas.',
+      'Entiende cómo te sientes: «estoy nostálgico», «me siento con energía».',
+      'Radar de artistas nuevos y lo que hace buenas tus sesiones.',
+    ],
+  ),
   (
     version: 14,
     title: 'Privacidad y ayuda',
