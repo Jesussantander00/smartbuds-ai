@@ -54,6 +54,43 @@ class Contact {
   final bool mutual;
 }
 
+/// Estado de una sala de escucha sincronizada.
+class RoomState {
+  const RoomState({
+    required this.id,
+    required this.code,
+    required this.isHost,
+    this.title,
+    this.artist,
+    this.positionMs = 0,
+    this.playing = false,
+    required this.updatedAt,
+  });
+  final String id;
+  final String code;
+  final bool isHost;
+  final String? title;
+  final String? artist;
+  final int positionMs;
+  final bool playing;
+  final DateTime updatedAt;
+
+  /// Dónde va la canción del anfitrión ahora (la última posición + el tiempo pasado).
+  int positionNow(DateTime now) =>
+      playing ? positionMs + now.difference(updatedAt).inMilliseconds.clamp(0, 600000) : positionMs;
+
+  static RoomState fromMap(Map m, String? uid) => RoomState(
+        id: m['id'] as String,
+        code: m['code'] as String,
+        isHost: m['host'] == uid,
+        title: m['title'] as String?,
+        artist: m['artist'] as String?,
+        positionMs: (m['position_ms'] as num?)?.toInt() ?? 0,
+        playing: m['playing'] == true,
+        updatedAt: DateTime.tryParse('${m['updated_at']}')?.toLocal() ?? DateTime.now(),
+      );
+}
+
 /// Mi perfil social.
 class SocialProfile {
   const SocialProfile(this.name, this.friendCode, this.isPublic);
@@ -251,6 +288,7 @@ class SocialService extends ChangeNotifier {
         'note': (message ?? '').trim().isEmpty ? null : message!.trim(),
         'is_anonymous': anonymous,
       });
+      settings.logSocial('sent');
       return true;
     });
     return ok ?? false;
@@ -308,6 +346,7 @@ class SocialService extends ChangeNotifier {
           'song_title': title,
           'song_artist': artist,
         });
+        settings.logSocial('item');
         return true;
       }) ??
       false;
@@ -320,6 +359,84 @@ class SocialService extends ChangeNotifier {
       });
 
   Future<void> removeItem(int id) => _guard(() => _call('DELETE', '/rest/v1/playlist_items?id=eq.$id'));
+
+  // -------------------------------------------------- Escucha sincronizada
+
+  Future<RoomState?> openRoom() => _guard(() async {
+        final m = await _call('POST', '/rest/v1/rpc/open_room', const {}) as Map;
+        return RoomState.fromMap(m, _uid);
+      });
+
+  Future<void> updateRoom(String? title, String? artist, int positionMs, bool playing) async {
+    try {
+      await _call('POST', '/rest/v1/rpc/update_room', {
+        'song_title': title,
+        'song_artist': artist,
+        'pos': positionMs,
+        'is_playing': playing,
+      });
+    } catch (_) {
+      // Un fallo de red no debe molestar la música; se reintenta en el siguiente ciclo.
+    }
+  }
+
+  Future<RoomState?> joinRoom(String code) => _guard(() async {
+        final r = await _call('POST', '/rest/v1/rpc/join_room', {'room_code': code.trim().toUpperCase()});
+        final m = r is List ? (r.isEmpty ? null : r.first) : r;
+        if (m is! Map || m['id'] == null) {
+          throw const SocialException('Código no válido (o no son amigos mutuos con quien abrió la sala).');
+        }
+        return RoomState.fromMap(m, _uid);
+      });
+
+  /// La sala donde estoy (como anfitrión o invitado), o null.
+  Future<RoomState?> currentRoom() async {
+    try {
+      final r = await _call('GET', '/rest/v1/listen_rooms?select=*&limit=1');
+      if (r is List && r.isNotEmpty) return RoomState.fromMap(r.first as Map, _uid);
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> leaveRoom(RoomState room) => _guard(() async {
+        if (room.isHost) {
+          await _call('POST', '/rest/v1/rpc/close_room', const {});
+        } else {
+          await _call('DELETE', '/rest/v1/room_members?room_id=eq.${room.id}&user_id=eq.$_uid');
+        }
+      });
+
+  // ---------------------------------------------------------------- Votos
+
+  /// Puntaje de cada canción de la lista y mi voto (1, -1 o 0).
+  Future<Map<int, ({int score, int mine})>> scores(String playlistId) async =>
+      await _guard(() async {
+        final r = await _call('POST', '/rest/v1/rpc/playlist_scores', {'pid': playlistId});
+        return {
+          for (final m in (r as List? ?? const []).cast<Map>())
+            (m['item_id'] as num).toInt(): (
+              score: (m['score'] as num?)?.toInt() ?? 0,
+              mine: (m['my_vote'] as num?)?.toInt() ?? 0,
+            ),
+        };
+      }) ??
+      const {};
+
+  Future<void> vote(int itemId, int value) =>
+      _guard(() => _call('POST', '/rest/v1/rpc/vote_item', {'item': itemId, 'vote': value}));
+
+  // -------------------------------------------------- Tendencias del círculo
+
+  /// Artistas que comparten 2+ amigos mutuos (sin decir quiénes).
+  Future<List<(String, int)>> circleTrends() async =>
+      await _guard(() async {
+        final r = await _call('POST', '/rest/v1/rpc/circle_trends', const {});
+        return [
+          for (final m in (r as List? ?? const []).cast<Map>())
+            (m['artist'] as String, (m['friends'] as num).toInt()),
+        ];
+      }) ??
+      const [];
 
   // ----------------------------------------------------- Resumen del grupo
 

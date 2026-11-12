@@ -72,6 +72,17 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Sugerencias según el clima (usa la ubicación aproximada por internet).
   bool weatherSuggestions = false;
 
+  // ------------------------------------------------- Logros
+
+  /// Acciones sociales propias (para insignias y desafíos): tipo y fecha.
+  List<({String type, DateTime at})> socialLog = [];
+
+  void logSocial(String type) {
+    socialLog = [(type: type, at: DateTime.now()), ...socialLog].take(300).toList();
+    _persist();
+    notifyListeners();
+  }
+
   // ------------------------------------------------- Amigos
 
   /// Amigos agregados por código: código → (nombre, id).
@@ -365,6 +376,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     liveArt = d['liveArt'] != false;
     realVisualizer = d['realVisualizer'] != false;
     privateMode = d['privateMode'] == true;
+    socialLog = [
+      for (final e in (d['socialLog'] as List?) ?? const [])
+        if (e is Map && e['at'] is String) (type: (e['t'] as String?) ?? '', at: DateTime.parse(e['at'] as String)),
+    ];
     friends = [
       for (final f in (d['friends'] as List?) ?? const [])
         if (f is Map && f['id'] is String)
@@ -508,6 +523,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'liveArt': liveArt,
         'realVisualizer': realVisualizer,
         'privateMode': privateMode,
+        'socialLog': [for (final e in socialLog) {'t': e.type, 'at': e.at.toIso8601String()}],
         'friends': [for (final f in friends) {'code': f.code, 'name': f.name, 'id': f.userId}],
         'lastSeenChangelog': lastSeenChangelog,
         'dynamicColors': dynamicColors,

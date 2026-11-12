@@ -18,6 +18,10 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Toques en los audífonos | Sí | No | No | — | Pausa/reanudar del reproductor |
 | Clima | Sí | Sí | No | Internet (ubicación aproximada, sin GPS) | ipwho.is + Open-Meteo |
 | Amigos y listas compartidas | Sí | Sí | No (aún) | Cuenta | Supabase |
+| Escucha sincronizada | Sí (cualquier app) | Solo Apple Music | No | Cuenta | Supabase; saltar al segundo exacto solo si la app de música lo permite. No transmite audio: cada quien escucha en su app y cuenta |
+| Votación en listas | Sí | Sí | No | Cuenta | Supabase |
+| Insignias y desafíos | Sí | Sí | No | Ninguno | Tu historial (no se comparte) |
+| Tendencias de tu círculo | Sí | Sí | No | Cuenta | Artistas favoritos de 2+ amigos mutuos, sin nombres |
 | Datos del sonido (ritmo, energía) | **No** | **No** | **No** | — | Ninguna app de música los comparte |
 | Ecualizador del sistema | Por evaluar | No (iOS no lo permite) | No | — | Depende del fabricante |
 | Modo inmersivo y carátulas vivas | Sí | Sí | No | Ninguno | Carátula que comparta la app de música |

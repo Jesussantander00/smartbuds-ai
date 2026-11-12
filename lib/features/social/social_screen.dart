@@ -5,11 +5,16 @@ import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../assistant/assistant.dart';
 import 'social_service.dart';
+import 'listen_party.dart';
+import 'achievements.dart';
 
 /// Amigos: tu perfil, canciones que te envían, amigos (compatibilidad y
 /// descubrimientos), listas compartidas y el resumen del grupo.
 class SocialScreen extends StatefulWidget {
-  const SocialScreen({super.key, required this.assistant, this.social});
+  const SocialScreen({super.key, required this.assistant, this.social, this.party});
+
+  /// Escucha sincronizada (null si no hay cuenta configurada).
+  final ListenParty? party;
 
   final Assistant assistant;
 
@@ -69,7 +74,7 @@ class _SocialScreenState extends State<SocialScreen> {
       body: s == null || settings == null
           ? const _Empty('Amigos necesita la cuenta de SmartBuds (Supabase), que no está activa en esta versión.')
           : ListenableBuilder(
-              listenable: Listenable.merge([s, settings]),
+              listenable: Listenable.merge([s, settings, if (widget.party != null) widget.party!]),
               builder: (context, _) {
                 if (!settings.signedIn) {
                   return const _Empty('Entra con tu cuenta en «Mi música» para compartir música con tus amigos.');
@@ -89,11 +94,14 @@ class _SocialScreenState extends State<SocialScreen> {
                         ),
                       _profileCard(s),
                       if (s.profile != null) ...[
+                        if (widget.party != null) _party(widget.party!, s),
                         _inbox(s),
                         _friends(s),
+                        _trends(s),
                         _playlists(s),
                         _group(s),
                       ],
+                      _achievements(s),
                     ],
                   ),
                 );
@@ -179,6 +187,166 @@ class _SocialScreenState extends State<SocialScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  // ------------------------------------------------- Escuchar juntos
+
+  Widget _party(ListenParty party, SocialService s) {
+    final room = party.room;
+    return _Section(
+      title: 'Escuchar juntos',
+      icon: Icons.headset_mic_rounded,
+      children: [
+        if (room == null) ...[
+          const ListTile(
+            dense: true,
+            title: Text('Escuchen la misma canción al tiempo, cada quien en su app y con su cuenta. '
+                'Solo pueden unirse amigos mutuos con el código.'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: party.host,
+                  icon: const Icon(Icons.wifi_tethering_rounded),
+                  label: const Text('Abrir mi sala'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final code = await _ask('Código de la sala', hint: 'Ej.: A2B6630E', caps: TextCapitalization.characters);
+                    if (code == null) return;
+                    if (await party.join(code)) _snack('¡Te uniste! Tu app va a seguir la música del anfitrión.');
+                  },
+                  icon: const Icon(Icons.login_rounded),
+                  label: const Text('Unirme con código'),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          ListTile(
+            leading: NeonEqualizer(playing: room.playing, height: 22),
+            title: Text(room.isHost ? 'Tu sala · código ${room.code}' : 'En la sala de un amigo'),
+            subtitle: Text(party.status ?? ''),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                if (room.isHost)
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final text = 'Escucha conmigo en SmartBuds AI → Amigos → Escuchar juntos. Código: ${room.code}';
+                      final ok = await assistant.media?.shareText(text) ?? false;
+                      if (!ok) await Clipboard.setData(ClipboardData(text: room.code));
+                    },
+                    icon: const Icon(Icons.ios_share_rounded),
+                    label: const Text('Invitar'),
+                  ),
+                TextButton.icon(
+                  onPressed: party.leave,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: Text(room.isHost ? 'Cerrar la sala' : 'Salir'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (party.status == 'La sala se cerró.')
+          const ListTile(dense: true, leading: Icon(Icons.info_outline), title: Text('La sala se cerró.')),
+      ],
+    );
+  }
+
+  // --------------------------------------------------------- Tendencias
+
+  Widget _trends(SocialService s) {
+    if (s.contacts.where((c) => c.mutual).length < 2) return const SizedBox.shrink();
+    return _Section(
+      title: 'Tendencias de tu círculo',
+      icon: Icons.local_fire_department_rounded,
+      children: [
+        FutureBuilder<List<(String, int)>>(
+          future: s.circleTrends(),
+          builder: (context, snap) {
+            final list = snap.data ?? const [];
+            if (list.isEmpty) {
+              return const ListTile(
+                dense: true,
+                title: Text('Cuando 2 o más amigos compartan un artista favorito, aparecerá aquí '
+                    '(sin decir quiénes).'),
+              );
+            }
+            return Column(
+              children: [
+                for (final (artist, n) in list)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.trending_up_rounded, color: Neon.cyan),
+                    title: Text(artist),
+                    subtitle: Text('Favorito de $n de tus amigos'),
+                    trailing: const Icon(Icons.play_circle_fill_rounded, color: Neon.cyan),
+                    onTap: () => assistant.handleSearch(SearchRequest(artist)),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------- Insignias y desafíos
+
+  Widget _achievements(SocialService s) {
+    final settings = assistant.settings;
+    if (settings == null) return const SizedBox.shrink();
+    final a = Achievements(assistant.profile, settings);
+    final badges = a.badges(mutualFriends: s.contacts.where((c) => c.mutual).length);
+    final theme = Theme.of(context);
+    return _Section(
+      title: 'Insignias y desafíos',
+      icon: Icons.emoji_events_rounded,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Align(alignment: Alignment.centerLeft, child: Text('Desafíos de esta semana', style: theme.textTheme.titleSmall)),
+        ),
+        for (final c in a.weekly())
+          ListTile(
+            dense: true,
+            leading: Icon(c.done ? Icons.check_circle_rounded : Icons.flag_outlined, color: c.done ? Colors.green : Neon.cyan),
+            title: Text(c.title),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: LinearProgressIndicator(value: (c.progress / c.goal).clamp(0.0, 1.0).toDouble(), minHeight: 5),
+            ),
+            trailing: Text('${c.progress.clamp(0, c.goal)}/${c.goal}'),
+          ),
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final b in badges)
+                Tooltip(
+                  message: '${b.description} (${b.progress.clamp(0, b.goal)}/${b.goal})',
+                  child: Chip(
+                    avatar: Icon(b.earned ? Icons.military_tech_rounded : Icons.lock_outline_rounded,
+                        size: 18, color: b.earned ? Neon.cyan : null),
+                    label: Text(b.title),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -438,6 +606,9 @@ class _SocialScreenState extends State<SocialScreen> {
 
   Future<void> _openPlaylist(SocialService s, SharedPlaylist p) async {
     var items = await s.items(p.id);
+    var votes = await s.scores(p.id);
+    List<PlaylistItem> sorted() =>
+        [...items]..sort((a, b) => (votes[b.id]?.score ?? 0).compareTo(votes[a.id]?.score ?? 0));
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -448,7 +619,11 @@ class _SocialScreenState extends State<SocialScreen> {
           final theme = Theme.of(context);
           Future<void> reload() async {
             final fresh = await s.items(p.id);
-            set(() => items = fresh);
+            final v = await s.scores(p.id);
+            set(() {
+              items = fresh;
+              votes = v;
+            });
           }
 
           return SafeArea(
@@ -519,15 +694,27 @@ class _SocialScreenState extends State<SocialScreen> {
                         ),
                         if (items.isNotEmpty)
                           ActionChip(
+                            avatar: const Icon(Icons.how_to_vote_rounded, size: 18),
+                            label: const Text('Poner la más votada'),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              final top = sorted().first;
+                              assistant.handleSearch(
+                                  SearchRequest([top.title, if ((top.artist ?? '').isNotEmpty) top.artist].join(' ')));
+                            },
+                          ),
+                        if (items.isNotEmpty)
+                          ActionChip(
                             avatar: const Icon(Icons.playlist_play_rounded, size: 18),
                             label: const Text('Ponerla toda'),
                             onPressed: () {
                               Navigator.pop(context);
                               String q(PlaylistItem i) => [i.title, if ((i.artist ?? '').isNotEmpty) i.artist].join(' ');
+                              final order = sorted(); // las más votadas primero
                               assistant.queue
                                 ..clear()
-                                ..addAll(items.skip(1).map(q));
-                              assistant.handleSearch(SearchRequest(q(items.first)));
+                                ..addAll(order.skip(1).map(q));
+                              assistant.handleSearch(SearchRequest(q(order.first)));
                             },
                           ),
                       ],
@@ -539,8 +726,30 @@ class _SocialScreenState extends State<SocialScreen> {
                         ? const Center(child: Text('La lista está vacía. ¡Agrega la primera!'))
                         : ListView(
                             children: [
-                              for (final i in items)
+                              for (final i in sorted())
                                 ListTile(
+                                  leading: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () async {
+                                          await s.vote(i.id, votes[i.id]?.mine == 1 ? 0 : 1);
+                                          await reload();
+                                        },
+                                        child: Icon(Icons.thumb_up_alt_rounded,
+                                            size: 18, color: votes[i.id]?.mine == 1 ? Neon.cyan : null),
+                                      ),
+                                      Text('${votes[i.id]?.score ?? 0}', style: const TextStyle(fontSize: 12)),
+                                      InkWell(
+                                        onTap: () async {
+                                          await s.vote(i.id, votes[i.id]?.mine == -1 ? 0 : -1);
+                                          await reload();
+                                        },
+                                        child: Icon(Icons.thumb_down_alt_rounded,
+                                            size: 18, color: votes[i.id]?.mine == -1 ? Neon.pink : null),
+                                      ),
+                                    ],
+                                  ),
                                   title: Text(i.title),
                                   subtitle: Text([
                                     if ((i.artist ?? '').isNotEmpty) i.artist!,
