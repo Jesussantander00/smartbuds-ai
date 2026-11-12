@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 16;
+const latestChangelog = 17;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 17,
+    title: 'Escuchar juntos',
+    items: [
+      'Abre una sala y tus amigos escuchan la misma canción al tiempo, cada uno en su app.',
+      'Vota 👍 / 👎 en las listas compartidas y pon la más votada.',
+      'Insignias, desafíos semanales y tendencias de tu círculo (sin decir quién).',
+    ],
+  ),
   (
     version: 16,
     title: 'Experiencia inmersiva',

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Prueba integral del módulo social con 3 cuentas (A envía, B recibe, C intenta lo ajeno).
-# Requiere un PostgreSQL local con la base «t» preparada (ver preparar.sh). Uso: bash supabase/pruebas/social.sh
 P="psql -h /tmp/pg -p 5499 -U postgres -d t -q -t -A"
 A=11111111-1111-1111-1111-111111111111; B=22222222-2222-2222-2222-222222222222; C=33333333-3333-3333-3333-333333333333
 ok=0; bad=0

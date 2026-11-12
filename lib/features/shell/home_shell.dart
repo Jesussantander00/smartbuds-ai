@@ -15,6 +15,7 @@ import 'glass_sidebar.dart';
 import '../privacy/privacy_screen.dart';
 import '../social/social_screen.dart';
 import '../social/social_service.dart';
+import '../social/listen_party.dart';
 
 /// Navegación principal: Inicio · Asistente · Mi música · Dispositivos.
 class HomeShell extends StatefulWidget {
@@ -51,6 +52,7 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   bool _open = false;
   SocialService? _social;
+  ListenParty? _party;
 
   @override
   void initState() {
@@ -59,11 +61,14 @@ class _HomeShellState extends State<HomeShell> {
     if (auth != null) {
       _social = SocialService(url: auth.url, anonKey: auth.anonKey, auth: auth, settings: widget.settings);
       _social!.refresh();
+      _party = ListenParty(social: _social!, assistant: widget.assistant, controller: widget.controller);
+      if (widget.settings.signedIn) _party!.resume();
     }
   }
 
   @override
   void dispose() {
+    _party?.dispose();
     _social?.dispose();
     super.dispose();
   }
@@ -84,7 +89,7 @@ class _HomeShellState extends State<HomeShell> {
         sync: widget.sync,
         auth: widget.auth,
       ),
-      SocialScreen(assistant: widget.assistant, social: _social),
+      SocialScreen(assistant: widget.assistant, social: _social, party: _party),
       // Diagnóstico de reproductores y capacidades (sin micrófono propio).
       DetectedPlayerScreen(
         controller: widget.controller,

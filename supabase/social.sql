@@ -358,3 +358,183 @@ revoke update, delete on public.song_shares from authenticated, anon;
 revoke all on public.social_profiles, public.shared_playlists, public.playlist_members,
   public.playlist_items, public.song_shares, public.contacts from anon;
 grant usage, select on all sequences in schema public to authenticated;
+
+-- =============================================================================
+-- Funciones sociales avanzadas (PR #20): escucha sincronizada, votos y tendencias.
+-- Mismas reglas: todo por funciones que validan, candado por usuario y RLS.
+-- =============================================================================
+
+-- ------------------------------------------------------- Escucha sincronizada
+-- Una «sala» por anfitrión. El anfitrión publica qué suena y en qué segundo;
+-- los invitados (solo amigos mutuos con el código) ponen lo mismo en SU app.
+create table if not exists public.listen_rooms (
+  id uuid primary key default gen_random_uuid(),
+  host uuid not null unique references auth.users (id) on delete cascade,
+  code text not null unique default upper(encode(gen_random_bytes(4), 'hex')),
+  title text check (char_length(title) <= 200),
+  artist text check (char_length(artist) <= 200),
+  position_ms integer not null default 0 check (position_ms >= 0),
+  playing boolean not null default false,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.room_members (
+  room_id uuid not null references public.listen_rooms (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+alter table public.listen_rooms enable row level security;
+alter table public.room_members enable row level security;
+
+create or replace function public.is_room_member(rid uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from public.room_members m where m.room_id = rid and m.user_id = auth.uid())
+     or exists (select 1 from public.listen_rooms r where r.id = rid and r.host = auth.uid())
+$$;
+revoke all on function public.is_room_member(uuid) from public, anon;
+grant execute on function public.is_room_member(uuid) to authenticated;
+
+drop policy if exists "ver mi sala" on public.listen_rooms;
+create policy "ver mi sala" on public.listen_rooms
+  for select to authenticated using (public.is_room_member(id));
+drop policy if exists "ver miembros de mi sala" on public.room_members;
+create policy "ver miembros de mi sala" on public.room_members
+  for select to authenticated using (public.is_room_member(room_id));
+drop policy if exists "salir de una sala" on public.room_members;
+create policy "salir de una sala" on public.room_members
+  for delete to authenticated using (user_id = auth.uid());
+
+-- Abrir (o reabrir) mi sala.
+create or replace function public.open_room()
+returns public.listen_rooms language plpgsql security definer set search_path = public, pg_temp as $$
+declare r public.listen_rooms;
+begin
+  if auth.uid() is null then raise exception 'Necesitas una cuenta'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('room:' || auth.uid()::text, 0));
+  select * into r from public.listen_rooms where host = auth.uid();
+  if r.id is null then
+    insert into public.listen_rooms (host) values (auth.uid()) returning * into r;
+  end if;
+  return r;
+end $$;
+revoke all on function public.open_room() from public, anon;
+grant execute on function public.open_room() to authenticated;
+
+-- El anfitrión publica lo que suena (máx. 1 vez por segundo).
+create or replace function public.update_room(song_title text, song_artist text, pos integer, is_playing boolean)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if auth.uid() is null then raise exception 'Necesitas una cuenta'; end if;
+  if char_length(coalesce(song_title, '')) > 200 or char_length(coalesce(song_artist, '')) > 200
+     or coalesce(pos, 0) < 0 or coalesce(pos, 0) > 86400000 then
+    raise exception 'Datos no válidos';
+  end if;
+  update public.listen_rooms
+     set title = nullif(trim(coalesce(song_title, '')), ''), artist = nullif(trim(coalesce(song_artist, '')), ''),
+         position_ms = coalesce(pos, 0), playing = coalesce(is_playing, false), updated_at = now()
+   where host = auth.uid() and updated_at < now() - interval '1 second';
+end $$;
+revoke all on function public.update_room(text, text, integer, boolean) from public, anon;
+grant execute on function public.update_room(text, text, integer, boolean) to authenticated;
+
+-- Unirse: código + ser amigo mutuo del anfitrión. Comparte el freno de intentos.
+create or replace function public.join_room(room_code text)
+returns public.listen_rooms language plpgsql security definer set search_path = public, pg_temp as $$
+declare r public.listen_rooms; fails int; members int;
+begin
+  if auth.uid() is null then raise exception 'Necesitas una cuenta'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('join:' || auth.uid()::text, 0));
+  select count(*) into fails from public.join_attempts
+    where user_id = auth.uid() and not ok and at > now() - interval '1 hour';
+  if fails >= 10 then raise exception 'Demasiados intentos. Prueba en una hora.'; end if;
+  select * into r from public.listen_rooms where code = upper(trim(coalesce(room_code, '')));
+  if r.id is null or not public.are_friends(auth.uid(), r.host) then
+    insert into public.join_attempts (user_id, ok) values (auth.uid(), false);
+    return null; -- «Código no válido» (no revela si existe)
+  end if;
+  if r.host = auth.uid() then return r; end if;
+  select count(*) into members from public.room_members where room_id = r.id;
+  if members >= 20 then raise exception 'La sala está llena (20 personas).'; end if;
+  insert into public.join_attempts (user_id, ok) values (auth.uid(), true);
+  insert into public.room_members (room_id, user_id) values (r.id, auth.uid()) on conflict do nothing;
+  return r;
+end $$;
+revoke all on function public.join_room(text) from public, anon;
+grant execute on function public.join_room(text) to authenticated;
+
+-- Cerrar mi sala (saca a todos).
+create or replace function public.close_room()
+returns void language sql security definer set search_path = public, pg_temp as $$
+  delete from public.listen_rooms where host = auth.uid()
+$$;
+revoke all on function public.close_room() from public, anon;
+grant execute on function public.close_room() to authenticated;
+
+-- ------------------------------------------------------------- Votación grupal
+create table if not exists public.playlist_votes (
+  item_id bigint not null references public.playlist_items (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  value smallint not null check (value in (-1, 1)),
+  primary key (item_id, user_id)
+);
+alter table public.playlist_votes enable row level security; -- sin políticas: solo por funciones
+
+-- Votar 👍 (1), 👎 (-1) o quitar el voto (0). Solo miembros de la lista.
+create or replace function public.vote_item(item bigint, vote smallint)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare pid uuid;
+begin
+  select playlist_id into pid from public.playlist_items where id = item;
+  if pid is null or not public.is_playlist_member(pid) then raise exception 'No eres parte de esa lista'; end if;
+  if vote not in (-1, 0, 1) then raise exception 'Voto no válido'; end if;
+  if vote = 0 then
+    delete from public.playlist_votes where item_id = item and user_id = auth.uid();
+  else
+    insert into public.playlist_votes (item_id, user_id, value) values (item, auth.uid(), vote)
+      on conflict (item_id, user_id) do update set value = excluded.value;
+  end if;
+end $$;
+revoke all on function public.vote_item(bigint, smallint) from public, anon;
+grant execute on function public.vote_item(bigint, smallint) to authenticated;
+
+-- Puntaje de cada canción de una lista (y mi voto). Los votos de cada quien no se exponen.
+create or replace function public.playlist_scores(pid uuid)
+returns table (item_id bigint, score integer, my_vote smallint)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_playlist_member(pid) then raise exception 'No eres parte de esa lista'; end if;
+  return query
+    select i.id, coalesce(sum(v.value), 0)::integer,
+           coalesce(max(case when v.user_id = auth.uid() then v.value end), 0)::smallint
+    from public.playlist_items i
+    left join public.playlist_votes v on v.item_id = i.id
+    where i.playlist_id = pid
+    group by i.id;
+end $$;
+revoke all on function public.playlist_scores(uuid) from public, anon;
+grant execute on function public.playlist_scores(uuid) to authenticated;
+
+-- ------------------------------------------------------ Tendencias de tu círculo
+-- Artistas favoritos que comparten 2 o más de tus amigos mutuos. Nunca dice
+-- quién: solo cuántos (y solo si son al menos 2, para que no se pueda deducir).
+create or replace function public.circle_trends()
+returns table (artist text, friends integer)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select a.artist, count(distinct p.user_id)::integer
+  from public.contacts c
+  join public.social_profiles p on p.user_id = c.contact_id
+  cross join lateral jsonb_array_elements_text(p.top_artists) as a(artist)
+  where c.user_id = auth.uid() and public.are_friends(auth.uid(), c.contact_id)
+  group by a.artist
+  having count(distinct p.user_id) >= 2
+  order by 2 desc, 1
+  limit 10
+$$;
+revoke all on function public.circle_trends() from public, anon;
+grant execute on function public.circle_trends() to authenticated;
+
+grant select, delete on public.listen_rooms, public.room_members to authenticated;
+revoke insert, update on public.listen_rooms, public.room_members from authenticated, anon;
+revoke all on public.playlist_votes from authenticated, anon;
+revoke all on public.listen_rooms, public.room_members from anon;
