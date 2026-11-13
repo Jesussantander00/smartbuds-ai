@@ -364,17 +364,26 @@ class _NeonEqualizerState extends State<NeonEqualizer> with SingleTickerProvider
   late final AnimationController _c =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
 
+  bool _reduce = false;
+
   @override
-  void initState() {
-    super.initState();
-    if (widget.playing) _c.repeat();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _sync();
   }
 
   @override
   void didUpdateWidget(NeonEqualizer old) {
     super.didUpdateWidget(old);
-    if (widget.playing && !_c.isAnimating) _c.repeat();
-    if (!widget.playing && _c.isAnimating) _c.stop();
+    _sync();
+  }
+
+  /// Solo anima mientras suena y sin «reducir movimiento» (ahorra batería).
+  void _sync() {
+    final want = widget.playing && !_reduce;
+    if (want && !_c.isAnimating) _c.repeat();
+    if (!want && _c.isAnimating) _c.stop();
   }
 
   @override
@@ -436,7 +445,27 @@ class MicOrb extends StatefulWidget {
 
 class _MicOrbState extends State<MicOrb> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(MicOrb old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  /// Las ondas solo se mueven mientras escucha (antes giraban siempre).
+  void _sync() {
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final want = widget.on && widget.listening && !reduce;
+    if (want && !_c.isAnimating) _c.repeat();
+    if (!want && _c.isAnimating) _c.stop();
+  }
 
   @override
   void dispose() {

@@ -885,6 +885,10 @@ class Assistant extends ChangeNotifier {
   /// «Pon algo que me guste»: elige de tu perfil y lo busca.
   Future<bool> playFavorite() async {
     final recs = forYou(n: 3);
+    final ready = brain.readiness();
+    if (recs.isNotEmpty && ready.learning) {
+      await _say('Todavía te estoy conociendo, llevo ${ready.plays} canciones. Pongo una que te ha gustado.');
+    }
     if (recs.isNotEmpty) {
       // Un poco de azar entre las 3 mejores para no repetir siempre la misma.
       final r = recs[_random.nextInt(recs.length)];

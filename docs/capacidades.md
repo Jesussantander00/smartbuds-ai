@@ -29,7 +29,7 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Perfil de sonido por audífono | Sí: volumen guardado y límite | Solo se muestra; sin control de volumen | No | Bluetooth | AudioManager |
 | Análisis de reproducción | Sí | Sí | No | Ninguno | Tu historial en el teléfono (tiempo escuchado estimado) |
 | Modo inmersivo y carátulas vivas | Sí | Sí | No | Ninguno | Carátula que comparta la app de música |
-| Visualizador con el audio real | Sí (si el fabricante lo permite) | No (iOS no deja leer el audio de otras apps): animación | No | Micrófono (ya concedido) + ajustes de audio | Visualizer de Android (sesión 0) |
+| Visualizador con el audio real | Sí (si el fabricante lo permite) | No (iOS no deja leer el audio de otras apps): animación | No | Micrófono (ya concedido) + ajustes de audio | API `Visualizer` de Android sobre la salida general (sesión 0). No es captura de audio (`AudioPlaybackCapture`, que exige proyección de pantalla y que la app de origen lo permita). Varios fabricantes la bloquean o entregan silencio: tras 3 s de silencio vuelve a la animación, y si en 10 s nunca llegó sonido apaga la captura. Sin animación con «reducir movimiento» o batería baja |
 | Fondo con el color de la carátula | Sí | Sí | No | Ninguno | Carátula |
 | Letras sincronizadas | **No por ahora** | **No por ahora** | **No por ahora** | — | Requiere un proveedor con licencia (p. ej. API comercial de Musixmatch); las fuentes gratuitas no tienen permiso de los autores |
 | Centro multidispositivo (ver qué suena en tus otros dispositivos) | Sí | Sí | No (aún) | Cuenta | Supabase (`supabase/dispositivos.sql`); una fila por dispositivo, sin historial, solo tu cuenta la ve; nada en modo privado |
