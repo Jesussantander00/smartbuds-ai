@@ -28,7 +28,9 @@ class ActionBridge(messenger: BinaryMessenger) : MethodChannel.MethodCallHandler
     }
 
     fun dispatch(action: String?) {
-        if (action == null || action !in KNOWN) return
+        if (action == null) return
+        val isLink = action.startsWith("url:smartbuds:") && action.length <= 200
+        if (action !in KNOWN && !isLink) return
         main.post {
             if (ready) channel.invokeMethod("action", action) else pending += action
         }

@@ -46,6 +46,9 @@ class VoiceEngine extends ChangeNotifier {
   /// «Me gusta», «No me gusta», «Pon algo que me guste».
   final Future<void> Function(VoiceIntent intent)? onIntent;
 
+  /// Tus comandos personalizados: se revisan antes que los de SmartBuds.
+  VoiceIntent? Function(String heard)? customIntent;
+
   final CommandParser parser;
 
   /// Tiempo mínimo antes de aceptar otra vez la misma orden.
@@ -174,6 +177,7 @@ class VoiceEngine extends ChangeNotifier {
         EnergyRampIntent() => 'Subir la energía',
         PrivateModeIntent(:final on) => on ? 'Modo privado' : 'Salir del modo privado',
         CarModeIntent(:final on) => on ? 'Modo carro' : 'Salir del modo carro',
+        MacroIntent(:final name) => name,
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -352,8 +356,9 @@ class VoiceEngine extends ChangeNotifier {
         lastRejectedVoice = !guard.accepts(spk);
         if (lastRejectedVoice) break; // no es tu voz
         for (final t in texts) {
-          final intent =
-              freeMode && !requireWakeWord ? parser.parseOpen(t) : parser.parseIntent(t);
+          final custom = requireWakeWord ? null : customIntent?.call(t);
+          final intent = custom ??
+              (freeMode && !requireWakeWord ? parser.parseOpen(t) : parser.parseIntent(t));
           // Con palabra de activación, solo «Oye música» abre la escucha.
           if (requireWakeWord && intent is! WakeIntent) continue;
           if (intent != null) {
@@ -412,6 +417,7 @@ class VoiceEngine extends ChangeNotifier {
             EnergyRampIntent() ||
             PrivateModeIntent() ||
             CarModeIntent() ||
+            MacroIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

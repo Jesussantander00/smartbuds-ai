@@ -44,6 +44,23 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
 
   static func register(with registrar: FlutterPluginRegistrar) {
     shared = SmartBudsNative(messenger: registrar.messenger())
+    for url in pendingLinks { shared?.send(url: url) }
+    pendingLinks.removeAll()
+  }
+
+  /// Enlaces que llegan antes de que Flutter esté listo.
+  private static var pendingLinks: [URL] = []
+  private var ready = false
+  private var queued: [String] = []
+
+  static func handle(url: URL) {
+    guard url.scheme == "smartbuds", url.absoluteString.count <= 200 else { return }
+    if let s = shared { s.send(url: url) } else { pendingLinks.append(url) }
+  }
+
+  private func send(url: URL) {
+    let action = "url:" + url.absoluteString
+    if ready { actions.invokeMethod("action", arguments: action) } else { queued.append(action) }
   }
 
   private init(messenger: FlutterBinaryMessenger) {
@@ -51,10 +68,15 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
     voice = VoiceBridge(messenger: messenger)
     // Accesos rápidos (en Android). En iPhone solo se contesta «listo».
     actions = FlutterMethodChannel(name: "smartbuds/actions", binaryMessenger: messenger)
-    actions.setMethodCallHandler { call, result in
-      if call.method == "ready" { result(true) } else { result(FlutterMethodNotImplemented) }
-    }
     super.init()
+    actions.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "ready", let self = self else { result(FlutterMethodNotImplemented); return }
+      self.ready = true
+      let pending = self.queued
+      self.queued.removeAll()
+      for a in pending { self.actions.invokeMethod("action", arguments: a) }
+      result(true)
+    }
   }
 }
 

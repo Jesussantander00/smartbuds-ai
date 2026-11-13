@@ -4,6 +4,8 @@ import '../../core/settings/app_settings.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import '../automations/automation_engine.dart';
+import '../automations/automations_screen.dart';
 import 'assistant.dart';
 
 /// Asistente: qué puedes decir y cómo responde SmartBuds.
@@ -173,6 +175,20 @@ class _AssistantScreenState extends State<AssistantScreen> {
           children: [
             if (voice != null && _filter.isEmpty) _hero(context, voice!),
             if (widget.assistant != null && _filter.isEmpty) _quick(context),
+            if (widget.assistant?.automations case final AutomationEngine engine when _filter.isEmpty)
+              Card(
+                child: ListTile(
+                  leading: const AppIcon(Icons.auto_awesome_rounded, colors: AppColors.home, size: 38),
+                  title: const Text('Automatizaciones y comandos'),
+                  subtitle: Text(engine.automations.isEmpty
+                      ? 'Crea tus propias órdenes: «vamos al gimnasio»…'
+                      : '${engine.automations.where((a) => a.enabled).length} activas'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => AutomationsScreen(engine: engine),
+                  )),
+                ),
+              ),
             const SizedBox(height: 12),
             TextField(
               onChanged: (v) => setState(() => _filter = v.trim()),

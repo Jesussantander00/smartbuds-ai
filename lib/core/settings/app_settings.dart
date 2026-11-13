@@ -269,6 +269,15 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Automatizaciones y comandos personalizados (JSON de cada una).
+  List<Map<String, dynamic>> automations = [];
+
+  void setAutomations(List<Map<String, dynamic>> list) {
+    automations = list;
+    _persist();
+    notifyListeners();
+  }
+
   /// Modo carro: dispositivos Bluetooth que son el auto (nombre) y si se abre solo.
   Set<String> carDevices = {};
   bool carAutoOpen = true;
@@ -441,6 +450,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
       for (final e in ((d['headphoneVolumes'] as Map?) ?? const {}).entries)
         e.key as String: (e.value as num).toInt(),
     };
+    automations = [
+      for (final a in (d['automations'] as List?) ?? const [])
+        if (a is Map) a.cast<String, dynamic>(),
+    ];
     carDevices = {...((d['carDevices'] as List?) ?? const []).cast<String>()};
     carAutoOpen = d['carAutoOpen'] != false;
     deviceName = d['deviceName'] as String?;
@@ -588,6 +601,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'batterySaver': batterySaver,
         'weatherSuggestions': weatherSuggestions,
         'headphoneVolumes': headphoneVolumes,
+        'automations': automations,
         'carDevices': carDevices.toList(),
         'carAutoOpen': carAutoOpen,
         'deviceName': deviceName,
