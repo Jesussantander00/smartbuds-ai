@@ -8,6 +8,8 @@ import '../assistant/assistant.dart';
 import 'detected_player_controller.dart';
 import 'connectivity.dart';
 import '../audio/audio_tools_screen.dart';
+import 'device_center_screen.dart';
+import 'device_hub.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
   const DetectedPlayerScreen({
@@ -17,10 +19,14 @@ class DetectedPlayerScreen extends StatefulWidget {
     this.onOpenPermissions,
     this.platformNote,
     this.assistant,
+    this.hub,
   });
 
   /// Audífonos, ajustes rápidos (opcional; null en pruebas).
   final Assistant? assistant;
+
+  /// Centro multidispositivo (null sin Supabase).
+  final DeviceHub? hub;
 
   final DetectedPlayerController controller;
 
@@ -93,6 +99,17 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 ),
               if (widget.assistant != null) ...[
                 _HeadphonesCard(assistant: widget.assistant!),
+                Card(
+                  child: ListTile(
+                    leading: const AppIcon(Icons.devices_rounded, colors: AppColors.devices, size: 36),
+                    title: const Text('Centro multidispositivo'),
+                    subtitle: const Text('Tus otros teléfonos, modo carro y reloj'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => DeviceCenterScreen(assistant: widget.assistant!, hub: widget.hub),
+                    )),
+                  ),
+                ),
                 Card(
                   child: ListTile(
                     leading: const AppIcon(Icons.equalizer_rounded, colors: AppColors.home, size: 36),

@@ -15,7 +15,7 @@ class ActionBridge(messenger: BinaryMessenger) : MethodChannel.MethodCallHandler
 
     companion object {
         const val EXTRA_ACTION = "smartbuds_action"
-        val KNOWN = setOf("listen", "next", "favorite", "discover")
+        val KNOWN = setOf("listen", "next", "favorite", "discover", "like")
     }
 
     private val channel = MethodChannel(messenger, "smartbuds/actions")

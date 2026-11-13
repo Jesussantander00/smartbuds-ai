@@ -7,6 +7,8 @@ import '../assistant/assistant.dart';
 import '../assistant/assistant_screen.dart';
 import '../devices/detected_player_controller.dart';
 import '../devices/detected_player_screen.dart';
+import '../devices/device_hub.dart';
+import '../car/car_mode_screen.dart';
 import '../home/home_screen.dart';
 import '../music_profile/music_profile.dart';
 import '../music_profile/my_music_screen.dart';
@@ -53,6 +55,8 @@ class _HomeShellState extends State<HomeShell> {
   bool _open = false;
   SocialService? _social;
   ListenParty? _party;
+  DeviceHub? _hub;
+  Route<void>? _carRoute;
 
   @override
   void initState() {
@@ -63,11 +67,46 @@ class _HomeShellState extends State<HomeShell> {
       _social!.refresh();
       _party = ListenParty(social: _social!, assistant: widget.assistant, controller: widget.controller);
       if (widget.settings.signedIn) _party!.resume();
+      _hub = DeviceHub(url: auth.url, anonKey: auth.anonKey, auth: auth, settings: widget.settings);
+    }
+    widget.assistant.addListener(_onAssistant);
+    widget.controller.addListener(_onAssistant);
+  }
+
+  /// Publica lo que suena para tus otros dispositivos y abre el modo carro
+  /// cuando el asistente lo pide (voz o Bluetooth del carro).
+  void _onAssistant() {
+    final a = widget.assistant;
+    _hub?.publish(a.active);
+    // Fuera del ciclo de dibujo: el aviso puede llegar mientras se construye.
+    Future.microtask(_syncCarMode);
+  }
+
+  void _syncCarMode() {
+    if (!mounted) return;
+    final a = widget.assistant;
+    if (a.carMode && _carRoute == null) {
+      final route = MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => CarModeScreen(assistant: a, voice: widget.voice),
+      );
+      _carRoute = route;
+      Navigator.of(context).push(route).whenComplete(() {
+        if (_carRoute == route) _carRoute = null;
+        a.setCarMode(false);
+      });
+    } else if (!a.carMode && _carRoute != null) {
+      final route = _carRoute!;
+      _carRoute = null;
+      if (route.isActive) Navigator.of(context).removeRoute(route);
     }
   }
 
   @override
   void dispose() {
+    widget.assistant.removeListener(_onAssistant);
+    widget.controller.removeListener(_onAssistant);
+    _hub?.dispose();
     _party?.dispose();
     _social?.dispose();
     super.dispose();
@@ -96,6 +135,7 @@ class _HomeShellState extends State<HomeShell> {
         onOpenPermissions: widget.onOpenNotificationAccess,
         platformNote: widget.platformNote,
         assistant: widget.assistant,
+        hub: _hub,
       ),
       PrivacyScreen(
         assistant: widget.assistant,

@@ -32,3 +32,9 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Visualizador con el audio real | Sí (si el fabricante lo permite) | No (iOS no deja leer el audio de otras apps): animación | No | Micrófono (ya concedido) + ajustes de audio | Visualizer de Android (sesión 0) |
 | Fondo con el color de la carátula | Sí | Sí | No | Ninguno | Carátula |
 | Letras sincronizadas | **No por ahora** | **No por ahora** | **No por ahora** | — | Requiere un proveedor con licencia (p. ej. API comercial de Musixmatch); las fuentes gratuitas no tienen permiso de los autores |
+| Centro multidispositivo (ver qué suena en tus otros dispositivos) | Sí | Sí | No (aún) | Cuenta | Supabase (`supabase/dispositivos.sql`); una fila por dispositivo, sin historial, solo tu cuenta la ve; nada en modo privado |
+| «Continuar aquí» | Sí | Solo Apple Music | No | Cuenta | Busca la misma canción en este teléfono; no sigue en el segundo exacto |
+| Controlar la música de otro teléfono a distancia | **No** | **No** | **No** | — | El sistema solo deja controlar la música del propio teléfono |
+| Modo carro (pantalla simple + voz) | Sí; se abre solo con el Bluetooth del carro | Sí (abrir con voz o botón) | No | Micrófono | Pantalla propia de SmartBuds. Usar con el carro detenido |
+| Android Auto / CarPlay | **No** | **No** | — | — | Solo aceptan apps que reproducen su propia música (CarPlay además exige permiso especial de Apple) |
+| Reloj | Controles de música del reloj (Wear OS) + «Me gusta» en la notificación | «Ahora suena» del Apple Watch | No | — | Controles del sistema. App propia para el reloj: no por ahora (Wear OS y watchOS exigen una app aparte) |

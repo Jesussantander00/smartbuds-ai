@@ -17,6 +17,7 @@ import 'core/models.dart';
 import 'core/player_detector/active_player_detector.dart';
 import 'core/settings/app_settings.dart';
 import 'core/storage/json_store.dart';
+import 'core/voice_engine/command_parser.dart';
 import 'core/voice_engine/voice_engine.dart';
 import 'core/telemetry/error_reporter.dart';
 import 'core/ui/futuristic.dart';
@@ -214,6 +215,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
           await assistant.playFavorite();
         case 'discover':
           await assistant.discover();
+        case 'like':
+          await assistant.handleIntent(const LikeIntent());
       }
     });
     unawaited(channel.invokeMethod('ready').catchError((_) => null));

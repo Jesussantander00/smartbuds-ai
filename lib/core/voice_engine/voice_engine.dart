@@ -173,6 +173,7 @@ class VoiceEngine extends ChangeNotifier {
         UsageProfileIntent(:final profile) => 'Modo $profile',
         EnergyRampIntent() => 'Subir la energía',
         PrivateModeIntent(:final on) => on ? 'Modo privado' : 'Salir del modo privado',
+        CarModeIntent(:final on) => on ? 'Modo carro' : 'Salir del modo carro',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -410,6 +411,7 @@ class VoiceEngine extends ChangeNotifier {
             UsageProfileIntent() ||
             EnergyRampIntent() ||
             PrivateModeIntent() ||
+            CarModeIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

@@ -196,6 +196,12 @@ class PrivateModeIntent extends VoiceIntent {
   final bool on;
 }
 
+/// «Modo carro» / «Sal del modo carro»: pantalla grande y simple para el auto.
+class CarModeIntent extends VoiceIntent {
+  const CarModeIntent(this.on);
+  final bool on;
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),
@@ -401,6 +407,23 @@ class CommandParser {
     'modo estudio': 'estudio', 'modo concentracion': 'estudio', 'modo viaje': 'viaje',
     'modo diario': 'diario', 'modo normal': 'diario',
   };
+  static const _carOn = {
+    'modo carro',
+    'modo auto',
+    'modo automovil',
+    'modo coche',
+    'modo conduccion',
+    'voy a manejar',
+    'voy manejando',
+  };
+  static const _carOff = {
+    'sal del modo carro',
+    'quita el modo carro',
+    'sal del modo auto',
+    'sal del modo automovil',
+    'ya llegue',
+  };
+
   static const _energy = {
     'sube la energia poco a poco', 'sube la energia', 'de tranquila a fiesta', 'calentamiento',
   };
@@ -510,6 +533,8 @@ class CommandParser {
     if (text == 'sal del modo privado' || text == 'quita el modo privado') {
       return const PrivateModeIntent(false);
     }
+    if (_carOn.contains(text)) return const CarModeIntent(true);
+    if (_carOff.contains(text)) return const CarModeIntent(false);
     final prof = _profiles[text];
     if (prof != null) return UsageProfileIntent(prof);
     if (_energy.contains(text)) return const EnergyRampIntent();
