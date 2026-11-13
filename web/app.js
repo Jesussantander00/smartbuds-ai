@@ -187,7 +187,9 @@
               : e.data === YT.PlayerState.BUFFERING ? 'Cargando…'
               : e.data === YT.PlayerState.PAUSED ? 'En pausa' : $('nowSource').textContent;
           }
-          $('playBtn').textContent = isPlaying ? '⏸' : '▶';
+          $('playBtn').innerHTML = isPlaying
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
           document.body.classList.toggle('is-playing', isPlaying); // ecualizador animado
           if (e.data === YT.PlayerState.ENDED) next(false);
         },
@@ -624,6 +626,7 @@
   function renderMic() {
     $('mic').classList.toggle('listening', listening);
     document.body.classList.toggle('is-listening', listening);
+    $('hudState').textContent = listening ? 'ESCUCHANDO' : 'EN ESPERA';
     $('micStatus').textContent = listening
       ? (continuous ? 'Escuchando… di «Cambia», «Pausa», «Busca …»' : 'Te escucho…')
       : 'Toca y di: «Cambia», «Pausa», «Sube», «Busca …»';
