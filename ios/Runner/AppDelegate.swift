@@ -118,6 +118,24 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       result(false)
     case "getOutputDevice":
       result(outputDevice() ?? NSNull())
+    case "openSystemEqualizer", "fadeVolume":
+      // iOS no deja ecualizar ni cambiar el volumen de otras apps.
+      result(false)
+    case "audioOutputInfo":
+      let session = AVAudioSession.sharedInstance()
+      let out = session.currentRoute.outputs.first
+      let info: [String: Any] = [
+        "available": out != nil,
+        "name": (out?.portName as Any?) ?? NSNull(),
+        "type": (out?.portType.rawValue as Any?) ?? NSNull(),
+        "nativeSampleRate": String(Int(session.sampleRate)),
+        "framesPerBuffer": String(Int(session.ioBufferDuration * session.sampleRate)),
+        "outputLatencyMs": Int(session.outputLatency * 1000),
+        "channelCounts": [session.outputNumberOfChannels],
+        "sampleRates": [Int(session.sampleRate)],
+        "volumePercent": Int(session.outputVolume * 100),
+      ]
+      result(info)
     case "getBattery":
       UIDevice.current.isBatteryMonitoringEnabled = true
       let level = UIDevice.current.batteryLevel

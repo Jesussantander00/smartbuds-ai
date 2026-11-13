@@ -18,6 +18,10 @@
         <intent>
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent>
+        <!-- Ecualizador del teléfono (Samsung, Dolby, Xiaomi…). -->
+        <intent>
+            <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>

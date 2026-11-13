@@ -86,6 +86,18 @@ class AndroidMediaSource
     }
   }
 
+  /// Abre el ecualizador del teléfono (si el fabricante trae uno).
+  Future<bool> openSystemEqualizer() async => await _safe<bool>('openSystemEqualizer') ?? false;
+
+  /// Información técnica de la salida de audio actual.
+  Future<Map<String, dynamic>?> audioOutputInfo() async {
+    final m = await _safe<Map<dynamic, dynamic>>('audioOutputInfo');
+    return m == null ? null : Map<String, dynamic>.from(m);
+  }
+
+  /// Lleva el volumen al [to] % suavemente en [ms] milisegundos.
+  Future<void> fadeVolume(int to, {int ms = 2000}) => _safe<bool>('fadeVolume', {'to': to, 'ms': ms});
+
   /// Volumen del sistema en porcentaje (0–100).
   Future<bool> setVolumePercent(int percent) async =>
       await _safe<bool>('setVolumePercent', {'percent': percent}) ?? false;
