@@ -77,6 +77,7 @@ void main() {
       }
     }
     profile.likeTrack(MusicProfile.keyFor('Canción 0', 'Artista 0'));
+    fill(); // lo reciente no se recomienda
     final recs = brain.recommend(BrainContext(now: now.add(const Duration(hours: 3)), sessionSkips: 2), n: 6);
     expect(recs, isNotEmpty);
     for (final r in recs) {
