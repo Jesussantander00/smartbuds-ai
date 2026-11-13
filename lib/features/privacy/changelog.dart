@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 18;
+const latestChangelog = 19;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 19,
+    title: 'Todos tus dispositivos',
+    items: [
+      'Centro multidispositivo: mira qué suena en tus otros teléfonos y «Continuar aquí».',
+      'Modo carro: botones grandes y voz siempre activa. Se abre solo con el Bluetooth del carro o diciendo «modo carro».',
+      'La notificación de SmartBuds trae «Me gusta».',
+    ],
+  ),
   (
     version: 18,
     title: 'Herramientas de audio',

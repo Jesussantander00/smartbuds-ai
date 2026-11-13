@@ -269,6 +269,28 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Modo carro: dispositivos Bluetooth que son el auto (nombre) y si se abre solo.
+  Set<String> carDevices = {};
+  bool carAutoOpen = true;
+
+  void setCarDevice(String name, bool isCar) {
+    carDevices = isCar ? {...carDevices, name} : ({...carDevices}..remove(name));
+    _persist();
+    notifyListeners();
+  }
+
+  /// Centro multidispositivo: nombre visible de este teléfono y si comparte
+  /// lo que suena con tus otros dispositivos (solo tu cuenta lo ve).
+  String? deviceName;
+  bool shareDevices = true;
+
+  void setDeviceName(String? name) {
+    final n = name?.trim();
+    deviceName = (n == null || n.isEmpty) ? null : (n.length > 40 ? n.substring(0, 40) : n);
+    _persist();
+    notifyListeners();
+  }
+
   /// Últimos audífonos usados (nombre).
   String? lastHeadphone;
 
@@ -419,6 +441,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
       for (final e in ((d['headphoneVolumes'] as Map?) ?? const {}).entries)
         e.key as String: (e.value as num).toInt(),
     };
+    carDevices = {...((d['carDevices'] as List?) ?? const []).cast<String>()};
+    carAutoOpen = d['carAutoOpen'] != false;
+    deviceName = d['deviceName'] as String?;
+    shareDevices = d['shareDevices'] != false;
     blockedTracks = {...((d['blockedTracks'] as List?) ?? const []).cast<String>()};
     blockedArtists = {...((d['blockedArtists'] as List?) ?? const []).cast<String>()};
     authEmail = d['authEmail'] as String?;
@@ -453,6 +479,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? gradualDiscovery,
     bool? compact,
     bool? smoothTransitions,
+    bool? carAutoOpen,
+    bool? shareDevices,
     bool? liveArt,
     bool? realVisualizer,
     bool? dynamicColors,
@@ -466,6 +494,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
+    if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
+    if (shareDevices != null) this.shareDevices = shareDevices;
     if (liveArt != null) this.liveArt = liveArt;
     if (realVisualizer != null) this.realVisualizer = realVisualizer;
     if (dynamicColors != null) this.dynamicColors = dynamicColors;
@@ -558,6 +588,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'batterySaver': batterySaver,
         'weatherSuggestions': weatherSuggestions,
         'headphoneVolumes': headphoneVolumes,
+        'carDevices': carDevices.toList(),
+        'carAutoOpen': carAutoOpen,
+        'deviceName': deviceName,
+        'shareDevices': shareDevices,
         'blockedTracks': blockedTracks.toList(),
         'blockedArtists': blockedArtists.toList(),
         'authEmail': authEmail,

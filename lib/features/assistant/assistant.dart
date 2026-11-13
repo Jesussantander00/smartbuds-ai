@@ -169,8 +169,22 @@ class Assistant extends ChangeNotifier {
     if (name != null) settings?.setLastHeadphone(name);
     if (name != headphoneName) {
       headphoneName = name;
+      // Te subiste al carro: abre el modo carro si ese Bluetooth es el auto.
+      final st = settings;
+      if (name != null && st != null && st.carAutoOpen && st.carDevices.contains(name)) {
+        carMode = true;
+      }
       notifyListeners();
     }
+  }
+
+  /// Modo carro abierto (pantalla grande y simple). La interfaz lo observa.
+  bool carMode = false;
+
+  void setCarMode(bool on) {
+    if (carMode == on) return;
+    carMode = on;
+    notifyListeners();
   }
 
   Future<void> _say(String text) async => voice?.speak(text);
@@ -321,6 +335,11 @@ class Assistant extends ChangeNotifier {
         await _say(on
             ? 'Modo privado: no guardo lo que escuches.'
             : 'Listo, vuelvo a aprender de lo que escuchas.');
+      case CarModeIntent(:final on):
+        setCarMode(on);
+        await _say(on
+            ? 'Modo carro. Úsalo con la voz y mira la pantalla solo con el carro detenido.'
+            : 'Listo, salí del modo carro.');
       case MultiIntent(:final parts):
         for (final p in parts) {
           await handleIntent(p);

@@ -25,6 +25,7 @@ class VoiceForegroundService : Service() {
         private const val ACTION_PREV = "com.smartbuds.smartbuds_ai.MEDIA_PREV"
         private const val ACTION_TOGGLE = "com.smartbuds.smartbuds_ai.MEDIA_TOGGLE"
         private const val ACTION_NEXT = "com.smartbuds.smartbuds_ai.MEDIA_NEXT"
+        private const val ACTION_LIKE = "com.smartbuds.smartbuds_ai.LIKE"
 
         fun start(context: Context) {
             val intent = Intent(context, VoiceForegroundService::class.java)
@@ -53,6 +54,11 @@ class VoiceForegroundService : Service() {
             ACTION_TOGGLE -> "togglePlayPause"
             ACTION_NEXT -> "next"
             else -> null
+        }
+        if (intent?.action == ACTION_LIKE) {
+            // «Me gusta» desde la notificación (o el reloj que la refleje).
+            SmartBudsApplication.instance?.actions?.dispatch("like")
+            return START_STICKY
         }
         if (media != null) {
             MediaSessionConnector.instance?.commandActive(media)
@@ -129,6 +135,7 @@ class VoiceForegroundService : Service() {
             .addAction(mediaAction(10, ACTION_PREV, android.R.drawable.ic_media_previous, "Anterior"))
             .addAction(mediaAction(11, ACTION_TOGGLE, android.R.drawable.ic_media_pause, "Pausa"))
             .addAction(mediaAction(12, ACTION_NEXT, android.R.drawable.ic_media_next, "Siguiente"))
+            .addAction(mediaAction(13, ACTION_LIKE, android.R.drawable.btn_star_big_on, "Me gusta"))
             .addAction(
                 Notification.Action.Builder(
                     android.graphics.drawable.Icon.createWithResource(
