@@ -1,11 +1,11 @@
 # Comprueba cada cambio: pruebas, APK de Android y app de iPhone (sin firmar).
 #
-# Ahorro de minutos (repo privado: cada minuto de macOS cuenta como 10):
-# - En cada PR: solo pruebas + APK (Linux, barato).
-# - iPhone (macOS): al fusionar en main, o a mano desde «Actions → Run workflow»,
-#   o en un PR con la etiqueta «ios».
-# - Cambios solo de documentación no gastan minutos.
-# - Si subes otro commit, se cancela la revisión anterior que seguía corriendo.
+# El repositorio es público: los minutos de Actions son gratis, así que iPhone
+# vuelve a compilarse en cada PR. Si algún día vuelve a ser privado (cada minuto
+# de macOS cuenta como 10), poner en el trabajo «ios»:
+#   if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ios')
+# Cambios solo de documentación o SQL no corren, y un commit nuevo cancela la
+# revisión anterior que seguía corriendo.
 name: Comprobar SmartBuds
 
 on:
@@ -48,7 +48,6 @@ jobs:
 
   ios:
     name: iPhone (sin firmar)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ios')
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
