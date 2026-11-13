@@ -101,6 +101,27 @@ class MusicBrain {
     settings?.setBrainWeight(kind.name, next);
   }
 
+  // ------------------------------------------------ Datos suficientes
+
+  /// Canciones escuchadas que hacen falta para recomendar con confianza.
+  static const minPlays = 20;
+
+  /// Cuánto sabe el cerebro de ti: canciones escuchadas (sin modo privado)
+  /// y si todavía está aprendiendo. Con pocos datos lo dice en vez de inventar.
+  ({int plays, int needed, bool learning}) readiness() {
+    final plays = profile.tracks.values.fold<int>(0, (a, t) => a + t.plays);
+    return (plays: plays, needed: minPlays, learning: plays < minPlays);
+  }
+
+  /// Puntaje de una canción para el cerebro. Un solo salto no la descarta:
+  /// pudo ser el momento. Desde el segundo salto (o un «no me gusta») sí cuenta.
+  double _score(TrackStats t) {
+    final w = profile.weights;
+    var v = t.score(w);
+    if (t.skips == 1 && t.dislikes == 0) v -= w.skip; // perdona el primero
+    return v;
+  }
+
   // ---------------------------------------------------- Recomendar
 
   /// Las [n] canciones que más probablemente quieras escuchar ahora,
@@ -115,31 +136,35 @@ class MusicBrain {
     final blocked = settings?.isBlocked;
     final pool = profile.tracks.values
         .where((t) =>
-            t.score(profile.weights) > 0 &&
+            _score(t) > 0 &&
             !recent.contains(t.key) &&
             !tired.contains(t.key) &&
             !(blocked?.call(t.title, t.artist) ?? false))
         .toList();
     if (pool.isEmpty) return const [];
-    final maxScore = pool.map((t) => t.score(profile.weights)).reduce(max);
+    final maxScore = pool.map(_score).reduce(max);
     final careful = ctx.sessionSkips >= 2 || ctx.usageProfile == 'estudio';
 
     final scored = <Recommendation>[];
     for (final t in pool) {
       final reasons = <String>[];
       var kind = RecKind.favorite;
-      final base = t.score(profile.weights) / maxScore; // 0–1
+      // Cada razón sale de un dato real y lo muestra (veces, días, conteos).
+      final base = _score(t) / maxScore; // 0–1
       var s = base;
-      if (base > .6) reasons.add('Es de tus favoritas');
+      if (base > .6 && t.completes > 0) reasons.add('La terminaste ${t.completes} de ${t.plays} veces');
 
       final aff = t.affinity(daypart);
       s += aff * .6;
-      if (aff >= .5) reasons.add('Te gusta ${daypart.label}');
+      final inDaypart = t.positiveByDaypart[daypart] ?? 0;
+      if (aff >= .5 && inDaypart >= 2) reasons.add('La escuchaste $inDaypart veces ${daypart.label}');
 
       final completion = t.plays == 0 ? 0.0 : t.completes / t.plays;
       if (careful) {
         s += completion * .5 + (t.plays >= 3 ? .2 : 0);
-        if (completion >= .8) reasons.add('Casi siempre la escuchas completa');
+        if (completion >= .8 && t.plays >= 3) {
+          reasons.add('Casi siempre la escuchas completa (${t.completes} de ${t.plays})');
+        }
       }
 
       final last = t.lastPlayedAt;
@@ -154,7 +179,7 @@ class MusicBrain {
       if (t.artist != null && rising.contains(t.artist!.toLowerCase())) {
         s += .3;
         kind = RecKind.rising;
-        reasons.add('Últimamente escuchas mucho a ${t.artist}');
+        reasons.add('Escuchas más a ${t.artist} estas 2 semanas que antes');
       }
 
       if (moodSet.contains(t.key)) {
@@ -165,20 +190,24 @@ class MusicBrain {
 
       if (t.likes > 0) reasons.add('Le diste «me gusta»');
       s *= weightOf(kind);
-      if (reasons.isEmpty) reasons.add('Encaja con lo que sueles escuchar');
+      if (reasons.isEmpty) reasons.add('La has escuchado ${t.plays} ${t.plays == 1 ? 'vez' : 'veces'}');
       scored.add(Recommendation(track: t, kind: kind, score: s, reasons: reasons));
     }
     scored.sort((a, b) => b.score.compareTo(a.score));
 
-    // Variedad: máximo 2 canciones del mismo artista.
+    // Variedad: primero un artista distinto por puesto; solo si faltan
+    // canciones se repite artista (máximo 2). Así no se encierra en los mismos.
     final out = <Recommendation>[];
     final perArtist = <String, int>{};
-    for (final r in scored) {
-      final a = (r.track.artist ?? '').toLowerCase();
-      if ((perArtist[a] ?? 0) >= 2) continue;
-      perArtist[a] = (perArtist[a] ?? 0) + 1;
-      out.add(r);
-      if (out.length >= n) break;
+    for (final limit in const [1, 2]) {
+      for (final r in scored) {
+        if (out.length >= n) break;
+        if (out.contains(r)) continue;
+        final a = (r.track.artist ?? '').toLowerCase();
+        if ((perArtist[a] ?? 0) >= limit) continue;
+        perArtist[a] = (perArtist[a] ?? 0) + 1;
+        out.add(r);
+      }
     }
     return out;
   }

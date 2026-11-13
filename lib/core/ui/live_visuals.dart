@@ -27,6 +27,41 @@ class AudioBands {
   StreamSubscription<dynamic>? _sub;
   int _listeners = 0;
 
+  /// Cuadros seguidos en silencio y si alguna vez llegó sonido real.
+  int _silent = 0;
+  bool _heard = false;
+
+  /// Con ~15 cuadros por segundo: 3 s de silencio → animación normal;
+  /// 10 s sin haber oído nada nunca → el fabricante lo bloquea: se apaga
+  /// la captura para no gastar batería.
+  static const silentToFallback = 45;
+  static const neverHeardLimit = 150;
+
+  /// Procesa un cuadro de bandas (público para las pruebas).
+  @visibleForTesting
+  void onBands(List<double> b) {
+    final loud = b.any((v) => v > .01);
+    if (loud) {
+      _heard = true;
+      _silent = 0;
+      bands.value = b;
+      return;
+    }
+    _silent++;
+    if (!_heard && _silent >= neverHeardLimit) {
+      available = false;
+      bands.value = null;
+      _sub?.cancel();
+      _sub = null;
+      return;
+    }
+    if (_silent >= silentToFallback) {
+      bands.value = null;
+    } else if (bands.value != null) {
+      bands.value = b;
+    }
+  }
+
   void acquire() {
     _listeners++;
     if (_sub != null || !available) return;
@@ -39,7 +74,7 @@ class AudioBands {
         return;
       }
       if (e is Map && e['bands'] is List) {
-        bands.value = (e['bands'] as List).map((v) => (v as num).toDouble()).toList();
+        onBands((e['bands'] as List).map((v) => (v as num).toDouble()).toList());
       }
     }, onError: (_) {
       available = false;
@@ -53,6 +88,7 @@ class AudioBands {
       _sub?.cancel();
       _sub = null;
       bands.value = null;
+      _silent = 0;
     }
   }
 }
@@ -75,9 +111,10 @@ class LiveVisualizer extends StatefulWidget {
 
 class _LiveVisualizerState extends State<LiveVisualizer> {
   bool _acquired = false;
+  bool _reduce = false;
 
   void _sync() {
-    final want = widget.enabled && widget.playing;
+    final want = widget.enabled && widget.playing && !_reduce;
     if (want && !_acquired) {
       AudioBands.instance.acquire();
       _acquired = true;
@@ -90,6 +127,14 @@ class _LiveVisualizerState extends State<LiveVisualizer> {
   @override
   void initState() {
     super.initState();
+    _sync();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // «Reducir movimiento» del teléfono: sin captura de audio ni barras vivas.
+    _reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     _sync();
   }
 
@@ -111,7 +156,7 @@ class _LiveVisualizerState extends State<LiveVisualizer> {
     return ValueListenableBuilder<List<double>?>(
       valueListenable: AudioBands.instance.bands,
       builder: (context, bands, _) {
-        if (bands == null || !widget.enabled || !widget.playing) {
+        if (bands == null || !widget.enabled || !widget.playing || _reduce) {
           return NeonEqualizer(playing: widget.playing, height: widget.height * .6, color: color);
         }
         return SizedBox(
@@ -159,6 +204,14 @@ class LiveArt extends StatefulWidget {
 
 class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 6));
+  bool _reduce = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _sync();
+  }
 
   @override
   void initState() {
@@ -173,7 +226,8 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
   }
 
   void _sync() {
-    if (widget.enabled && widget.playing) {
+    // Sin animación (ni consumo) si está apagada, en pausa o con «reducir movimiento».
+    if (widget.enabled && widget.playing && !_reduce) {
       if (!_c.isAnimating) _c.repeat(reverse: true);
     } else {
       _c.stop();
@@ -188,8 +242,7 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (!widget.enabled || reduce) return widget.child;
+    if (!widget.enabled || _reduce) return widget.child;
     final glow = widget.glow ?? Neon.cyan;
     return AnimatedBuilder(
       animation: _c,

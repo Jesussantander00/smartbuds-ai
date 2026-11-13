@@ -492,7 +492,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                 )),
                 child: LiveArt(
                 playing: playing,
-                enabled: widget.assistant.settings?.liveArt ?? true,
+                enabled: (widget.assistant.settings?.liveArt ?? true) && !widget.assistant.lowBattery,
                 glow: _artColor,
                 child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 450),
@@ -559,7 +559,7 @@ class _NowPlayingState extends State<_NowPlaying> {
                 LiveVisualizer(
                   playing: true,
                   height: 16,
-                  enabled: widget.assistant.settings?.realVisualizer ?? true,
+                  enabled: (widget.assistant.settings?.realVisualizer ?? true) && !widget.assistant.lowBattery,
                   color: _artColor,
                 ),
                 const SizedBox(width: 8),
@@ -764,7 +764,8 @@ class _ForYou extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recs = assistant.forYou(n: 6);
-    if (recs.isEmpty) return const SizedBox.shrink();
+    final ready = assistant.brain.readiness();
+    if (recs.isEmpty && !ready.learning) return const SizedBox.shrink();
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -779,6 +780,29 @@ class _ForYou extends StatelessWidget {
             ],
           ),
         ),
+        // Con pocos datos lo dice: no finge conocerte todavía.
+        if (ready.learning)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Glass(
+              radius: 16,
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.school_outlined, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Todavía estoy aprendiendo tus gustos: llevo ${ready.plays} de ${ready.needed} canciones. '
+                      'Las sugerencias mejoran a medida que escuchas.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (recs.isNotEmpty)
         SizedBox(
           height: 128,
           child: ListView.separated(

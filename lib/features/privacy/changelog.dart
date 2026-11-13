@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 19;
+const latestChangelog = 20;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 20,
+    title: 'Un cerebro más justo',
+    items: [
+      'Un solo salto ya no descarta una canción, y «Para ti ahora» mezcla más artistas.',
+      'Cada sugerencia muestra el dato en que se basa, y si te conoce poco te lo dice.',
+      'Las animaciones respetan «reducir movimiento» y se apagan con batería baja.',
+    ],
+  ),
   (
     version: 19,
     title: 'Todos tus dispositivos',

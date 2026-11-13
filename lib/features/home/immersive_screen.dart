@@ -134,7 +134,7 @@ class _ImmersiveScreenState extends State<ImmersiveScreen> {
                                 final side = c.maxWidth.clamp(0.0, 360.0).toDouble();
                                 return LiveArt(
                                   playing: playing,
-                                  enabled: settings?.liveArt ?? true,
+                                  enabled: (settings?.liveArt ?? true) && !widget.assistant.lowBattery,
                                   glow: accent,
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(24),
@@ -165,7 +165,7 @@ class _ImmersiveScreenState extends State<ImmersiveScreen> {
                             LiveVisualizer(
                               playing: playing,
                               height: 44,
-                              enabled: settings?.realVisualizer ?? true,
+                              enabled: (settings?.realVisualizer ?? true) && !widget.assistant.lowBattery,
                               color: accent,
                             ),
                             const SizedBox(height: 12),
