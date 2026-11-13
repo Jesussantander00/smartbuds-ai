@@ -127,7 +127,7 @@ void main() {
       Automation mk() => Automation(
           id: Automation.newId(), name: 'A', kind: TriggerKind.phrase, phrase: 'buenas noches', steps: ['volumen al 20']);
       expect(engine.save(mk()), isNull);
-      expect(engine.save(mk()), contains('misma frase'));
+      expect(engine.save(mk()), contains('esa frase'));
     });
 
     test('apagada no responde', () {
