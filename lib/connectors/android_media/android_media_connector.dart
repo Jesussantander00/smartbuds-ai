@@ -87,6 +87,29 @@ class AndroidMediaSource
   }
 
   /// Abre el ecualizador del teléfono (si el fabricante trae uno).
+  /// Ecualizador de SmartBuds sobre la salida general (solo algunos Android).
+  Future<Map<String, dynamic>?> eqInfo() async {
+    try {
+      final r = await _channel.invokeMethod<Map<dynamic, dynamic>>('eqInfo');
+      return r?.cast<String, dynamic>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Aplica niveles en milibelios (uno por banda). true = el teléfono lo aceptó.
+  Future<bool> eqApply(List<int> levelsMb) async {
+    try {
+      return await _channel.invokeMethod<bool>('eqApply', {'levels': levelsMb}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> eqRelease() async {
+    await _safe<bool>('eqRelease');
+  }
+
   Future<bool> openSystemEqualizer() async => await _safe<bool>('openSystemEqualizer') ?? false;
 
   /// Información técnica de la salida de audio actual.

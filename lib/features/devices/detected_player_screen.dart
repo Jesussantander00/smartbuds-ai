@@ -10,6 +10,7 @@ import 'connectivity.dart';
 import '../audio/audio_tools_screen.dart';
 import 'device_center_screen.dart';
 import 'device_hub.dart';
+import 'headphone_diagnostics.dart';
 
 class DetectedPlayerScreen extends StatefulWidget {
   const DetectedPlayerScreen({
@@ -122,6 +123,18 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                     )),
                   ),
                 ),
+                if (widget.assistant!.settings != null)
+                  Card(
+                    child: ListTile(
+                      leading: const AppIcon(Icons.monitor_heart_rounded, colors: AppColors.music, size: 36),
+                      title: const Text('Diagnóstico de audífonos'),
+                      subtitle: const Text('Historial de conexiones, cortes y qué hacer'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => HeadphoneDiagnosticsScreen(settings: widget.assistant!.settings!),
+                      )),
+                    ),
+                  ),
                 ConnectivityCard(
                   assistant: widget.assistant!,
                   controller: c,

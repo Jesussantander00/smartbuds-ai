@@ -1,8 +1,18 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 25;
+const latestChangelog = 26;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 26,
+    title: 'Audio y audífonos',
+    items: [
+      'Ecualizador inteligente: perfiles por audífono y por tipo de música, con bandas manuales.',
+      'El analizador marca qué dato es real y cuál es estimado, y muestra la calidad de cada plataforma.',
+      'Transiciones: baja el volumen al final de cada canción y lo sube en la siguiente (Android).',
+      'Dispositivos → Diagnóstico de audífonos: cortes, duración de cada conexión y qué hacer.',
+    ],
+  ),
   (
     version: 25,
     title: 'Jarvis más inteligente',

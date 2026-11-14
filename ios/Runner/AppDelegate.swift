@@ -140,6 +140,10 @@ final class AppleMusicBridge: NSObject, FlutterStreamHandler {
       result(false)
     case "getOutputDevice":
       result(outputDevice() ?? NSNull())
+    case "eqInfo":
+      result(["available": false]) // iPhone no deja ecualizar el audio de otras apps
+    case "eqApply", "eqRelease":
+      result(false)
     case "openSystemEqualizer", "fadeVolume":
       // iOS no deja ecualizar ni cambiar el volumen de otras apps.
       result(false)

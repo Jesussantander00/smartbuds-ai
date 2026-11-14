@@ -14,6 +14,7 @@ import '../../core/player_detector/active_player_detector.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/telemetry/error_reporter.dart';
 import '../../connectors/knowledge/music_knowledge.dart';
+import '../audio/eq_controller.dart';
 import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../stats/evolution.dart';
@@ -181,6 +182,9 @@ class Assistant extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Ecualizador inteligente (lo crea main; null en pruebas).
+  EqController? eq;
 
   /// Tus automatizaciones y comandos personalizados (los ejecuta este asistente).
   AutomationRunner? automations;
