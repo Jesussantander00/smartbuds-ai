@@ -283,6 +283,14 @@ class RepetitionIntent extends VoiceIntent {
   final bool vary;
 }
 
+/// «Viaje musical (de una hora)», «bájame la energía»: progresión de energía.
+/// [shape]: arco, subida o bajada.
+class JourneyIntent extends VoiceIntent {
+  const JourneyIntent(this.shape, {this.minutes});
+  final String shape;
+  final int? minutes;
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -568,6 +576,8 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
+    'bájame la energía', 'baja la energía poco a poco', 'ayúdame a relajarme',
     'estoy repitiendo mucho', 'varía un poco', 'cambia de artista', 'algo de otro artista',
     'descubre por colaboraciones', 'artistas conectados', 'colaboraciones de este artista',
     'estoy estudiando', 'voy a estudiar', 'estoy trabajando', 'voy a trabajar',
@@ -604,6 +614,41 @@ class CommandParser {
     'varia', 'varia un poco', 'varia la musica', 'cambia de artista', 'algo de otro artista',
     'otro artista', 'ya me aburri de este artista',
   };
+  static const _journeyDown = {
+    'bajame la energia', 'baja la energia poco a poco', 'baja la energia', 'ayudame a relajarme',
+    'viaje para dormir', 'viaje tranquilo',
+  };
+
+  /// «viaje musical», «haz un viaje musical de una hora».
+  static JourneyIntent? parseJourney(String text) {
+    if (_journeyDown.contains(text)) return const JourneyIntent('bajada', minutes: 30);
+    final m = RegExp(r'^(haz |arma |pon |ponme |quiero )?(un )?viaje musical( de subida| de bajada)?( de (.+))?$')
+        .firstMatch(text);
+    if (m == null) return null;
+    final shape = switch (m.group(3)) {
+      ' de subida' => 'subida',
+      ' de bajada' => 'bajada',
+      _ => 'arco',
+    };
+    final what = m.group(5);
+    int? minutes;
+    if (what != null) {
+      minutes = switch (what) {
+        'una hora' => 60,
+        'media hora' => 30,
+        'hora y media' => 90,
+        'dos horas' => 120,
+        _ => () {
+            final mm = RegExp(r'^(.+?) minutos$').firstMatch(what);
+            if (mm == null) return null;
+            return int.tryParse(mm.group(1)!) ?? sleepNumbers[mm.group(1)!];
+          }(),
+      };
+      if (minutes == null) return null;
+    }
+    return JourneyIntent(shape, minutes: minutes);
+  }
+
   static const _corrections = {
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
     'haz un diagnóstico', 'autodiagnóstico', 'revisa si todo funciona', 'qué te pasa',
@@ -756,6 +801,8 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    final journey = parseJourney(text);
+    if (journey != null) return journey;
     if (_repetitionAsk.contains(text)) return const RepetitionIntent();
     if (_repetitionVary.contains(text)) return const RepetitionIntent(vary: true);
     if (_connections.contains(text)) return const ConnectionsIntent();
