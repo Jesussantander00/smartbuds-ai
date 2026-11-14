@@ -202,6 +202,13 @@ class CarModeIntent extends VoiceIntent {
   final bool on;
 }
 
+/// Una automatización o comando personalizado tuyo («vamos al gimnasio»).
+class MacroIntent extends VoiceIntent {
+  const MacroIntent(this.id, this.name);
+  final String id;
+  final String name;
+}
+
 /// Apps de música conocidas: nombre hablado → (paquete Android, nombre visible).
 const musicApps = <String, (String, String)>{
   'youtube music': ('com.google.android.apps.youtube.music', 'YouTube Music'),

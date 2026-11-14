@@ -38,3 +38,8 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Modo carro (pantalla simple + voz) | Sí; se abre solo con el Bluetooth del carro | Sí (abrir con voz o botón) | No | Micrófono | Pantalla propia de SmartBuds. Usar con el carro detenido |
 | Android Auto / CarPlay | **No** | **No** | — | — | Solo aceptan apps que reproducen su propia música (CarPlay además exige permiso especial de Apple) |
 | Reloj | Controles de música del reloj (Wear OS) + «Me gusta» en la notificación | «Ahora suena» del Apple Watch | No | — | Controles del sistema. App propia para el reloj: no por ahora (Wear OS y watchOS exigen una app aparte) |
+| Comandos personalizados («vamos al gimnasio» → varios pasos) | Sí | Sí | No | Micrófono | Reconocimiento de voz del teléfono; cada paso es una orden que SmartBuds ya entiende |
+| Automatización al conectar audífonos | Sí | Solo si la app está abierta | No | Bluetooth | Aviso de audífonos del sistema |
+| Automatización a una hora | Sí, con SmartBuds abierto o escuchando en segundo plano | Solo con la app abierta | No | — | Temporizador de la app. Con la app cerrada del todo no se despierta sola |
+| Enlaces smartbuds:// (Atajos, Tasker, MacroDroid, NFC) | Sí | Sí (app Atajos) | No | — | Esquema de URL propio; solo acciones que ya existen en la app |
+| Hogar inteligente (Google Home, Alexa) | **No por ahora** | **No por ahora** | — | — | Exigen registrar la app como dispositivo o «skill» en sus servicios en la nube. Los Atajos y Tasker sí pueden disparar SmartBuds |

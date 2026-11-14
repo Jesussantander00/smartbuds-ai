@@ -13,6 +13,7 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/telemetry/error_reporter.dart';
+import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../devices/detected_player_controller.dart';
 import '../music_profile/music_profile.dart';
@@ -178,6 +179,9 @@ class Assistant extends ChangeNotifier {
     }
   }
 
+  /// Tus automatizaciones y comandos personalizados (los ejecuta este asistente).
+  AutomationRunner? automations;
+
   /// Modo carro abierto (pantalla grande y simple). La interfaz lo observa.
   bool carMode = false;
 
@@ -335,6 +339,8 @@ class Assistant extends ChangeNotifier {
         await _say(on
             ? 'Modo privado: no guardo lo que escuches.'
             : 'Listo, vuelvo a aprender de lo que escuchas.');
+      case MacroIntent(:final id):
+        await automations?.runById(id);
       case CarModeIntent(:final on):
         setCarMode(on);
         await _say(on

@@ -23,6 +23,7 @@ import 'core/telemetry/error_reporter.dart';
 import 'core/ui/futuristic.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
+import 'features/automations/automation_engine.dart';
 import 'features/devices/detected_player_controller.dart';
 import 'features/music_profile/music_profile.dart';
 import 'features/music_profile/supabase_sync.dart';
@@ -109,6 +110,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   late final AndroidMediaSource? android;
   late final DetectedPlayerController controller;
   late final Assistant assistant;
+  late final AutomationEngine automations;
   VoiceEngine? voice;
 
   @override
@@ -152,6 +154,9 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       errors: widget.errors,
       weather: WeatherService(),
     );
+    // Automatizaciones y comandos personalizados: los ejecuta el mismo asistente.
+    automations = AutomationEngine(assistant: assistant, settings: widget.settings);
+    assistant.automations = automations;
     widget.profile.isBlocked = widget.settings.isBlocked;
     widget.profile.isPrivate = () => widget.settings.privateMode;
 
@@ -183,6 +188,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..voiceprint = widget.settings.voiceprint
         ..enabled = widget.settings.onlyMyVoice
         ..threshold = widget.settings.voiceThreshold;
+      v.customIntent = automations.match;
       voice = v;
       assistant.voice = v;
       // Respuestas cortas: por ajuste o porque queda poca batería.
@@ -206,7 +212,16 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
     const channel = MethodChannel('smartbuds/actions');
     channel.setMethodCallHandler((call) async {
       if (call.method != 'action') return;
-      switch (call.arguments as String?) {
+      var action = call.arguments as String?;
+      // Enlaces smartbuds://… (Atajos de iPhone, Tasker, NFC…).
+      if (action != null && action.startsWith('url:')) {
+        action = AutomationEngine.actionForLink(action.substring(4));
+      }
+      if (action != null && action.startsWith('run:')) {
+        await automations.runById(action.substring(4));
+        return;
+      }
+      switch (action) {
         case 'listen':
           if (voice?.enabled == false) await voice?.start();
         case 'next':
@@ -224,6 +239,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
 
   @override
   void dispose() {
+    automations.dispose();
     voice?.dispose();
     assistant.dispose();
     controller.dispose();

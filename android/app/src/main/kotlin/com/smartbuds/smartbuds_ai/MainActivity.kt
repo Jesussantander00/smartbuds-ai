@@ -32,6 +32,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleAction(intent: Intent?) {
+        // Enlace smartbuds://… (lo interpreta Dart, con su lista de acciones permitidas).
+        val data = intent?.data
+        if (intent != null && intent.action == Intent.ACTION_VIEW && data?.scheme == "smartbuds") {
+            intent.data = null // que no se repita al girar
+            SmartBudsApplication.instance?.actions?.dispatch("url:$data")
+            return
+        }
         val action = intent?.getStringExtra(ActionBridge.EXTRA_ACTION) ?: return
         intent.removeExtra(ActionBridge.EXTRA_ACTION) // que no se repita al girar
         SmartBudsApplication.instance?.actions?.dispatch(action)

@@ -59,6 +59,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Enlaces smartbuds://… para Atajos, Tasker, MacroDroid o etiquetas NFC. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="smartbuds" />
+            </intent-filter>
             <!-- Accesos rápidos al mantener presionado el ícono. -->
             <meta-data
                 android:name="android.app.shortcuts"

@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 20;
+const latestChangelog = 21;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 21,
+    title: 'Automatizaciones',
+    items: [
+      'Crea tus propios comandos: «vamos al gimnasio» → volumen al 80 y música para entrenar.',
+      'También al conectar tus audífonos o a una hora, con plantillas listas.',
+      'Enlaces smartbuds:// para Atajos de iPhone, Tasker o etiquetas NFC.',
+    ],
+  ),
   (
     version: 20,
     title: 'Un cerebro más justo',
