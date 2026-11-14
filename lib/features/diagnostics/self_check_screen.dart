@@ -70,6 +70,7 @@ class _SelfCheckScreenState extends State<SelfCheckScreen> {
         CheckArea.conexion => (Icons.wifi_rounded, 'Conexión'),
         CheckArea.audifonos => (Icons.headphones_rounded, 'Audífonos'),
         CheckArea.bateria => (Icons.battery_alert_rounded, 'Batería'),
+        CheckArea.musica => (Icons.psychology_rounded, 'Inteligencia musical'),
       };
 
   @override

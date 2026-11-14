@@ -576,7 +576,7 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
-    'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
+    'termina el viaje', 'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
     'bájame la energía', 'baja la energía poco a poco', 'ayúdame a relajarme',
     'estoy repitiendo mucho', 'varía un poco', 'cambia de artista', 'algo de otro artista',
     'descubre por colaboraciones', 'artistas conectados', 'colaboraciones de este artista',
@@ -614,6 +614,9 @@ class CommandParser {
     'varia', 'varia un poco', 'varia la musica', 'cambia de artista', 'algo de otro artista',
     'otro artista', 'ya me aburri de este artista',
   };
+  static const _journeyEnd = {
+    'termina el viaje', 'termina el viaje musical', 'para el viaje', 'cancela el viaje', 'sal del viaje',
+  };
   static const _journeyDown = {
     'bajame la energia', 'baja la energia poco a poco', 'baja la energia', 'ayudame a relajarme',
     'viaje para dormir', 'viaje tranquilo',
@@ -621,6 +624,7 @@ class CommandParser {
 
   /// «viaje musical», «haz un viaje musical de una hora».
   static JourneyIntent? parseJourney(String text) {
+    if (_journeyEnd.contains(text)) return const JourneyIntent('fin');
     if (_journeyDown.contains(text)) return const JourneyIntent('bajada', minutes: 30);
     final m = RegExp(r'^(haz |arma |pon |ponme |quiero )?(un )?viaje musical( de subida| de bajada)?( de (.+))?$')
         .firstMatch(text);

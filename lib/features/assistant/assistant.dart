@@ -404,6 +404,10 @@ class Assistant extends ChangeNotifier {
         await _say(arrangeQueue());
       case ConnectionsIntent(:final artist, :final current):
         await sayConnections(current ? active?.artist : artist, aroundRequested: current || artist != null);
+      case JourneyIntent(shape: 'fin'):
+        final had = journey != null;
+        cancelJourney();
+        await _say(had ? 'Listo, terminé el viaje musical.' : 'No hay ningún viaje musical en curso.');
       case JourneyIntent(:final shape, :final minutes):
         await startJourney(JourneyShape.values.firstWhere((s) => s.name == shape, orElse: () => JourneyShape.arco),
             minutes: minutes ?? 45);
@@ -474,6 +478,10 @@ class Assistant extends ChangeNotifier {
       headphones: headphoneName,
       unstableHeadphones: settings?.unstableConnection(_clock()) ?? false,
       lowBattery: lowBattery,
+      knownTracks: profile.tracks.length,
+      energyKnown: SmartQueue.describe([for (final t in profile.tracks.values) '${t.title} ${t.artist ?? ''}'], profile)
+          .where((q) => q.energy != null)
+          .length,
     ));
   }
 
@@ -655,7 +663,7 @@ class Assistant extends ChangeNotifier {
       return;
     }
     queue.add(query);
-    if (settings?.smartQueue ?? false) arrangeQueue();
+    if ((settings?.smartQueue ?? false) && journey == null) arrangeQueue();
     notifyListeners();
     await _say(queue.length == 1
         ? 'Listo, la pongo después de esta.'
@@ -667,7 +675,7 @@ class Assistant extends ChangeNotifier {
     final add = items.where((q) => q.trim().isNotEmpty && !queue.contains(q)).take(20).toList();
     if (add.isEmpty) return 0;
     queue.addAll(add);
-    if (settings?.smartQueue ?? false) arrangeQueue();
+    if ((settings?.smartQueue ?? false) && journey == null) arrangeQueue();
     notifyListeners();
     return add.length;
   }
@@ -681,7 +689,13 @@ class Assistant extends ChangeNotifier {
   /// Arma y empieza un viaje musical: la primera suena ya, las demás van a la cola.
   Future<Journey> startJourney(JourneyShape shape, {int minutes = 45}) async {
     final j = JourneyPlanner.plan(profile, shape,
-        minutes: minutes, startEnergy: _currentEnergy, random: _random, blocked: settings?.blockedArtists ?? const {});
+        minutes: minutes,
+        startEnergy: _currentEnergy,
+        random: _random,
+        blocked: settings?.blockedArtists ?? const {},
+        avoid: avoidKeys);
+    // El viaje mezcla energías: no debe enseñarle a un ambiente lo que no es.
+    profile.clearMood();
     journey = j;
     journeyIndex = 0;
     queueBeforeArrange = null;
@@ -819,7 +833,7 @@ class Assistant extends ChangeNotifier {
   late ActivityTracker activity = ActivityTracker(clock: _clock);
 
   /// Recomendaciones para [a] según lo que has escuchado haciendo eso.
-  List<ActivityPick> forActivity(Activity a, {int n = 5}) => activity.recommend(a, profile, n: n);
+  List<ActivityPick> forActivity(Activity a, {int n = 5}) => activity.recommend(a, profile, n: n, avoid: avoidKeys);
 
   /// «Estoy estudiando»: empieza la actividad, pone la música que te sirve
   /// para eso y deja algunas en la cola.
@@ -870,8 +884,23 @@ class Assistant extends ChangeNotifier {
     return SmartQueue.moodEnergy[profile.currentMood];
   }
 
+  /// Canciones que conviene no recomendar ahora: lo que se está repitiendo
+  /// demasiado y lo que suena en este momento (lo usan actividad y viajes).
+  Set<String> get avoidKeys {
+    final a = active;
+    final title = a?.title;
+    return {
+      for (final r in repeatAlerts)
+        if (r.kind == RepeatKind.song) r.key,
+      if (a != null && title != null) MusicProfile.keyFor(title, a.artist),
+    };
+  }
+
   /// Reordena lo que sigue para evitar cambios bruscos. Devuelve la explicación.
   String arrangeQueue() {
+    if (journey != null) {
+      return 'Hay un viaje musical en curso: la cola ya va ordenada por energía. Termínalo para reordenarla.';
+    }
     if (queue.length < 2) return 'La cola tiene menos de dos canciones: no hay nada que ordenar.';
     final items = SmartQueue.describe(queue, profile);
     final start = _currentEnergy;

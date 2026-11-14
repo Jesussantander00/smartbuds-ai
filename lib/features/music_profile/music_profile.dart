@@ -247,6 +247,13 @@ class MusicProfile extends ChangeNotifier {
     _moodAt = _clock();
   }
 
+  /// Deja de asociar lo que suena a un ambiente (p. ej. durante un viaje
+  /// musical, que mezcla energías: no debe ensuciar tus listas por ambiente).
+  void clearMood() {
+    currentMood = null;
+    _moodAt = null;
+  }
+
   /// Cuándo pediste el ambiente actual (para saber si sigue vigente).
   DateTime? get moodAt => _moodAt;
 

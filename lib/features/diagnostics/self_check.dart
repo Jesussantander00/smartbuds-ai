@@ -3,7 +3,7 @@
 /// Flutter) para poder probarla; los datos los junta [Assistant.selfCheck].
 library;
 
-enum CheckArea { voz, permisos, reproduccion, conexion, audifonos, bateria }
+enum CheckArea { voz, permisos, reproduccion, conexion, audifonos, bateria, musica }
 
 enum Severity { ok, warning, problem }
 
@@ -51,6 +51,8 @@ class SelfCheckInput {
     this.headphones,
     this.unstableHeadphones = false,
     this.lowBattery = false,
+    this.knownTracks,
+    this.energyKnown = 0,
   });
 
   final DateTime now;
@@ -82,6 +84,10 @@ class SelfCheckInput {
   final String? headphones;
   final bool unstableHeadphones;
   final bool lowBattery;
+
+  /// Canciones que SmartBuds conoce y de cuántas sabe la energía (null: no se revisa).
+  final int? knownTracks;
+  final int energyKnown;
 }
 
 class SelfCheck {
@@ -204,6 +210,23 @@ class SelfCheck {
           fix: 'Revisa que estén encendidos y emparejados.', action: FixAction.refreshHeadphones));
     } else {
       out.add(Finding(CheckArea.audifonos, Severity.ok, 'Audífonos conectados: ${i.headphones}'));
+    }
+
+    // ------------------------------------------------- Inteligencia musical
+    final known = i.knownTracks;
+    if (known != null) {
+      final pct = known == 0 ? 0 : (i.energyKnown * 100 / known).round();
+      if (known < 10) {
+        out.add(const Finding(CheckArea.musica, Severity.warning, 'Aún te conozco poco',
+            detail: 'Con menos de 10 canciones, las recomendaciones, viajes y actividades usan búsquedas generales.',
+            fix: 'Escucha música con SmartBuds abierto; termina las que te gusten y salta las que no.'));
+      } else if (pct < 30) {
+        out.add(Finding(CheckArea.musica, Severity.warning, 'Sé la energía de solo el $pct % de tu música',
+            detail: 'Los viajes, la cola inteligente y las actividades necesitan saber qué es tranquilo y qué es movido.',
+            fix: 'Pide ambientes («pon algo tranquilo», «estoy estudiando», «pon algo para entrenar»): lo que termines ahí, lo aprendo.'));
+      } else {
+        out.add(Finding(CheckArea.musica, Severity.ok, 'Conozco la energía del $pct % de tu música ($known canciones)'));
+      }
     }
 
     // ------------------------------------------------------------ Batería

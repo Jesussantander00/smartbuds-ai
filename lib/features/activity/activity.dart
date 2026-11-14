@@ -165,7 +165,7 @@ class ActivityTracker {
 
   /// Canciones para [a]: lo que terminaste haciendo eso, la energía que
   /// conviene y (para estudiar/trabajar) que sean conocidas.
-  List<ActivityPick> recommend(Activity a, MusicProfile profile, {int n = 5}) {
+  List<ActivityPick> recommend(Activity a, MusicProfile profile, {int n = 5, Set<String> avoid = const {}}) {
     final rule = ActivityEngine.rules[a]!;
     final stats = statsFor(a, profile.history);
     final moodOf = <String, String>{};
@@ -177,7 +177,7 @@ class ActivityTracker {
     final now = _clock();
     final picks = <ActivityPick>[];
     for (final t in profile.tracks.values) {
-      if (t.dislikes > t.likes) continue;
+      if (t.dislikes > t.likes || avoid.contains(t.key)) continue;
       final reasons = <String>[];
       var score = 0.0;
       final s = stats[t.key];
