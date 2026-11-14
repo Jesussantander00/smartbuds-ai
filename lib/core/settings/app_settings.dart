@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -269,6 +270,16 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Copia de seguridad automática en la nube (una vez al día, con cuenta).
+  bool autoBackup = true;
+  DateTime? lastBackupAt;
+
+  void markBackup(DateTime at) {
+    lastBackupAt = at;
+    _persist();
+    notifyListeners();
+  }
+
   /// Automatizaciones y comandos personalizados (JSON de cada una).
   List<Map<String, dynamic>> automations = [];
 
@@ -375,7 +386,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   }
 
   Future<void> load() async {
-    final d = await _store.load() ?? const {};
+    _apply(await _store.load() ?? const {});
+  }
+
+  void _apply(Map<String, dynamic> d) {
     onboardingDone = d['onboardingDone'] == true;
     voiceFeedback = d['voiceFeedback'] != false;
     followHeadphones = d['followHeadphones'] != false;
@@ -450,6 +464,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
       for (final e in ((d['headphoneVolumes'] as Map?) ?? const {}).entries)
         e.key as String: (e.value as num).toInt(),
     };
+    autoBackup = d['autoBackup'] != false;
+    lastBackupAt = DateTime.tryParse('${d['lastBackupAt'] ?? ''}');
     automations = [
       for (final a in (d['automations'] as List?) ?? const [])
         if (a is Map) a.cast<String, dynamic>(),
@@ -467,7 +483,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     final exp = d['authExpiresAt'] as String?;
     authExpiresAt = exp == null ? null : DateTime.tryParse(exp);
     deviceId = (d['deviceId'] as String?) ?? _newId();
-    if (d['deviceId'] == null) await _persist();
+    if (d['deviceId'] == null) unawaited(_persist());
     notifyListeners();
   }
 
@@ -493,6 +509,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? compact,
     bool? smoothTransitions,
     bool? carAutoOpen,
+    bool? autoBackup,
     bool? shareDevices,
     bool? liveArt,
     bool? realVisualizer,
@@ -508,6 +525,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
+    if (autoBackup != null) this.autoBackup = autoBackup;
     if (shareDevices != null) this.shareDevices = shareDevices;
     if (liveArt != null) this.liveArt = liveArt;
     if (realVisualizer != null) this.realVisualizer = realVisualizer;
@@ -554,7 +572,32 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
-  Future<void> _persist() => _store.save({
+  Future<void> _persist() => _store.save(toMap());
+
+  /// Ajustes que NO viajan en la copia de seguridad: sesión de la cuenta,
+  /// identidad de este teléfono, tu huella de voz y estado de la bienvenida.
+  static const _notInBackup = {
+    'authEmail', 'authUserId', 'authAccessToken', 'authRefreshToken', 'authExpiresAt',
+    'deviceId', 'deviceName', 'voiceprint', 'onlyMyVoice', 'lastUsedPlayerId', 'onboardingDone',
+    'lastBackupAt',
+  };
+
+  /// Tus preferencias para la copia de seguridad (sin datos de sesión ni de voz).
+  Map<String, dynamic> backupPreferences() =>
+      Map.of(toMap())..removeWhere((k, _) => _notInBackup.contains(k));
+
+  /// Restaura preferencias de una copia; conserva la sesión y lo propio de este teléfono.
+  Future<void> restorePreferences(Map<String, dynamic> prefs) async {
+    final merged = toMap();
+    prefs.forEach((k, v) {
+      if (!_notInBackup.contains(k)) merged[k] = v;
+    });
+    _apply(merged);
+    await _persist();
+  }
+
+  /// Todos los ajustes como mapa (para guardar y para la copia de seguridad).
+  Map<String, dynamic> toMap() => {
         'onboardingDone': onboardingDone,
         'voiceFeedback': voiceFeedback,
         'followHeadphones': followHeadphones,
@@ -602,6 +645,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'weatherSuggestions': weatherSuggestions,
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
+        'autoBackup': autoBackup,
+        'lastBackupAt': lastBackupAt?.toIso8601String(),
         'carDevices': carDevices.toList(),
         'carAutoOpen': carAutoOpen,
         'deviceName': deviceName,
@@ -613,7 +658,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'authAccessToken': authAccessToken,
         'authRefreshToken': authRefreshToken,
         'authExpiresAt': authExpiresAt?.toIso8601String(),
-      });
+      };
 
   static String _newId() {
     final r = Random.secure();

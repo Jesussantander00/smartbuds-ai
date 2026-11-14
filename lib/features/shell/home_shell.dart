@@ -8,6 +8,7 @@ import '../assistant/assistant_screen.dart';
 import '../devices/detected_player_controller.dart';
 import '../devices/detected_player_screen.dart';
 import '../devices/device_hub.dart';
+import '../backup/backup_service.dart';
 import '../car/car_mode_screen.dart';
 import '../home/home_screen.dart';
 import '../music_profile/music_profile.dart';
@@ -56,6 +57,7 @@ class _HomeShellState extends State<HomeShell> {
   SocialService? _social;
   ListenParty? _party;
   DeviceHub? _hub;
+  late final BackupService _backup;
   Route<void>? _carRoute;
 
   @override
@@ -69,8 +71,42 @@ class _HomeShellState extends State<HomeShell> {
       if (widget.settings.signedIn) _party!.resume();
       _hub = DeviceHub(url: auth.url, anonKey: auth.anonKey, auth: auth, settings: widget.settings);
     }
+    _backup = BackupService(
+      settings: widget.settings,
+      profile: widget.profile,
+      auth: auth,
+      url: auth?.url,
+      anonKey: auth?.anonKey,
+    );
     widget.assistant.addListener(_onAssistant);
     widget.controller.addListener(_onAssistant);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _backupCheck());
+  }
+
+  String get _deviceName => _hub?.myName ?? widget.settings.deviceName ?? 'Este teléfono';
+
+  /// Copia diaria y, si este teléfono está vacío y hay copia en la nube, ofrecerla.
+  Future<void> _backupCheck() async {
+    if (!widget.settings.signedIn) return;
+    if (await _backup.shouldOfferRestore()) {
+      if (!mounted) return;
+      final c = _backup.cloud!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text('Tienes una copia de ${c.device ?? 'otro teléfono'} con ${c.songs} canciones.'),
+        action: SnackBarAction(
+          label: 'Restaurar',
+          onPressed: () async {
+            final r = await _backup.restoreFromCloud();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(r == null ? (_backup.error ?? 'No se pudo restaurar.') : 'Listo: tu SmartBuds volvió.')));
+          },
+        ),
+      ));
+      return;
+    }
+    await _backup.autoBackup(device: _deviceName);
   }
 
   /// Publica lo que suena para tus otros dispositivos y abre el modo carro
@@ -107,6 +143,7 @@ class _HomeShellState extends State<HomeShell> {
     widget.assistant.removeListener(_onAssistant);
     widget.controller.removeListener(_onAssistant);
     _hub?.dispose();
+    _backup.dispose();
     _party?.dispose();
     _social?.dispose();
     super.dispose();
@@ -127,6 +164,8 @@ class _HomeShellState extends State<HomeShell> {
         assistant: widget.assistant,
         sync: widget.sync,
         auth: widget.auth,
+        backup: _backup,
+        deviceName: _deviceName,
       ),
       SocialScreen(assistant: widget.assistant, social: _social, party: _party),
       // Diagnóstico de reproductores y capacidades (sin micrófono propio).
