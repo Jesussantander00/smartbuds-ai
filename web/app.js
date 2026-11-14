@@ -664,6 +664,7 @@
    * disparen nada).
    */
   let awaitingSong = false; // después de «Busca», la siguiente frase es la canción
+  let awaitingAt = 0;
   const FOLLOW_UP = new Set(['pon una de el', 'pon una de ella', 'otra de el', 'otra de ella', 'mas de el',
     'mas de ella', 'pon otra de el', 'pon otra de ella', 'otra del mismo artista', 'una de el', 'una de ella']);
   const CORRECTIONS = new Set(['no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
@@ -677,7 +678,7 @@
 
   /** Pregunta y toma la siguiente frase como lo que quieres escuchar. */
   function askFor(question) {
-    awaitingSong = true;
+    awaitingSong = true; awaitingAt = Date.now();
     say(question);
     $('micStatus').textContent = question;
     if (!speakBack || !('speechSynthesis' in window)) setTimeout(() => startListening(true), 300);
@@ -685,8 +686,10 @@
   }
 
   function handleSpeech(said, free) {
-    const n = norm(said);
+    let n = norm(said).replace(/^(oye |hey |hola )?(jarvis|smartbuds|musica)\s+/, '');
+    said = said.replace(/^\s*(oye |hey |hola )?(jarvis|smartbuds)[,\s]+/i, '');
     if (!n) return false;
+    if (awaitingSong && Date.now() - awaitingAt > 20000) awaitingSong = false; // la pregunta caducó
     $('heard').textContent = `Oí: «${said}»`;
     if (awaitingSong) {
       awaitingSong = false;
@@ -696,7 +699,7 @@
       return true;
     }
     if (['busca', 'buscar', 'buscame', 'busca una cancion'].includes(n)) {
-      awaitingSong = true;
+      awaitingSong = true; awaitingAt = Date.now();
       say('¿Qué canción?');
       $('micStatus').textContent = '¿Qué canción? Dímela…';
       // Escucha la respuesta en cuanto termine la pregunta (o ya, si la voz está apagada).
@@ -727,7 +730,11 @@
     const prevAction = [lastAction, lastActionAt];
     lastAction = 'search';
     lastActionAt = Date.now();
-    const search = n.match(/^(busca|buscar|buscame|pon la cancion|reproduce)\s+(.+)$/);
+    if (/^(pon|ponme|algo|quiero)\b/.test(n)) {
+      const moodFirst = n.split(' ').map((w) => MOODS[w]).find(Boolean);
+      if (moodFirst) { queue = []; play({ query: moodFirst }); return true; }
+    }
+    const search = n.match(/^(busca|buscar|buscame|pon la cancion|reproduce|reproduceme|ponme|quiero escuchar|quiero oir|toca)\s+(?:la cancion |una cancion de |musica de |algo de |a )?(.+)$/);
     if (search) { play({ query: search[2] }); return true; }
     if (/^(pon|algo|quiero)\b/.test(n)) {
       const mood = n.split(' ').map((w) => MOODS[w]).find(Boolean);
@@ -780,7 +787,9 @@
           ? 'En iPhone la voz no funciona desde el ícono de inicio. Ábrela en Safari para hablarle.'
           : 'Permite el micrófono para SmartBuds (en el candado de la barra de direcciones).';
       } else if (e.error === 'no-speech' || e.error === 'aborted') {
-        // Silencio o la cortamos nosotros: no es un fallo.
+        // Silencio o la cortamos nosotros (para hablar): no es un fallo, y si
+        // Jarvis preguntó «¿Qué canción?» sigue esperando la respuesta.
+        return;
       } else {
         errorStreak++;
         $('micStatus').textContent = e.error === 'audio-capture'
