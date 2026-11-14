@@ -247,6 +247,15 @@ class MusicProfile extends ChangeNotifier {
     _moodAt = _clock();
   }
 
+  /// Cuándo pediste el ambiente actual (para saber si sigue vigente).
+  DateTime? get moodAt => _moodAt;
+
+  /// Las últimas [n] canciones que empezaron a sonar (la más reciente primero).
+  List<String> lastPlayedKeys([int n = 5]) => [
+        for (final e in history.reversed)
+          if (e.type == ListenEventType.play) e.key,
+      ].take(n).toList();
+
   bool _excluded(TrackStats t) => isBlocked?.call(t.title, t.artist) ?? false;
 
   TrackStats? _current;

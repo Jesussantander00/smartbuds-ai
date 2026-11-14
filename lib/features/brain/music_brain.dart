@@ -265,6 +265,31 @@ class MusicBrain {
   /// Preferencia de variedad aprendida de tus mejores sesiones (0 = pocos artistas, 1 = muchos).
   double get varietyPreference => ((sessionInsight()?.bestVariety ?? 5) / 10).clamp(0.0, 1.0).toDouble();
 
+  // ------------------------------------------------ Ambiente de la sesión
+
+  /// Ambiente de lo que suena, sin interrumpirte. Límite honesto: las apps de
+  /// música no comparten el ritmo ni la energía de la canción, así que sale de
+  /// lo que pediste hace poco o de tus listas por ambiente.
+  ({String mood, String reason})? ambience() {
+    final mood = profile.currentMood, at = profile.moodAt;
+    if (mood != null && at != null && now.difference(at) < const Duration(hours: 2)) {
+      return (mood: mood, reason: 'lo pediste hace ${now.difference(at).inMinutes} min');
+    }
+    final last = profile.lastPlayedKeys(5);
+    if (last.length < 3) return null;
+    String? best;
+    var bestCount = 0;
+    profile.moodTracks.forEach((m, keys) {
+      final c = last.where(keys.contains).length;
+      if (c > bestCount) {
+        best = m;
+        bestCount = c;
+      }
+    });
+    if (best == null || bestCount < 2) return null;
+    return (mood: best!, reason: '$bestCount de las últimas ${last.length} están en tu lista «$best»');
+  }
+
   // ------------------------------------------------ Radar de descubrimiento
 
   /// Artistas nuevos parecidos a tus favoritos, y con quién se parecen.

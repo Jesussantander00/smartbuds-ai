@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 23;
+const latestChangelog = 24;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 24,
+    title: 'Tu memoria musical',
+    items: [
+      'Pregunta «¿cómo han cambiado mis gustos este año?» o abre Mi música → Tu evolución.',
+      'SmartBuds nota el ambiente de lo que suena y sigue en esa línea.',
+      'Radar con artistas emergentes: separa los datos reales de las predicciones.',
+    ],
+  ),
   (
     version: 23,
     title: 'Conocimiento musical y extensiones',

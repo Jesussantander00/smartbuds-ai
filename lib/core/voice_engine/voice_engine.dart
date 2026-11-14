@@ -179,6 +179,7 @@ class VoiceEngine extends ChangeNotifier {
         CarModeIntent(:final on) => on ? 'Modo carro' : 'Salir del modo carro',
         MacroIntent(:final name) => name,
         ArtistInfoIntent(:final artist) => artist == null ? 'Sobre este artista' : 'Sobre $artist',
+        TasteEvolutionIntent() => 'Tu evolución musical',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -420,6 +421,7 @@ class VoiceEngine extends ChangeNotifier {
             CarModeIntent() ||
             MacroIntent() ||
             ArtistInfoIntent() ||
+            TasteEvolutionIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

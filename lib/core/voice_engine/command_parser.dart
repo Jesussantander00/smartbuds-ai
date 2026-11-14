@@ -181,6 +181,11 @@ class ArtistInfoIntent extends VoiceIntent {
   final String? artist;
 }
 
+/// «¿Cómo han cambiado mis gustos este año?»: tu evolución musical.
+class TasteEvolutionIntent extends VoiceIntent {
+  const TasteEvolutionIntent();
+}
+
 /// «Pon media hora de música»: una lista de tus canciones para ese tiempo.
 class DurationIntent extends VoiceIntent {
   const DurationIntent(this.minutes);
@@ -422,6 +427,16 @@ class CommandParser {
     'modo estudio': 'estudio', 'modo concentracion': 'estudio', 'modo viaje': 'viaje',
     'modo diario': 'diario', 'modo normal': 'diario',
   };
+  static const _evolution = {
+    'como han cambiado mis gustos',
+    'como han cambiado mis gustos este ano',
+    'como cambiaron mis gustos',
+    'como ha cambiado mi musica',
+    'como ha cambiado mi gusto musical',
+    'mi evolucion musical',
+    'cual es mi evolucion musical',
+  };
+
   static const _aboutCurrent = {
     'cuentame de este artista',
     'cuentame del artista',
@@ -568,6 +583,7 @@ class CommandParser {
     }
     if (_carOn.contains(text)) return const CarModeIntent(true);
     if (_carOff.contains(text)) return const CarModeIntent(false);
+    if (_evolution.contains(text)) return const TasteEvolutionIntent();
     if (_aboutCurrent.contains(text)) return const ArtistInfoIntent();
     for (final p in _aboutPrefixes) {
       if (text.startsWith(p)) {
