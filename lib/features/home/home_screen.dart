@@ -17,6 +17,7 @@ import '../../core/settings/app_settings.dart';
 import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
 import '../activity/activity.dart';
+import '../discovery/connections_screen.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
 class HomeScreen extends StatefulWidget {
@@ -1124,6 +1125,13 @@ class _ExtrasRow extends StatelessWidget {
         avatar: const Icon(Icons.trending_up_rounded, size: 18),
         label: const Text('Subir la energía'),
         onPressed: assistant.energyRamp,
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.hub_rounded, size: 18),
+        label: const Text('Descubrir por conexiones'),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ConnectionsScreen(assistant: assistant),
+        )),
       ),
       if (assistant.headphoneName != null)
         Chip(

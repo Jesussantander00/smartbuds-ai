@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../connectors/knowledge/music_knowledge.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../assistant/assistant.dart';
+import '../discovery/connections_screen.dart';
 
 /// «Sobre el artista»: resumen con su fuente, datos de Deezer, artistas
 /// parecidos y sus colaboraciones en tu música.
@@ -128,6 +129,18 @@ Future<void> showArtistInfo(BuildContext context, Assistant assistant, String ar
                   ),
                   Text('Datos de Deezer.', style: theme.textTheme.bodySmall),
                 ],
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.hub_rounded),
+                  label: Text('Artistas conectados con $artist'),
+                  onPressed: () {
+                    final nav = Navigator.of(context);
+                    nav.pop();
+                    nav.push(MaterialPageRoute<void>(
+                      builder: (_) => ConnectionsScreen(assistant: assistant, around: artist),
+                    ));
+                  },
+                ),
               ],
             );
           },

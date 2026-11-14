@@ -525,6 +525,7 @@ class VoiceEngine extends ChangeNotifier {
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
         DiagnoseIntent() => 'Autodiagnóstico',
         ArrangeQueueIntent() => 'Ordenar la cola',
+        ConnectionsIntent(:final artist) => artist == null ? 'Descubrir por conexiones' : 'Conexiones de $artist',
         ActivityIntent(:final activity) => activity == null ? 'Terminar actividad' : 'Actividad: $activity',
       };
 
@@ -904,6 +905,7 @@ class VoiceEngine extends ChangeNotifier {
             TasteEvolutionIntent() ||
             DiagnoseIntent() ||
             ArrangeQueueIntent() ||
+            ConnectionsIntent() ||
             ActivityIntent() ||
             HomeSceneIntent() ||
             NowPlayingIntent() ||
