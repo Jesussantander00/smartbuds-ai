@@ -1007,6 +1007,22 @@
   setupVoice();
   renderMic();
   renderMusic();
+  // Puerta de entrada: el navegador solo deja sonar música después de un toque
+  // en la página. Se pide UNA vez al entrar; desde ahí «busca …» suena de una.
+  setTimeout(() => {
+    const ua = navigator.userActivation;
+    if (!ua || ua.hasBeenActive) return;
+    if ($('login') && $('login').offsetParent) return; // aún sin entrar a la cuenta
+    const g = document.createElement('button');
+    g.id = 'startGate';
+    g.innerHTML = '<b>Toca para entrar</b><small>Después todo es por voz: di «busca …» y suena de una vez.</small>';
+    g.onclick = () => {
+      g.remove();
+      if (rec && continuous && !listening) { wantOn = true; startListening(); }
+      renderMic();
+    };
+    document.body.appendChild(g);
+  }, 700);
   loadDevices();
   setInterval(loadDevices, 60000);
   fetchTracks();

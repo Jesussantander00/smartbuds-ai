@@ -307,3 +307,9 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
 }
 
 .results-title { display: block; opacity: .75; margin: 4px 6px 6px; }
+
+#startGate { position: fixed; inset: 0; z-index: 9999; border: 0; display: flex; flex-direction: column; gap: 10px;
+  align-items: center; justify-content: center; text-align: center; padding: 24px; color: #fff; cursor: pointer;
+  background: rgba(10, 8, 6, .78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+#startGate b { font-size: 1.6rem; }
+#startGate small { opacity: .8; font-size: 1rem; max-width: 280px; }

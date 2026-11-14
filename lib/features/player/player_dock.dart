@@ -236,7 +236,6 @@ class _Results extends StatelessWidget {
                 color: res.hasFull ? Neon.cyan : Colors.amber),
             onTap: () => player.playResult(res),
           ),
-        if (q != null) _external(context, q),
         Padding(
           padding: const EdgeInsets.all(6),
           child: Text(
