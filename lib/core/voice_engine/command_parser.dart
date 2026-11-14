@@ -246,6 +246,84 @@ const musicApps = <String, (String, String)>{
 
 /// Convierte lo que el usuario dijo en un comando universal.
 /// Reglas locales, sin IA: así «Cambia» funciona sin internet y al instante.
+/// «Pon una de él», «otra del mismo artista»: se resuelve con la memoria de
+/// la conversación (el artista que suena o del que hablaron hace poco).
+class FollowUpArtistIntent extends VoiceIntent {
+  const FollowUpArtistIntent();
+}
+
+/// «Haz un diagnóstico», «¿qué te pasa?»: SmartBuds se revisa y lo dice.
+class DiagnoseIntent extends VoiceIntent {
+  const DiagnoseIntent();
+}
+
+/// «Ordena la cola»: cola inteligente (cambios de ambiente suaves).
+class ArrangeQueueIntent extends VoiceIntent {
+  const ArrangeQueueIntent();
+}
+
+/// «Estoy estudiando», «voy a entrenar»: música según lo que haces.
+/// [activity]: estudiar, trabajar, descansar o ejercicio; null = «terminé».
+class ActivityIntent extends VoiceIntent {
+  const ActivityIntent(this.activity);
+  final String? activity;
+}
+
+/// «Descubre por colaboraciones» / «¿con quién ha colaborado Feid?»:
+/// artistas nuevos conectados con tu música. [current]: el artista que suena.
+class ConnectionsIntent extends VoiceIntent {
+  const ConnectionsIntent([this.artist, this.current = false]);
+  final String? artist;
+  final bool current;
+}
+
+/// «¿Estoy repitiendo mucho?» (vary = false) o «varía un poco» (vary = true).
+class RepetitionIntent extends VoiceIntent {
+  const RepetitionIntent({this.vary = false});
+  final bool vary;
+}
+
+/// «Viaje musical (de una hora)», «bájame la energía»: progresión de energía.
+/// [shape]: arco, subida o bajada.
+class JourneyIntent extends VoiceIntent {
+  const JourneyIntent(this.shape, {this.minutes});
+  final String shape;
+  final int? minutes;
+}
+
+/// «Reproduce la primera / segunda…» de los resultados (índice desde 1).
+class ResultPickIntent extends VoiceIntent {
+  const ResultPickIntent(this.index);
+  final int index;
+}
+
+/// «Busca otra versión»: otra fuente u otra versión de la misma canción.
+class OtherVersionIntent extends VoiceIntent {
+  const OtherVersionIntent();
+}
+
+/// «Agrega esta canción a la cola».
+class QueueCurrentIntent extends VoiceIntent {
+  const QueueCurrentIntent();
+}
+
+/// «Pon el álbum X» / «busca el disco X».
+class AlbumIntent extends VoiceIntent {
+  const AlbumIntent(this.query);
+  final String query;
+}
+
+/// «No, la otra», «eso no era»: corrige la última acción.
+class CorrectionIntent extends VoiceIntent {
+  const CorrectionIntent();
+}
+
+/// Orden incompleta («pon», «pon algo», «quiero escuchar»): Jarvis pregunta
+/// qué artista o género quieres en lugar de quedarse sin hacer nada.
+class ClarifyIntent extends VoiceIntent {
+  const ClarifyIntent();
+}
+
 class CommandParser {
   const CommandParser();
 
@@ -362,6 +440,10 @@ class CommandParser {
     'energetica': ('con energía', 'musica con energia motivacion'),
     'motivado': ('con energía', 'musica con energia motivacion'),
     'motivada': ('con energía', 'musica con energia motivacion'),
+    'movido': ('con energía', 'musica con energia motivacion'),
+    'movida': ('con energía', 'musica con energia motivacion'),
+    'rapido': ('con energía', 'musica con energia motivacion'),
+    'suave': ('tranquila', 'musica tranquila relajante'),
     'animado': ('alegre', 'musica alegre'),
     'animada': ('alegre', 'musica alegre'),
     'contento': ('alegre', 'musica alegre'),
@@ -504,6 +586,132 @@ class CommandParser {
     'maximo': 100, 'minimo': 10, 'tope': 100,
   };
 
+  static const _followUpArtist = {
+    'pon una de el', 'pon una de ella', 'pon una de ellos', 'otra de el', 'otra de ella',
+    'pon otra de el', 'pon otra de ella', 'mas de el', 'mas de ella', 'pon mas de el',
+    'pon mas de ella', 'otra del mismo', 'otra del mismo artista', 'pon otra del mismo artista',
+    'algo de el', 'algo de ella', 'pon algo de el', 'pon algo de ella', 'otra de ese artista',
+    'pon otra de ese artista', 'una de el', 'una de ella',
+  };
+  static const _diagnose = {
+    'diagnostico', 'haz un diagnostico', 'autodiagnostico', 'revisa si todo funciona',
+    'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
+  };
+  static const _arrangeQueue = {
+    'reproduce la primera', 'pon la primera', 'pon la segunda', 'pon la tercera', 'busca otra versión',
+    'otra versión', 'agrega esta canción a la cola', 'agrega esta a la cola',
+    'termina el viaje', 'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
+    'bájame la energía', 'baja la energía poco a poco', 'ayúdame a relajarme',
+    'estoy repitiendo mucho', 'varía un poco', 'cambia de artista', 'algo de otro artista',
+    'descubre por colaboraciones', 'artistas conectados', 'colaboraciones de este artista',
+    'estoy estudiando', 'voy a estudiar', 'estoy trabajando', 'voy a trabajar',
+    'voy a descansar', 'quiero descansar', 'voy a entrenar', 'estoy entrenando', 'voy al gimnasio',
+    'terminé', 'ya terminé',
+    'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
+    'organiza lo que sigue', 'acomoda la cola',
+  };
+  static const _activities = <String, String?>{
+    'estoy estudiando': 'estudiar', 'voy a estudiar': 'estudiar', 'a estudiar': 'estudiar',
+    'hora de estudiar': 'estudiar', 'me voy a poner a estudiar': 'estudiar',
+    'estoy trabajando': 'trabajar', 'voy a trabajar': 'trabajar', 'a trabajar': 'trabajar',
+    'hora de trabajar': 'trabajar',
+    'voy a descansar': 'descansar', 'quiero descansar': 'descansar', 'estoy descansando': 'descansar',
+    'a descansar': 'descansar', 'hora de descansar': 'descansar',
+    'voy a entrenar': 'ejercicio', 'estoy entrenando': 'ejercicio', 'a entrenar': 'ejercicio',
+    'voy al gimnasio': 'ejercicio', 'voy a hacer ejercicio': 'ejercicio', 'estoy haciendo ejercicio': 'ejercicio',
+    'hora de entrenar': 'ejercicio',
+    'termine': null, 'ya termine': null, 'termine de estudiar': null, 'termine de trabajar': null,
+    'termine de entrenar': null, 'termine de descansar': null,
+  };
+  static const _connections = {
+    'descubre por colaboraciones', 'artistas conectados', 'descubre artistas conectados',
+    'descubrir por conexiones', 'descubre por conexiones', 'artistas relacionados con lo que escucho',
+  };
+  static const _connectionsCurrent = {
+    'con quien ha colaborado este artista', 'quien ha colaborado con este artista',
+    'colaboraciones de este artista', 'artistas parecidos a este',
+  };
+  static const _repetitionAsk = {
+    'estoy repitiendo mucho', 'que estoy repitiendo', 'repito mucho', 'estoy escuchando lo mismo',
+  };
+  static const _repetitionVary = {
+    'varia', 'varia un poco', 'varia la musica', 'cambia de artista', 'algo de otro artista',
+    'otro artista', 'ya me aburri de este artista',
+  };
+  static const _journeyEnd = {
+    'termina el viaje', 'termina el viaje musical', 'para el viaje', 'cancela el viaje', 'sal del viaje',
+  };
+  static const _journeyDown = {
+    'bajame la energia', 'baja la energia poco a poco', 'baja la energia', 'ayudame a relajarme',
+    'viaje para dormir', 'viaje tranquilo',
+  };
+
+  /// «viaje musical», «haz un viaje musical de una hora».
+  static JourneyIntent? parseJourney(String text) {
+    if (_journeyEnd.contains(text)) return const JourneyIntent('fin');
+    if (_journeyDown.contains(text)) return const JourneyIntent('bajada', minutes: 30);
+    final m = RegExp(r'^(haz |arma |pon |ponme |quiero )?(un )?viaje musical( de subida| de bajada)?( de (.+))?$')
+        .firstMatch(text);
+    if (m == null) return null;
+    final shape = switch (m.group(3)) {
+      ' de subida' => 'subida',
+      ' de bajada' => 'bajada',
+      _ => 'arco',
+    };
+    final what = m.group(5);
+    int? minutes;
+    if (what != null) {
+      minutes = switch (what) {
+        'una hora' => 60,
+        'media hora' => 30,
+        'hora y media' => 90,
+        'dos horas' => 120,
+        _ => () {
+            final mm = RegExp(r'^(.+?) minutos$').firstMatch(what);
+            if (mm == null) return null;
+            return int.tryParse(mm.group(1)!) ?? sleepNumbers[mm.group(1)!];
+          }(),
+      };
+      if (minutes == null) return null;
+    }
+    return JourneyIntent(shape, minutes: minutes);
+  }
+
+  static const _ordinals = {
+    'primera': 1, 'primero': 1, 'segunda': 2, 'segundo': 2, 'tercera': 3, 'tercero': 3,
+    'cuarta': 4, 'cuarto': 4, 'quinta': 5, 'quinto': 5, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5,
+  };
+  static const _otherVersion = {
+    'busca otra version', 'otra version', 'pon otra version', 'otra version de esta', 'busca otra version de esta',
+  };
+  static const _queueCurrent = {
+    'agrega esta cancion a la cola', 'agrega esta a la cola', 'anade esta cancion a la cola', 'anade esta a la cola',
+    'pon esta en la cola', 'agregala a la cola', 'guarda esta para despues',
+  };
+
+  /// «reproduce la primera (canción)», «pon la segunda», «la tercera».
+  static ResultPickIntent? parsePick(String text) {
+    final m = RegExp(r'^(reproduce |pon |ponme |toca )?(la |el )?(cancion |opcion |resultado )?(numero )?(\w+)( cancion| opcion| resultado)?$')
+        .firstMatch(text);
+    if (m == null) return null;
+    final explicit = m.group(1) != null || m.group(2) != null || m.group(3) != null || m.group(4) != null;
+    final n = _ordinals[m.group(5)];
+    if (n == null || !explicit) return null;
+    return ResultPickIntent(n);
+  }
+
+  static const _corrections = {
+    'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
+    'haz un diagnóstico', 'autodiagnóstico', 'revisa si todo funciona', 'qué te pasa',
+    'no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
+    'no esa no', 'no eso no', 'te equivocaste', 'no es esa', 'no es eso', 'no esa',
+    'no no la otra', 'esa no es',
+  };
+  static const _incomplete = {
+    'pon', 'ponme', 'pon algo', 'ponme algo', 'pon una', 'pon una de', 'pon musica',
+    'quiero escuchar', 'quiero escuchar algo', 'pon algo del', 'pon algo de la',
+    'reproduce algo', 'quiero oir algo', 'pon otra cosa',
+  };
   static const _artistPrompts = {
     'pon algo de', 'pon musica de', 'pon canciones de', 'quiero escuchar a',
   };
@@ -565,6 +773,13 @@ class CommandParser {
     'estoy relajado', 'estoy cansado', 'estoy triste', 'estoy feliz', 'estoy nostálgico',
     'me siento nostálgico', 'me siento con energía', 'estoy enamorado', 'pon algo nostálgico',
     'pon algo con energía', 'pon algo relajado',
+    'pon una de él', 'pon una de ella', 'otra de él', 'otra de ella', 'más de él', 'más de ella',
+    'pon otra de él', 'pon otra de ella', 'otra del mismo artista',
+    'no la otra', 'eso no era', 'esa no', 'no era esa', 'no era eso', 'te equivocaste',
+    // «pon» suelto no va aquí: con música de fondo dispararía preguntas por error.
+    'pon algo', 'ponme algo', 'pon una', 'pon música', 'quiero escuchar',
+    'algo más movido', 'algo más tranquilo', 'algo más alegre', 'algo más suave',
+    'pon algo más movido', 'pon algo más tranquilo',
     'apaga en cinco minutos', 'apaga en diez minutos', 'apaga en quince minutos',
     'apaga en veinte minutos', 'apaga en treinta minutos',
     'apaga en cuarenta y cinco minutos', 'apaga en sesenta minutos', 'apaga en una hora',
@@ -636,6 +851,28 @@ class CommandParser {
     if (_restart.contains(text)) return const RestartIntent();
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
+    if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    final pick = parsePick(text);
+    if (pick != null) return pick;
+    if (_otherVersion.contains(text)) return const OtherVersionIntent();
+    if (_queueCurrent.contains(text)) return const QueueCurrentIntent();
+    for (final p in const ['pon el album ', 'busca el album ', 'pon el disco ', 'busca el disco ', 'reproduce el album ']) {
+      if (text.startsWith(p) && text.length > p.length + 1) return AlbumIntent(text.substring(p.length).trim());
+    }
+    final journey = parseJourney(text);
+    if (journey != null) return journey;
+    if (_repetitionAsk.contains(text)) return const RepetitionIntent();
+    if (_repetitionVary.contains(text)) return const RepetitionIntent(vary: true);
+    if (_connections.contains(text)) return const ConnectionsIntent();
+    if (_connectionsCurrent.contains(text)) return const ConnectionsIntent(null, true);
+    for (final p in const ['con quien ha colaborado ', 'colaboraciones de ']) {
+      if (text.startsWith(p) && text.length > p.length + 1) return ConnectionsIntent(text.substring(p.length).trim());
+    }
+    if (_diagnose.contains(text)) return const DiagnoseIntent();
+    if (_arrangeQueue.contains(text)) return const ArrangeQueueIntent();
+    if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();
+    if (_corrections.contains(text)) return const CorrectionIntent();
+    if (_incomplete.contains(text)) return const ClarifyIntent();
     if (_undo.contains(text)) return const UndoIntent();
     if (_share.contains(text)) return const ShareIntent();
     if (_radioOn.contains(text)) return const RadioIntent();

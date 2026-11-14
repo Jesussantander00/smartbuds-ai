@@ -16,6 +16,10 @@ import '../../core/ui/art_color.dart';
 import '../../core/settings/app_settings.dart';
 import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
+import '../activity/activity.dart';
+import '../discovery/connections_screen.dart';
+import '../discovery/repetition.dart';
+import '../discovery/journey.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
 class HomeScreen extends StatefulWidget {
@@ -43,6 +47,18 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Buscar: con el reproductor integrado, los resultados se ven aquí mismo;
+  /// si no, se busca en tu app de música.
+  void _search() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
+    if (widget.assistant.playInApp) {
+      unawaited(widget.assistant.searchInApp(q));
+    } else {
+      unawaited(widget.controller.search(q));
+    }
+  }
+
   /// Una sección de Inicio (el orden y cuáles se ven se eligen en «Personalizar»).
   List<Widget> _section(String id) => switch (id) {
         'now' => [
@@ -51,9 +67,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 assistant: widget.assistant,
                 controller: widget.controller),
           ],
-        'foryou' => [_ForYou(assistant: widget.assistant)],
+        'foryou' => [
+            _RepeatCard(assistant: widget.assistant),
+            _ActivityCard(assistant: widget.assistant),
+            _ForYou(assistant: widget.assistant),
+          ],
         'extras' => [_ExtrasRow(assistant: widget.assistant)],
         'queue' => [
+            if (widget.assistant.journey != null) _JourneyCard(assistant: widget.assistant),
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
           ],
         'suggestion' => [
@@ -86,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _query,
                     textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => widget.controller.search(_query.text),
+                    onSubmitted: (_) => _search(),
                     decoration: const InputDecoration(
                       isDense: true,
                       labelText: 'Buscar una canción',
@@ -97,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
                   tooltip: 'Buscar',
-                  onPressed: widget.controller.busy ? null : () => widget.controller.search(_query.text),
+                  onPressed: widget.controller.busy ? null : _search,
                   icon: const Icon(Icons.search),
                 ),
               ],
@@ -786,6 +807,269 @@ class _ConnectionPill extends StatelessWidget {
 
 /// «Para ti ahora»: lo que el cerebro musical cree que quieres escuchar,
 /// con el porqué. Solo suena si lo tocas.
+/// Elegir forma y duración del viaje musical.
+Future<void> _pickJourney(BuildContext context, Assistant assistant) async {
+  var shape = JourneyShape.arco;
+  var minutes = 45;
+  final go = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final theme = Theme.of(context);
+        final curve = JourneyPlanner.curve(shape, (minutes / JourneyPlanner.songMinutes).round().clamp(4, 40),
+            start: shape == JourneyShape.bajada ? 3 : 1);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Viaje musical', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 8),
+                SegmentedButton<JourneyShape>(
+                  segments: [
+                    for (final s in JourneyShape.values)
+                      ButtonSegment(value: s, label: Text(Journey.nameOf(s))),
+                  ],
+                  selected: {shape},
+                  onSelectionChanged: (v) => setState(() => shape = v.first),
+                ),
+                const SizedBox(height: 8),
+                Text(Journey(shape, minutes, const []).description, style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 10),
+                _EnergyStrip(energies: curve),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final m in const [20, 30, 45, 60, 90])
+                      ChoiceChip(
+                        label: Text('$m min'),
+                        selected: minutes == m,
+                        onSelected: (_) => setState(() => minutes = m),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Empezar'),
+                    onPressed: () => Navigator.pop(context, true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+  if (go == true) await assistant.startJourney(shape, minutes: minutes);
+}
+
+/// Barras de energía del viaje (la actual resaltada).
+class _EnergyStrip extends StatelessWidget {
+  const _EnergyStrip({required this.energies, this.current});
+  final List<int> energies;
+  final int? current;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var i = 0; i < energies.length; i++)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                child: Container(
+                  height: 8 + energies[i] * 7.0,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(3),
+                    color: current == null
+                        ? Neon.cyan.withValues(alpha: .7)
+                        : i == current
+                            ? Neon.cyan
+                            : i < current!
+                                ? Neon.cyan.withValues(alpha: .35)
+                                : Colors.white24,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progreso del viaje musical en curso.
+class _JourneyCard extends StatelessWidget {
+  const _JourneyCard({required this.assistant});
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final j = assistant.journey!;
+    final i = assistant.journeyIndex.clamp(0, j.steps.length - 1);
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timeline_rounded, size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text('Viaje ${Journey.nameOf(j.shape).toLowerCase()} · ${i + 1} de ${j.steps.length} · '
+                      '${j.steps[i].stage}', style: theme.textTheme.titleSmall),
+                ),
+                TextButton(onPressed: assistant.cancelJourney, child: const Text('Terminar')),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _EnergyStrip(energies: [for (final s in j.steps) s.energy], current: i),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Aviso amable cuando algo se repite demasiado.
+class _RepeatCard extends StatelessWidget {
+  const _RepeatCard({required this.assistant});
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final alerts = assistant.repeatAlerts;
+    if (alerts.isEmpty) return const SizedBox.shrink();
+    final a = alerts.first;
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(a.kind == RepeatKind.song ? Icons.repeat_one_rounded : Icons.person_rounded,
+                    size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Text('Se está repitiendo', style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(a.message, style: theme.textTheme.bodyMedium),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(onPressed: () => assistant.keepRepeating(a), child: const Text('Está bien, me gusta')),
+                FilledButton.tonal(onPressed: () => assistant.varyMusic(a), child: const Text('Variar')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// «Según lo que haces»: estudiar, trabajar, descansar o ejercicio.
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.assistant});
+  final Assistant assistant;
+
+  static const _icons = {
+    Activity.estudiar: Icons.menu_book_rounded,
+    Activity.trabajar: Icons.work_rounded,
+    Activity.descansar: Icons.self_improvement_rounded,
+    Activity.ejercicio: Icons.fitness_center_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tracker = assistant.activity;
+    final current = tracker.current;
+    final routine = tracker.routineSuggestion();
+    final picks = current == null ? const <ActivityPick>[] : assistant.forActivity(current.activity, n: 3);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.directions_run_rounded, size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Según lo que haces', style: theme.textTheme.titleMedium)),
+                if (current != null)
+                  TextButton(onPressed: assistant.endActivity, child: const Text('Terminé')),
+              ],
+            ),
+            if (current != null)
+              Text(
+                '${ActivityEngine.rules[current.activity]!.label} · '
+                '${DateTime.now().difference(current.start).inMinutes} min · '
+                'música ${ActivityEngine.rules[current.activity]!.blurb}',
+                style: theme.textTheme.bodySmall,
+              )
+            else if (routine != null)
+              Text('Sueles ${ActivityEngine.rules[routine]!.label.toLowerCase()} a esta hora. ¿Empezamos?',
+                  style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final a in Activity.values)
+                  ChoiceChip(
+                    avatar: Icon(_icons[a], size: 18),
+                    label: Text(ActivityEngine.rules[a]!.label),
+                    selected: current?.activity == a || (current == null && routine == a),
+                    onSelected: (_) => assistant.startActivity(a),
+                  ),
+              ],
+            ),
+            if (current != null && picks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('Aún estoy aprendiendo qué te sirve para esto: lo que termines o saltes ahora me enseña.',
+                    style: theme.textTheme.bodySmall),
+              ),
+            for (final p in picks)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.music_note_rounded),
+                title: Text(p.query, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(p.reasons.first, maxLines: 2),
+                trailing: IconButton(
+                  tooltip: 'Poner',
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  onPressed: () => assistant.handleSearch(SearchRequest(p.query)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ForYou extends StatelessWidget {
   const _ForYou({required this.assistant});
   final Assistant assistant;
@@ -938,6 +1222,42 @@ class _QueueCard extends StatelessWidget {
                 ],
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (assistant.queue.length >= 2)
+                  ActionChip(
+                    avatar: const Icon(Icons.auto_graph_rounded, size: 18),
+                    label: const Text('Ordenar por ambiente'),
+                    onPressed: () {
+                      final msg = assistant.arrangeQueue();
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(SnackBar(
+                          content: Text(msg),
+                          action: assistant.queueBeforeArrange == null
+                              ? null
+                              : SnackBarAction(label: 'Deshacer', onPressed: assistant.undoArrange),
+                        ));
+                    },
+                  ),
+                if (assistant.settings case final st?)
+                  ListenableBuilder(
+                    listenable: st,
+                    builder: (context, _) => FilterChip(
+                      label: const Text('Automática'),
+                      tooltip: 'Ordenar sola cada vez que agregas canciones',
+                      selected: st.smartQueue,
+                      onSelected: (v) => st.update(smartQueue: v),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1003,6 +1323,18 @@ class _ExtrasRow extends StatelessWidget {
         avatar: const Icon(Icons.trending_up_rounded, size: 18),
         label: const Text('Subir la energía'),
         onPressed: assistant.energyRamp,
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.timeline_rounded, size: 18),
+        label: const Text('Viaje musical'),
+        onPressed: () => _pickJourney(context, assistant),
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.hub_rounded, size: 18),
+        label: const Text('Descubrir por conexiones'),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ConnectionsScreen(assistant: assistant),
+        )),
       ),
       if (assistant.headphoneName != null)
         Chip(

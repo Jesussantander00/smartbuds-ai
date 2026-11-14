@@ -18,6 +18,18 @@ abstract class SimilarArtistsFinder {
 
   /// Foto del artista (para las tarjetas de favoritos), o null.
   Future<String?> pictureOf(String artist) async => null;
+
+  /// Con quién ha colaborado (artistas invitados en sus canciones más
+  /// escuchadas) y en qué canción. Vacío si no se sabe.
+  Future<List<Collaboration>> collaboratorsOf(String artist) async => const [];
+}
+
+/// Una colaboración real: [with_] aparece en la canción [song] de otro artista.
+class Collaboration {
+  const Collaboration(this.name, this.song, {this.fans});
+  final String name;
+  final String song;
+  final int? fans;
 }
 
 /// Artistas parecidos con la API pública de Deezer (gratis, sin clave).
@@ -54,6 +66,32 @@ class DeezerSimilarArtists implements SimilarArtistsFinder {
       if (out.length >= max) break;
     }
     return out;
+  }
+
+  /// Colaboradores: los «contributors» de sus 25 canciones más escuchadas en Deezer.
+  @override
+  Future<List<Collaboration>> collaboratorsOf(String artist) async {
+    try {
+      final found = await _get('/search/artist?q=${Uri.encodeQueryComponent(artist)}&limit=1');
+      final first = (found['data'] as List?)?.whereType<Map>().firstOrNull;
+      final id = first?['id'];
+      if (id == null) return const [];
+      final self = '${first?['name'] ?? artist}'.toLowerCase();
+      final top = await _get('/artist/$id/top?limit=25');
+      final out = <String, Collaboration>{};
+      for (final t in ((top['data'] as List?) ?? const []).whereType<Map>()) {
+        final title = t['title'];
+        if (title is! String) continue;
+        for (final c in ((t['contributors'] as List?) ?? const []).whereType<Map>()) {
+          final name = c['name'];
+          if (name is! String || name.toLowerCase() == self) continue;
+          out.putIfAbsent(name.toLowerCase(), () => Collaboration(name, title));
+        }
+      }
+      return out.values.toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   final Map<String, String?> _pictures = {};

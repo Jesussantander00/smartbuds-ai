@@ -593,6 +593,7 @@
     estudiar: 'musica para estudiar concentracion', trabajar: 'musica para estudiar concentracion',
     romantico: 'canciones romanticas', romantica: 'canciones romanticas', triste: 'canciones tristes',
     alegre: 'musica alegre', feliz: 'musica alegre',
+    movido: 'musica con energia', movida: 'musica con energia', suave: 'musica tranquila relajante',
   };
 
   /**
@@ -602,6 +603,25 @@
    * disparen nada).
    */
   let awaitingSong = false; // después de «Busca», la siguiente frase es la canción
+  const FOLLOW_UP = new Set(['pon una de el', 'pon una de ella', 'otra de el', 'otra de ella', 'mas de el',
+    'mas de ella', 'pon otra de el', 'pon otra de ella', 'otra del mismo artista', 'una de el', 'una de ella']);
+  const CORRECTIONS = new Set(['no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
+    'no esa no', 'te equivocaste', 'no es esa', 'no es eso']);
+  const INCOMPLETE = new Set(['pon', 'ponme', 'pon algo', 'ponme algo', 'pon una', 'pon musica',
+    'quiero escuchar', 'quiero escuchar algo', 'pon algo de', 'pon una de']);
+  let lastArtist = '';
+  let lastArtistAt = 0;
+  let lastAction = '';
+  let lastActionAt = 0;
+
+  /** Pregunta y toma la siguiente frase como lo que quieres escuchar. */
+  function askFor(question) {
+    awaitingSong = true;
+    say(question);
+    $('micStatus').textContent = question;
+    if (!speakBack || !('speechSynthesis' in window)) setTimeout(() => startListening(true), 300);
+    return true;
+  }
 
   function handleSpeech(said, free) {
     const n = norm(said);
@@ -609,6 +629,8 @@
     $('heard').textContent = `Oí: «${said}»`;
     if (awaitingSong) {
       awaitingSong = false;
+      lastAction = 'search';
+      lastActionAt = Date.now();
       play({ query: said.replace(/^(la cancion|cancion)\s+/i, '') });
       return true;
     }
@@ -620,16 +642,40 @@
       if (!speakBack || !('speechSynthesis' in window)) setTimeout(() => startListening(true), 300);
       return true;
     }
-    if (COMMANDS[n]) { COMMANDS[n](); return true; }
+    // Memoria de la conversación: «pon una de él», «no, la otra», «pon…».
+    if (FOLLOW_UP.has(n)) {
+      const who = (current && current.artist) || (Date.now() - lastArtistAt < 600000 ? lastArtist : '');
+      if (who) { lastAction = 'search'; play({ query: who }); say(`Otra de ${who}.`); return true; }
+      return askFor('¿De qué artista?');
+    }
+    if (CORRECTIONS.has(n)) {
+      const recent = Date.now() - lastActionAt < 90000;
+      if (recent && lastAction === 'next') { lastAction = 'previous'; previous(); say('Perdón, vuelvo a la anterior.'); return true; }
+      if (recent && lastAction === 'previous') { lastAction = 'next'; next(true); say('Perdón, lo corrijo.'); return true; }
+      if (recent && lastAction === 'search') return askFor('Perdón. ¿Qué querías escuchar?');
+      say('No tengo nada reciente que corregir.');
+      return true;
+    }
+    if (INCOMPLETE.has(n)) return askFor('¿Qué artista o género quieres?');
+    if (COMMANDS[n]) {
+      lastAction = COMMANDS[n] === next ? 'next' : COMMANDS[n] === previous ? 'previous' : 'other';
+      lastActionAt = Date.now();
+      COMMANDS[n]();
+      return true;
+    }
+    const prevAction = [lastAction, lastActionAt];
+    lastAction = 'search';
+    lastActionAt = Date.now();
     const search = n.match(/^(busca|buscar|buscame|pon la cancion|reproduce)\s+(.+)$/);
     if (search) { play({ query: search[2] }); return true; }
     if (/^(pon|algo|quiero)\b/.test(n)) {
       const mood = n.split(' ').map((w) => MOODS[w]).find(Boolean);
       if (mood) { queue = []; play({ query: mood }); return true; }
       const artist = n.match(/^(pon algo de|pon musica de|pon canciones de|quiero escuchar a|pon)\s+(.+)$/);
-      if (artist) { play({ query: artist[2] }); return true; }
+      if (artist) { lastArtist = artist[2]; lastArtistAt = Date.now(); play({ query: artist[2] }); return true; }
     }
     if (free) { play({ query: said }); return true; }
+    [lastAction, lastActionAt] = prevAction; // no era una orden: no cambia lo que se puede corregir
     return false;
   }
 

@@ -4,13 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../storage/json_store.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
 /// Estados de Jarvis (máquina de estados de la escucha):
 /// desactivado, preparado, escuchando, procesando, ejecutando, respondiendo,
 /// recuperando (reabriendo el micrófono) y error (necesita que toques «Reintentar»).
-enum JarvisState { off, ready, listening, processing, working, responding, recovering, error }
+enum JarvisState { off, ready, listening, processing, working, responding, recovering, error, noPermission }
 
 /// Cómo responde SmartBuds en voz alta.
 enum ReplyStyle { brief, normal, conversational, technical }
@@ -26,6 +27,118 @@ class VoiceLogEntry {
 
   /// Lo que SmartBuds dijo después (si dijo algo).
   String? reply;
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toIso8601String(),
+        'heard': heard,
+        'action': action,
+        if (reply != null) 'reply': reply,
+      };
+
+  static VoiceLogEntry? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final at = DateTime.tryParse('${j['at']}');
+    if (at == null) return null;
+    return VoiceLogEntry(at, '${j['heard'] ?? ''}', '${j['action'] ?? ''}')..reply = j['reply'] as String?;
+  }
+}
+
+/// Memoria corta de la conversación: de quién se habló y qué se hizo hace poco.
+/// Permite «busca Feid» → «pon una de él» → «no, la otra». Solo en memoria.
+class ConversationMemory {
+  ConversationMemory(this._clock);
+  final DateTime Function() _clock;
+
+  /// Cuánto dura el contexto («él» deja de ser Feid tras este tiempo).
+  static const window = Duration(minutes: 10);
+
+  /// Hasta cuándo se puede corregir la última acción con «no, la otra».
+  static const correctWindow = Duration(seconds: 90);
+
+  String? _artist;
+  DateTime? _artistAt;
+  VoiceIntent? _last;
+  DateTime? _lastAt;
+
+  /// Artista del que se habló hace poco (o null).
+  String? get artist =>
+      _artistAt != null && _clock().difference(_artistAt!) < window ? _artist : null;
+
+  /// Última acción que se puede corregir (o null si pasó mucho tiempo).
+  VoiceIntent? get lastAction =>
+      _lastAt != null && _clock().difference(_lastAt!) < correctWindow ? _last : null;
+
+  void noteArtist(String? name) {
+    final n = name?.trim();
+    if (n == null || n.isEmpty) return;
+    _artist = n;
+    _artistAt = _clock();
+  }
+
+  void remember(VoiceIntent intent) {
+    switch (intent) {
+      case ArtistIntent(:final artist):
+        noteArtist(artist);
+      case ArtistInfoIntent(:final artist):
+        noteArtist(artist);
+      default:
+        break;
+    }
+    if (_correctable(intent)) {
+      _last = intent;
+      _lastAt = _clock();
+    }
+  }
+
+  void forget() {
+    _artist = null;
+    _artistAt = null;
+    _last = null;
+    _lastAt = null;
+  }
+
+  static bool _correctable(VoiceIntent i) => switch (i) {
+        CommandIntent() ||
+        SearchIntent() ||
+        ArtistIntent() ||
+        MoodIntent() ||
+        LyricsIntent() ||
+        SimilarIntent() ||
+        DiscoverIntent() ||
+        FavoriteIntent() ||
+        ForgottenIntent() ||
+        DurationIntent() ||
+        VolumeIntent() ||
+        UsageProfileIntent() =>
+          true,
+        _ => false,
+      };
+
+  /// Qué hacer ante «no, la otra»: la orden contraria (si existe) y si hay
+  /// que preguntar qué querías.
+  static ({VoiceIntent? fix, String? ask, String? say}) correctionFor(VoiceIntent? last) {
+    switch (last) {
+      case null:
+        return (fix: null, ask: null, say: 'No tengo nada reciente que corregir.');
+      case CommandIntent(:final command):
+        final inverse = switch (command) {
+          MusicCommand.next => MusicCommand.previous,
+          MusicCommand.previous => MusicCommand.next,
+          MusicCommand.volumeUp => MusicCommand.volumeDown,
+          MusicCommand.volumeDown => MusicCommand.volumeUp,
+          MusicCommand.pause => MusicCommand.play,
+          MusicCommand.play => MusicCommand.pause,
+          MusicCommand.togglePlayPause => MusicCommand.togglePlayPause,
+        };
+        return (fix: CommandIntent(inverse), ask: null, say: 'Perdón, lo corrijo.');
+      case VolumeIntent():
+        return (fix: null, ask: '¿A qué volumen lo dejo?', say: null);
+      case UsageProfileIntent():
+        return (fix: const UsageProfileIntent('diario'), ask: null, say: 'Perdón, vuelvo al modo diario.');
+      default:
+        return (fix: null, ask: 'Perdón. ¿Qué querías escuchar?', say: null);
+    }
+  }
 }
 
 /// Motor de voz: escucha continua (también con la pantalla apagada) y convierte
@@ -56,6 +169,18 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Tus comandos personalizados: se revisan antes que los de SmartBuds.
   VoiceIntent? Function(String heard)? customIntent;
+
+  /// Artista que suena ahora (para «pon una de él»).
+  String? Function()? currentArtist;
+
+  /// Modo privado: no se guarda lo que dices en el historial.
+  bool Function()? isPrivate;
+
+  /// Dónde se guarda el historial de conversación (null = solo en memoria).
+  JsonStore? historyStore;
+
+  /// Memoria corta de la conversación (contexto y correcciones).
+  late final ConversationMemory conversation = ConversationMemory(_clock);
 
   final CommandParser parser;
 
@@ -135,6 +260,59 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Voz personalizada: velocidad y tono (0,5–2,0) y estilo de respuesta.
   double speechRate = 1.0;
+
+  /// Bajar la música de otras apps solo mientras Jarvis responde (ajuste,
+  /// apagado por defecto). Escuchar nunca cambia el volumen.
+  bool duckOnReply = false;
+
+  /// Una orden de volumen de una sola palabra («sube», «baja») contraria a la
+  /// anterior dentro de este tiempo se ignora: casi siempre es conversación o
+  /// canto mal oído, y obedecerla hacía subir y bajar la música en ciclo.
+  static const volumeFlipWindow = Duration(seconds: 10);
+  MusicCommand? _lastVolume;
+  DateTime? _lastVolumeAt;
+
+  /// Órdenes de volumen ignoradas por parecer conversación (para el autodiagnóstico).
+  int ignoredVolumeFlips = 0;
+
+  bool _isVolumeFlip(VoiceIntent intent, String heard) {
+    // Otra orden en medio («sube», «cambia», «baja») indica que hablas con
+    // Jarvis a propósito: se olvida la anterior.
+    final c = intent is CommandIntent ? intent.command : null;
+    if (c != MusicCommand.volumeUp && c != MusicCommand.volumeDown) {
+      _lastVolume = null;
+      return false;
+    }
+    final now = _clock();
+    final prev = _lastVolume, at = _lastVolumeAt;
+    _lastVolume = c;
+    _lastVolumeAt = now;
+    final oneWord = !CommandParser.normalize(heard).contains(' ');
+    if (!oneWord || prev == null || prev == c || at == null) return false;
+    if (now.difference(at) > volumeFlipWindow) return false;
+    ignoredVolumeFlips++;
+    _diag('Ignoré «${describe(intent)}»: llegó justo después de la orden contraria '
+        '(parece conversación o canto). Di «${c == MusicCommand.volumeUp ? 'sube' : 'baja'} el volumen» si de verdad la quieres.');
+    return true;
+  }
+
+  /// Traduce los avisos de audio del teléfono al registro de diagnóstico.
+  void _audioEvent(Map<dynamic, dynamic> e) {
+    final what = switch (e['event']) {
+      'duck_on' => 'Bajé la música mientras Jarvis responde',
+      'duck_off' => 'La música vuelve a su volumen',
+      'duck_failed' => 'No se pudo bajar la música para responder',
+      'focus' => 'El sistema cambió el foco de audio (${e['change']})',
+      'category' => 'Sesión de audio configurada (sin atenuar la música)',
+      'active' => 'Sesión de audio activa',
+      'route' => 'Cambio de salida de audio',
+      'engine_change' => 'El motor de audio del teléfono cambió',
+      'interruption' => e['began'] == true ? 'Interrupción del sistema (llamada, Siri, alarma)' : 'Terminó la interrupción',
+      'restart_blocked' => 'Evité un ciclo de reinicios del micrófono (${e['why']})',
+      _ => 'Audio: ${e['event']}',
+    };
+    _diag(what);
+  }
   double speechPitch = 1.0;
   ReplyStyle replyStyle = ReplyStyle.normal;
   int _replies = 0;
@@ -172,8 +350,15 @@ class VoiceEngine extends ChangeNotifier {
   }
 
   /// Estado de Jarvis (para el núcleo animado y los avisos).
+  /// No hay permiso de micrófono (se pide con el mecanismo del sistema al tocar).
+  bool micDenied = false;
+
+  /// Cambió la preferencia de escucha por decisión del usuario (encender / apagar):
+  /// se recuerda para la próxima vez que abra la app.
+  void Function(bool on)? onPreferenceChanged;
+
   JarvisState get jarvisState {
-    if (!enabled) return JarvisState.off;
+    if (!enabled) return micDenied ? JarvisState.noPermission : JarvisState.off;
     if (failed) return JarvisState.error;
     if (speaking) return JarvisState.responding;
     final now = _clock();
@@ -261,11 +446,37 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Últimas órdenes entendidas (la más reciente primero).
   final List<VoiceLogEntry> history = [];
-  static const historyMax = 50;
+  static const historyMax = 100;
 
   void _log(VoiceIntent intent) {
+    if (isPrivate?.call() ?? false) return; // modo privado: no se guarda
     history.insert(0, VoiceLogEntry(_clock(), lastHeard, describe(intent)));
     if (history.length > historyMax) history.removeLast();
+    _saveHistory();
+  }
+
+  /// Carga el historial de conversación guardado en el teléfono.
+  Future<void> loadHistory() async {
+    final data = await historyStore?.load();
+    final list = (data?['entries'] as List?) ?? const [];
+    history
+      ..clear()
+      ..addAll(list.map(VoiceLogEntry.fromJson).whereType<VoiceLogEntry>().take(historyMax));
+    notifyListeners();
+  }
+
+  void _saveHistory() {
+    final store = historyStore;
+    if (store == null) return;
+    unawaited(store.save({'entries': [for (final e in history) e.toJson()]}).catchError((_) {}));
+  }
+
+  /// Borra todo el historial de conversación (y el contexto).
+  Future<void> clearHistory() async {
+    history.clear();
+    conversation.forget();
+    await historyStore?.save({'entries': <Object>[]});
+    notifyListeners();
   }
 
   /// Texto legible de una orden (para el historial).
@@ -316,6 +527,21 @@ class VoiceEngine extends ChangeNotifier {
         MacroIntent(:final name) => name,
         ArtistInfoIntent(:final artist) => artist == null ? 'Sobre este artista' : 'Sobre $artist',
         TasteEvolutionIntent() => 'Tu evolución musical',
+        FollowUpArtistIntent() => 'Otra del mismo artista',
+        CorrectionIntent() => 'Corrección',
+        ClarifyIntent() => 'Pregunta: ¿qué quieres?',
+        DiagnoseIntent() => 'Autodiagnóstico',
+        ArrangeQueueIntent() => 'Ordenar la cola',
+        ResultPickIntent(:final index) => 'Resultado $index',
+        OtherVersionIntent() => 'Otra versión',
+        QueueCurrentIntent() => 'Agregar a la cola',
+        AlbumIntent(:final query) => 'Álbum: $query',
+        JourneyIntent(:final shape, :final minutes) => shape == 'fin'
+            ? 'Terminar viaje musical'
+            : 'Viaje musical: $shape${minutes == null ? '' : ' ($minutes min)'}',
+        RepetitionIntent(:final vary) => vary ? 'Variar' : '¿Repito mucho?',
+        ConnectionsIntent(:final artist) => artist == null ? 'Descubrir por conexiones' : 'Conexiones de $artist',
+        ActivityIntent(:final activity) => activity == null ? 'Terminar actividad' : 'Actividad: $activity',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -402,6 +628,24 @@ class VoiceEngine extends ChangeNotifier {
   Future<bool> hasPermission() async =>
       await _method.invokeMethod<bool>('hasPermission') ?? false;
 
+  /// Permiso de micrófono sin lanzar errores (null si no se pudo consultar).
+  Future<bool?> micPermission() async {
+    try {
+      return await _method.invokeMethod<bool>('hasPermission');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Abre los ajustes de SmartBuds en el sistema (para dar el permiso de micrófono).
+  Future<bool> openAppSettings() async {
+    try {
+      return await _method.invokeMethod<bool>('openAppSettings') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Pide micrófono (y notificaciones en Android 13+).
   Future<bool> requestPermission() async =>
       await _method.invokeMethod<bool>('requestPermission') ?? false;
@@ -414,6 +658,7 @@ class VoiceEngine extends ChangeNotifier {
       if (await hasPermission()) {
         await start();
       } else {
+        micDenied = true;
         _diag('Sin permiso de micrófono: hay que tocar el micrófono una vez');
         notifyListeners();
       }
@@ -437,9 +682,11 @@ class VoiceEngine extends ChangeNotifier {
     }
     if (!await requestPermission()) {
       error = 'Sin permiso de micrófono, SmartBuds no puede escucharte.';
+      micDenied = true;
       notifyListeners();
       return;
     }
+    micDenied = false;
     attach();
     try {
       await _method.invokeMethod('start', {'grammar': grammar, 'grammarEnabled': !freeMode});
@@ -447,6 +694,7 @@ class VoiceEngine extends ChangeNotifier {
       error = e.code == 'PERMISSION'
           ? 'Sin permiso de micrófono, SmartBuds no puede escucharte.'
           : 'No se pudo abrir el micrófono: ${e.message ?? e.code}';
+      if (e.code == 'PERMISSION') micDenied = true;
       _diag('Error al iniciar: $error');
       notifyListeners();
       return;
@@ -458,6 +706,7 @@ class VoiceEngine extends ChangeNotifier {
     _deafSince = null;
     _diag('Escucha continua activada');
     _startWatchdog();
+    onPreferenceChanged?.call(true);
     notifyListeners();
   }
 
@@ -495,6 +744,7 @@ class VoiceEngine extends ChangeNotifier {
     _watchdog?.cancel();
     _watchdog = null;
     _diag('Escucha detenida');
+    onPreferenceChanged?.call(false);
     await _method.invokeMethod('stop');
     notifyListeners();
   }
@@ -521,10 +771,13 @@ class VoiceEngine extends ChangeNotifier {
     if (shortReplies) said = shorten(said);
     if (history.isNotEmpty &&
         _clock().difference(history.first.at) < const Duration(seconds: 20)) {
-      history.first.reply ??= said;
+      if (history.first.reply == null) {
+        history.first.reply = said;
+        _saveHistory();
+      }
     }
     try {
-      await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch});
+      await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch, 'duck': duckOnReply});
     } catch (_) {}
   }
 
@@ -553,8 +806,9 @@ class VoiceEngine extends ChangeNotifier {
         }
         if (was != listening) _diag(listening ? 'Escuchando' : (recovering ? 'Reabriendo el micrófono' : 'Micrófono cerrado'));
         if (event['stopped'] == true) {
-          // Detenido desde el botón de la notificación.
+          // Detenido desde el botón de la notificación (decisión del usuario).
           enabled = false;
+          onPreferenceChanged?.call(false);
           paused = false;
           _watchdog?.cancel();
           _watchdog = null;
@@ -567,6 +821,8 @@ class VoiceEngine extends ChangeNotifier {
         if (error != null) _diag('Error: $error');
         // Error que el teléfono no puede resolver solo (modelo, permisos, reintentos agotados).
         if (event['fatal'] == true) failed = true;
+      case 'audio':
+        _audioEvent(event);
       case 'headphones':
         _onHeadphones(event['connected'] == true);
       case 'noise':
@@ -595,6 +851,7 @@ class VoiceEngine extends ChangeNotifier {
           if (requireWakeWord && intent is! WakeIntent) continue;
           if (intent != null) {
             _handledSession = session;
+            if (_isVolumeFlip(intent, t)) break;
             _dispatch(intent);
             break;
           }
@@ -605,6 +862,7 @@ class VoiceEngine extends ChangeNotifier {
 
   void _dispatch(VoiceIntent intent, {bool log = true}) {
     if (log) _log(intent);
+    conversation.remember(intent);
     // Núcleo de Jarvis: «ejecutando» unos segundos (hasta que responda).
     _busyUntil = _clock().add(const Duration(milliseconds: 2500));
     notifyListeners(); // el núcleo se redibuja solo y vuelve a «escuchando» al pasar el tiempo
@@ -634,6 +892,18 @@ class VoiceEngine extends ChangeNotifier {
         unawaited(_askThen('¿Qué dice la letra?', (h) => LyricsIntent(h)));
       case MultiIntent(:final parts):
         unawaited(runChain(parts));
+      case FollowUpArtistIntent():
+        final who = currentArtist?.call() ?? conversation.artist;
+        if (who == null || who.trim().isEmpty) {
+          unawaited(_askForArtist());
+        } else {
+          _dispatch(ArtistIntent(who), log: false);
+        }
+      case CorrectionIntent():
+        unawaited(_correct());
+      case ClarifyIntent():
+        unawaited(_askThen('¿Qué artista o género quieres?',
+            (h) => parser.parseIntent('pon algo $h') ?? parser.parseFree(h) ?? SearchIntent(SearchRequest(h))));
       case StopListeningIntent():
         unawaited(() async {
           await speak('Dejo de escuchar. Toca el micrófono cuando quieras.', force: true);
@@ -655,6 +925,16 @@ class VoiceEngine extends ChangeNotifier {
             MacroIntent() ||
             ArtistInfoIntent() ||
             TasteEvolutionIntent() ||
+            DiagnoseIntent() ||
+            ArrangeQueueIntent() ||
+            ResultPickIntent() ||
+            OtherVersionIntent() ||
+            QueueCurrentIntent() ||
+            AlbumIntent() ||
+            JourneyIntent() ||
+            RepetitionIntent() ||
+            ConnectionsIntent() ||
+            ActivityIntent() ||
             HomeSceneIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
@@ -690,6 +970,26 @@ class VoiceEngine extends ChangeNotifier {
     done?.call(voiceprint);
   }
 
+  /// «No, la otra» / «eso no era»: deshace o corrige la última acción.
+  Future<void> _correct() async {
+    final last = conversation.lastAction;
+    final plan = ConversationMemory.correctionFor(last);
+    final say = plan.say;
+    if (say != null) await speak(say);
+    final fix = plan.fix;
+    if (fix != null) {
+      _lastCommandAt = null; // la corrección no cuenta como repetición
+      _dispatch(fix, log: false);
+    }
+    final ask = plan.ask;
+    if (ask == null) return;
+    if (last is VolumeIntent) {
+      await _askThen(ask, (h) => VolumeIntent(parser.parseVolume('volumen al $h') ?? 50));
+    } else {
+      await _askThen(ask, (h) => parser.parseFree(h) ?? SearchIntent(SearchRequest(h)));
+    }
+  }
+
   /// «Busca» → «¿Qué canción?» → escucha el nombre con el reconocedor preciso.
   Future<void> _askForSong() async {
     if (onSearch == null) return;
@@ -706,6 +1006,7 @@ class VoiceEngine extends ChangeNotifier {
     lastHeard = heard;
     final request = parser.parseSearch('busca $heard') ?? SearchRequest(heard.trim());
     lastSearch = request;
+    conversation.remember(SearchIntent(request));
     notifyListeners();
     await onSearch!(request);
   }
@@ -746,6 +1047,7 @@ class VoiceEngine extends ChangeNotifier {
     lastHeard = heard;
     final intent = build(heard.trim());
     _log(intent);
+    conversation.remember(intent);
     notifyListeners();
     await handler(intent);
   }
@@ -765,8 +1067,11 @@ class VoiceEngine extends ChangeNotifier {
       return;
     }
     lastHeard = heard;
+    final intent = ArtistIntent(heard.trim());
+    _log(intent);
+    conversation.remember(intent);
     notifyListeners();
-    await handler(ArtistIntent(heard.trim()));
+    await handler(intent);
   }
 
   void _onHeadphones(bool connected) {

@@ -20,6 +20,15 @@ import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../stats/evolution.dart';
 import '../devices/detected_player_controller.dart';
+import '../diagnostics/online_probe.dart';
+import '../diagnostics/self_check.dart';
+import 'smart_queue.dart';
+import '../activity/activity.dart';
+import '../discovery/connections.dart';
+import '../discovery/repetition.dart';
+import '../discovery/journey.dart';
+import '../player/catalog.dart';
+import '../player/smartbuds_player.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -206,6 +215,8 @@ class Assistant extends ChangeNotifier {
 
   /// Reproductor activo en este momento (o null).
   PlayerStatus? get active {
+    final p = inApp;
+    if (p != null && inAppInControl) return p.status;
     final d = controller.detection;
     return d is PlayerDetected ? d.candidate.status : null;
   }
@@ -227,21 +238,37 @@ class Assistant extends ChangeNotifier {
   /// cuando funciona, la música misma es la respuesta.
   /// Transición suave: baja el volumen, hace [action] y lo vuelve a subir.
   /// Solo Android (iOS no deja cambiar el volumen de otras apps).
+  /// Nunca dos transiciones a la vez: si una orden llega durante otra, se
+  /// hace sin bajar el volumen (antes dos fundidos se pisaban y el volumen
+  /// quedaba subiendo y bajando, o en el nivel bajo).
+  bool _smoothing = false;
+
   Future<T> _smooth<T>(Future<T> Function() action) async {
     final m = media;
-    if (!(settings?.smoothTransitions ?? false) || m == null) return action();
+    if (!(settings?.smoothTransitions ?? false) || m == null || _smoothing) return action();
     final before = await m.volumePercent();
     if (before == null || before < 10) return action();
-    await m.fadeVolume((before * .3).round(), ms: 1200);
-    await Future<void>.delayed(const Duration(milliseconds: 1300));
-    final r = await action();
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    await m.fadeVolume(before, ms: 1500);
-    return r;
+    _smoothing = true;
+    try {
+      await m.fadeVolume((before * .3).round(), ms: 1200);
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+      final r = await action();
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      return r;
+    } finally {
+      await m.fadeVolume(before, ms: 1500); // siempre vuelve al volumen que tenías
+      _smoothing = false;
+    }
   }
 
   Future<void> handleCommand(MusicCommand command) async {
     _logAction(VoiceEngine.describe(CommandIntent(command)));
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      profile.noteCommand(command);
+      await _inAppCommand(p, command);
+      return;
+    }
     if (command == MusicCommand.next) _rememberForUndo();
     profile.noteCommand(command);
     final r = command == MusicCommand.next || command == MusicCommand.previous
@@ -270,6 +297,24 @@ class Assistant extends ChangeNotifier {
   /// «Busca <canción>».
   Future<void> handleSearch(SearchRequest request) async {
     _lastSearchAt = _clock(); // la canción que llega ya se anuncia con «Reproduciendo…»
+    // Reproductor integrado: busca y suena DENTRO de SmartBuds (si una fuente lo permite).
+    // «… en Spotify» pide otra app a propósito: entonces se abre esa app.
+    final p = inApp;
+    if (p != null && playInApp && request.appPackage == null) {
+      final t = await p.playQuery(request.query);
+      _lastSearchAt = _clock();
+      if (t != null) {
+        await _say(t.isPreview
+            ? '${t.display}: dentro de SmartBuds solo hay la vista previa de 30 segundos.'
+            : 'Reproduciendo ${t.display}.');
+        return;
+      }
+      // Nunca salir de SmartBuds por cuenta propia: se informa y se ofrece el botón.
+      p.panelOpen = true;
+      await _say('No puedo reproducir «${request.query}» dentro de SmartBuds: ninguna fuente integrada la tiene. '
+          'Si quieres, en resultados puedes abrirla en tu app de música.');
+      return;
+    }
     final r = await controller.searchVoice(request);
     if (r == null) return;
     if (r.outcome == CommandOutcome.verified) {
@@ -308,7 +353,38 @@ class Assistant extends ChangeNotifier {
       case DiscoverIntent():
         await discover();
       case ArtistIntent(:final artist):
-        await handleSearch(SearchRequest(artist));
+        final p = inApp;
+        if (p != null && playInApp && inAppInControl) {
+          // «Otra del mismo artista»: una distinta a la que suena.
+          final t = await p.playQuery(artist, different: true);
+          await _say(t == null ? 'No encontré otra de $artist para reproducir aquí.' : 'Reproduciendo ${t.display}.');
+        } else {
+          await handleSearch(SearchRequest(artist));
+        }
+      case ResultPickIntent(:final index):
+        final ok = await inApp?.pick(index - 1) ?? false;
+        if (!ok) await _say('No hay resultado número $index. Primero di «busca …».');
+      case OtherVersionIntent():
+        final ok = await inApp?.otherVersion() ?? false;
+        if (!ok) {
+          final r = inApp?.currentResult;
+          if (r == null) {
+            await _say('No hay ninguna canción sonando en SmartBuds.');
+          } else {
+            final t = await inApp!.playQuery('${r.title} ${r.artist ?? ''} version', different: true);
+            await _say(t == null ? 'No encontré otra versión.' : 'Otra versión: ${t.display}.');
+          }
+        }
+      case QueueCurrentIntent():
+        final r = inApp?.currentResult ?? (inApp?.results.isNotEmpty ?? false ? inApp!.results.first : null);
+        if (r == null) {
+          await _say('No hay ninguna canción para agregar.');
+        } else {
+          final n = addToQueue(['${r.title} ${r.artist ?? ''}'.trim()]);
+          await _say(n == 0 ? 'Esa ya está en la cola.' : 'Agregué ${r.title} a la cola.');
+        }
+      case AlbumIntent(:final query):
+        await playAlbumQuery(query);
       case MoodIntent(:final mood, :final query):
         await playMood(mood, query);
       case CommandIntent(:final command):
@@ -381,9 +457,97 @@ class Assistant extends ChangeNotifier {
         for (final p in parts) {
           await handleIntent(p);
         }
-      case SearchPromptIntent() || ArtistPromptIntent() || WakeIntent() || StopListeningIntent():
+      case DiagnoseIntent():
+        await sayDiagnosis();
+      case ArrangeQueueIntent():
+        await _say(arrangeQueue());
+      case ConnectionsIntent(:final artist, :final current):
+        await sayConnections(current ? active?.artist : artist, aroundRequested: current || artist != null);
+      case JourneyIntent(shape: 'fin'):
+        final had = journey != null;
+        cancelJourney();
+        await _say(had ? 'Listo, terminé el viaje musical.' : 'No hay ningún viaje musical en curso.');
+      case JourneyIntent(:final shape, :final minutes):
+        await startJourney(JourneyShape.values.firstWhere((s) => s.name == shape, orElse: () => JourneyShape.arco),
+            minutes: minutes ?? 45);
+      case RepetitionIntent(:final vary):
+        if (vary) {
+          await varyMusic();
+        } else {
+          final a = repeatAlerts;
+          await _say(a.isEmpty ? 'No, estás variando bien.' : a.first.message);
+        }
+      case ActivityIntent(:final activity):
+        final a = ActivityEngine.byName(activity);
+        if (a == null) {
+          await endActivity();
+        } else {
+          await startActivity(a);
+        }
+      case SearchPromptIntent() ||
+            ArtistPromptIntent() ||
+            WakeIntent() ||
+            StopListeningIntent() ||
+            FollowUpArtistIntent() ||
+            CorrectionIntent() ||
+            ClarifyIntent():
         break; // lo resuelve el VoiceEngine (pregunta y escucha)
     }
+  }
+
+  // ---------------------------------------------------- Autodiagnóstico
+
+  /// Cómo saber si hay internet (reemplazable en pruebas).
+  Future<bool?> Function() onlineProbe = checkOnline;
+
+  /// Revisa voz, permisos, reproducción, conexión y audífonos.
+  Future<List<Finding>> selfCheck() async {
+    final v = voice;
+    bool? notif;
+    try {
+      final m = media;
+      notif = m == null ? null : (await m.missingPermission()) == null;
+    } catch (_) {
+      notif = null;
+    }
+    final mic = await v?.micPermission();
+    final online = await onlineProbe();
+    final d = controller.detection;
+    final player = d is PlayerDetected ? d.candidate : null;
+    final view = player == null
+        ? null
+        : controller.players.where((p) => p.status.playerId == player.status.playerId).firstOrNull;
+    return SelfCheck.run(SelfCheckInput(
+      now: _clock(),
+      voiceSupported: v != null,
+      micPermission: mic,
+      voiceEnabled: v?.enabled ?? false,
+      voiceFailed: v?.failed ?? false,
+      voiceRecovering: v?.recovering ?? false,
+      voiceError: v?.error,
+      requireWakeWord: v?.requireWakeWord ?? false,
+      onlyMyVoice: v?.guard.enabled ?? false,
+      lastRejectedVoice: v?.lastRejectedVoice ?? false,
+      ignoredVolumeFlips: v?.ignoredVolumeFlips ?? 0,
+      notificationAccess: notif,
+      playerApp: player?.status.appName,
+      controlsLimited: view != null && view.voiceCaps.level != ControlLevel.direct,
+      online: online,
+      errors: errors?.recent ?? const [],
+      headphones: headphoneName,
+      unstableHeadphones: settings?.unstableConnection(_clock()) ?? false,
+      lowBattery: lowBattery,
+      knownTracks: profile.tracks.length,
+      energyKnown: SmartQueue.describe([for (final t in profile.tracks.values) '${t.title} ${t.artist ?? ''}'], profile)
+          .where((q) => q.energy != null)
+          .length,
+    ));
+  }
+
+  /// «Haz un diagnóstico»: revisa y lo dice en voz alta.
+  Future<void> sayDiagnosis() async {
+    await _say('Reviso…');
+    await _say(SelfCheck.spokenSummary(await selfCheck()));
   }
 
   // ---------------------------------------- Parecidas y «¿por qué esta?»
@@ -439,6 +603,7 @@ class Assistant extends ChangeNotifier {
     radioSongs = 0;
     switch (name) {
       case 'estudio':
+        activity.start(Activity.estudiar);
         await _say('Modo estudio: pocas interrupciones.');
         await playMood('para concentrarme', 'musica para concentrarse estudiar instrumental');
       case 'viaje':
@@ -534,6 +699,11 @@ class Assistant extends ChangeNotifier {
   // --------------------------------------------------- Volumen exacto
 
   Future<void> setVolume(int percent) async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.setVolume(percent);
+      return;
+    }
     // Perfil de sonido: respeta el límite de volumen de estos audífonos.
     final cap = headphoneName == null ? null : settings?.volumeCaps[headphoneName];
     if (cap != null && percent > cap) {
@@ -557,6 +727,7 @@ class Assistant extends ChangeNotifier {
       return;
     }
     queue.add(query);
+    if ((settings?.smartQueue ?? false) && journey == null) arrangeQueue();
     notifyListeners();
     await _say(queue.length == 1
         ? 'Listo, la pongo después de esta.'
@@ -568,8 +739,375 @@ class Assistant extends ChangeNotifier {
     final add = items.where((q) => q.trim().isNotEmpty && !queue.contains(q)).take(20).toList();
     if (add.isEmpty) return 0;
     queue.addAll(add);
+    if ((settings?.smartQueue ?? false) && journey == null) arrangeQueue();
     notifyListeners();
     return add.length;
+  }
+
+  // ------------------------------------------------ Viajes musicales
+
+  /// Viaje en curso (o null) y en qué paso va.
+  Journey? journey;
+  int journeyIndex = 0;
+
+  /// Arma y empieza un viaje musical: la primera suena ya, las demás van a la cola.
+  Future<Journey> startJourney(JourneyShape shape, {int minutes = 45}) async {
+    final j = JourneyPlanner.plan(profile, shape,
+        minutes: minutes,
+        startEnergy: _currentEnergy,
+        random: _random,
+        blocked: settings?.blockedArtists ?? const {},
+        avoid: avoidKeys);
+    // El viaje mezcla energías: no debe enseñarle a un ambiente lo que no es.
+    profile.clearMood();
+    journey = j;
+    journeyIndex = 0;
+    queueBeforeArrange = null;
+    queue
+      ..clear()
+      ..addAll(j.steps.skip(1).map((s) => s.query));
+    notifyListeners();
+    final yours = j.fromYours;
+    await _say('Viaje musical de $minutes minutos. ${j.description}'
+        '${yours == j.steps.length ? '' : yours == 0 ? ' Aún no conozco bien tu música por energía: uso música de cada tipo.' : ' $yours de ${j.steps.length} canciones son tuyas.'}');
+    await handleSearch(SearchRequest(j.steps.first.query));
+    return j;
+  }
+
+  /// Termina el viaje y vacía su cola.
+  void cancelJourney() {
+    if (journey == null) return;
+    journey = null;
+    queue.clear();
+    notifyListeners();
+  }
+
+  // ------------------------------------------------ Repeticiones
+
+  late RepetitionDetector repetition = RepetitionDetector(clock: _clock);
+
+  /// Lo que se está repitiendo demasiado (canciones y artistas).
+  List<RepeatAlert> get repeatAlerts => repetition.scan(profile);
+
+  /// «Está bien, me gusta»: no avisar de esto por una semana.
+  void keepRepeating(RepeatAlert a) {
+    repetition.snooze(a);
+    notifyListeners();
+  }
+
+  /// Pone algo diferente a [alert] (o al artista que suena): otro artista
+  /// parecido, o una favorita que hace rato no suena.
+  Future<void> varyMusic([RepeatAlert? alert]) async {
+    final a = alert ?? repeatAlerts.firstOrNull;
+    final artist = a?.kind == RepeatKind.artist ? a!.name : (profile.tracks[a?.key]?.artist ?? active?.artist);
+    if (artist != null && artist.trim().isNotEmpty) {
+      final list = await discoverConnections(around: artist);
+      if (list.isNotEmpty) {
+        await _say('Para variar: ${list.first.name}. ${list.first.reason}.');
+        await handleSearch(SearchRequest(list.first.query));
+        return;
+      }
+    }
+    final skipKey = a?.kind == RepeatKind.song ? a!.key : null;
+    final rec = forYou(n: 8).where((r) =>
+        r.track.key != skipKey && (artist == null || (r.track.artist ?? '').toLowerCase() != artist.toLowerCase()));
+    if (rec.isNotEmpty) {
+      await _say('Para variar, una de las tuyas que no es de ${artist ?? 'lo mismo'}.');
+      await playRecommendation(rec.first);
+      return;
+    }
+    await playForgotten();
+  }
+
+  // ------------------------------------------ Descubrimiento por conexiones
+
+  List<ArtistDiscovery>? _connections;
+  DateTime? _connectionsAt;
+
+  /// Artistas nuevos conectados con tu música (colaboraciones y estilo).
+  /// [around]: solo alrededor de ese artista. Sin él, tus 4 artistas principales
+  /// (se guarda 6 horas para no gastar datos).
+  Future<List<ArtistDiscovery>> discoverConnections({String? around, bool refresh = false}) async {
+    final now = _clock();
+    if (around == null && !refresh && _connections != null && _connectionsAt != null &&
+        now.difference(_connectionsAt!) < const Duration(hours: 6)) {
+      return _connections!;
+    }
+    final Map<String, double> seeds;
+    if (around != null && around.trim().isNotEmpty) {
+      seeds = {around.trim(): 1.0};
+    } else {
+      final top = profile.topArtists(4);
+      if (top.isEmpty) return const [];
+      final maxScore = top.first.$2;
+      seeds = {for (final (a, sc) in top) a: maxScore <= 0 ? 0.5 : sc / maxScore};
+    }
+    final s = similar;
+    final collabs = <String, List<Collaboration>>{};
+    final related = <String, List<SimilarArtist>>{};
+    await Future.wait([
+      for (final seed in seeds.keys) () async {
+        if (s == null) return;
+        try {
+          collabs[seed] = await s.collaboratorsOf(seed);
+        } catch (_) {}
+        try {
+          related[seed] = await s.similarTo(seed, max: 4);
+        } catch (_) {}
+      }(),
+    ]);
+    final list = ConnectionGraph.build(
+      seeds: seeds,
+      known: {for (final t in profile.tracks.values) if ((t.artist ?? '').isNotEmpty) t.artist!.toLowerCase().trim()},
+      blocked: settings?.blockedArtists ?? const {},
+      mineCollabs: {for (final seed in seeds.keys) seed: collaborationsOf(seed)},
+      collabs: collabs,
+      similar: related,
+    );
+    if (around == null) {
+      _connections = list;
+      _connectionsAt = now;
+    }
+    return list;
+  }
+
+  /// «Descubre por colaboraciones»: presenta el mejor y lo pone.
+  Future<void> sayConnections(String? around, {bool aroundRequested = false}) async {
+    if (aroundRequested && (around == null || around.trim().isEmpty)) {
+      await _say('No hay música sonando. Dime el artista: «colaboraciones de Feid».');
+      return;
+    }
+    final list = await discoverConnections(around: around);
+    if (list.isEmpty) {
+      await _say(around == null
+          ? 'Todavía no tengo suficientes artistas tuyos o no hay internet para buscar conexiones.'
+          : 'No encontré artistas nuevos conectados con $around.');
+      return;
+    }
+    final first = list.first;
+    final more = list.skip(1).take(2).map((d) => d.name).toList();
+    await _say('Te presento a ${first.name}: ${first.reason}.'
+        '${more.isEmpty ? '' : ' También te pueden gustar ${more.join(' y ')}.'}');
+    await handleSearch(SearchRequest(first.query));
+  }
+
+  // ------------------------------------------- Según lo que haces (actividad)
+
+  /// Tus actividades y lo que te sirvió en cada una (el de la app lo pone main).
+  late ActivityTracker activity = ActivityTracker(clock: _clock);
+
+  /// Recomendaciones para [a] según lo que has escuchado haciendo eso.
+  List<ActivityPick> forActivity(Activity a, {int n = 5}) => activity.recommend(a, profile, n: n, avoid: avoidKeys);
+
+  /// «Estoy estudiando»: empieza la actividad, pone la música que te sirve
+  /// para eso y deja algunas en la cola.
+  Future<void> startActivity(Activity a) async {
+    final rule = ActivityEngine.rules[a]!;
+    activity.start(a);
+    profile.setMood(rule.mood);
+    notifyListeners();
+    final picks = forActivity(a, n: 4);
+    if (picks.isEmpty) {
+      await _say('${rule.label}: música ${rule.blurb}. Voy aprendiendo qué te sirve.');
+      await handleSearch(SearchRequest(rule.query));
+      return;
+    }
+    await _say('${rule.label}: música ${rule.blurb}. Di «terminé» cuando acabes.');
+    await handleSearch(SearchRequest(picks.first.query));
+    if (queue.isEmpty && picks.length > 1) addToQueue(picks.skip(1).map((p) => p.query));
+  }
+
+  /// «Terminé»: cierra la actividad y dice cuánto duró.
+  Future<void> endActivity() async {
+    final c = activity.current;
+    if (c == null) {
+      await _say('No tenías ninguna actividad en curso.');
+      return;
+    }
+    activity.stop();
+    notifyListeners();
+    final mins = _clock().difference(c.start).inMinutes;
+    final label = ActivityEngine.rules[c.activity]!.label.toLowerCase();
+    await _say(mins < 1 ? 'Listo, terminaste de $label.' : 'Listo: $mins minutos de $label. Lo tendré en cuenta.');
+  }
+
+  // ------------------------------------------ Reproductor integrado
+
+  /// Reproductor propio de SmartBuds (lo crea main en Android/iPhone).
+  SmartBudsPlayer? inApp;
+
+  /// El reproductor integrado manda: suena, o está en pausa y ninguna otra app suena.
+  bool get inAppInControl {
+    final p = inApp;
+    if (p == null || !p.isActive) return false;
+    if (p.isPlaying) return true;
+    final d = controller.detection;
+    final ext = d is PlayerDetected ? d.candidate.status : null;
+    return !(ext?.isPlaying ?? false);
+  }
+
+  /// Reproducir dentro de SmartBuds (ajuste; activado por defecto).
+  bool get playInApp => inApp != null && (settings?.playInApp ?? true);
+
+  /// Órdenes de voz para el reproductor integrado: la cola de SmartBuds va
+  /// primero; el volumen es el del reproductor (no cambia el del teléfono).
+  Future<void> _inAppCommand(SmartBudsPlayer p, MusicCommand command) async {
+    switch (command) {
+      case MusicCommand.next:
+        await inAppNext();
+      case MusicCommand.previous:
+        await p.previous();
+      case MusicCommand.pause:
+        await p.pause();
+      case MusicCommand.play:
+        await p.resume();
+      case MusicCommand.togglePlayPause:
+        await p.toggle();
+      case MusicCommand.volumeUp:
+        await p.setVolume(p.volume + 15);
+      case MusicCommand.volumeDown:
+        await p.setVolume(p.volume - 15);
+    }
+  }
+
+  /// «Siguiente» en el reproductor integrado: la cola, si no el siguiente resultado.
+  Future<void> inAppNext() async {
+    if (queue.isNotEmpty) {
+      await _playNextQueued();
+      return;
+    }
+    final ok = await inApp?.nextResult() ?? false;
+    if (!ok) await _say('No hay más resultados. Di «busca …» o «pon algo nuevo».');
+  }
+
+  /// «Pon el álbum X»: busca el álbum y lo pone (la primera ya, el resto en la cola).
+  Future<void> playAlbumQuery(String query) async {
+    final p = inApp;
+    if (p == null) {
+      await handleSearch(SearchRequest(query));
+      return;
+    }
+    final albums = await p.catalog.albums(query);
+    if (albums.isEmpty) {
+      await _say('No encontré el álbum $query.');
+      return;
+    }
+    await playAlbum(albums.first);
+  }
+
+  Future<void> playAlbum(AlbumHit album) async {
+    final p = inApp;
+    if (p == null) return;
+    final tracks = await p.catalog.albumTracks(album);
+    if (tracks.isEmpty) {
+      // Sin lista de canciones (p. ej. de Apple): se busca el álbum como texto.
+      await handleSearch(SearchRequest('${album.title} ${album.artist ?? ''}'.trim()));
+      return;
+    }
+    journey = null;
+    queue
+      ..clear()
+      ..addAll(tracks.skip(1).map((t) => '${t.title} ${t.artist ?? album.artist ?? ''}'.trim()));
+    notifyListeners();
+    await _say('Álbum ${album.title}${album.artist == null ? '' : ' de ${album.artist}'}: ${tracks.length} canciones.');
+    // Cada canción se resuelve al sonar: completa si alguna fuente la tiene.
+    await handleSearch(SearchRequest('${tracks.first.title} ${tracks.first.artist ?? album.artist ?? ''}'.trim()));
+  }
+
+  /// Abrir en la app de música SOLO por pedido explícito del usuario (botón).
+  Future<void> openExternally(String query) async {
+    final r = await controller.searchVoice(SearchRequest(query));
+    if (r?.outcome == CommandOutcome.failed) await _say('No pude abrirla en tu app de música.');
+  }
+
+  /// Buscar desde la pantalla: muestra los resultados dentro de SmartBuds.
+  Future<void> searchInApp(String query) async {
+    final p = inApp;
+    if (p == null) return;
+    p.panelOpen = true;
+    await p.search(query);
+  }
+
+  // ---------------------------------------------------- Cola inteligente
+
+  /// Orden de la cola antes de ordenarla (para «Deshacer»).
+  List<String>? queueBeforeArrange;
+
+  /// Energía de lo que suena ahora (por su ambiente), o null.
+  int? get _currentEnergy {
+    final a = active;
+    final title = a?.title;
+    if (title == null) return null;
+    final key = MusicProfile.keyFor(title, a!.artist);
+    for (final e in profile.moodTracks.entries) {
+      if (e.value.contains(key)) return SmartQueue.moodEnergy[e.key];
+    }
+    return SmartQueue.moodEnergy[profile.currentMood];
+  }
+
+  /// Canciones que conviene no recomendar ahora: lo que se está repitiendo
+  /// demasiado y lo que suena en este momento (lo usan actividad y viajes).
+  Set<String> get avoidKeys {
+    final a = active;
+    final title = a?.title;
+    return {
+      for (final r in repeatAlerts)
+        if (r.kind == RepeatKind.song) r.key,
+      if (a != null && title != null) MusicProfile.keyFor(title, a.artist),
+    };
+  }
+
+  /// Reordena lo que sigue para evitar cambios bruscos. Devuelve la explicación.
+  String arrangeQueue() {
+    if (journey != null) {
+      return 'Hay un viaje musical en curso: la cola ya va ordenada por energía. Termínalo para reordenarla.';
+    }
+    if (queue.length < 2) return 'La cola tiene menos de dos canciones: no hay nada que ordenar.';
+    final items = SmartQueue.describe(queue, profile);
+    final start = _currentEnergy;
+    final known = SmartQueue.known(items);
+    if (known == 0) {
+      return 'Aún no sé el ambiente de estas canciones, así que dejé el orden como está '
+          '(solo evito el mismo artista seguido cuando lo sé).';
+    }
+    final arranged = SmartQueue.arrange(items, startEnergy: start);
+    final order = arranged.map((i) => i.query).toList();
+    final before = SmartQueue.abruptJumps(items, startEnergy: start);
+    final after = SmartQueue.abruptJumps(arranged, startEnergy: start);
+    if (_sameList(order, queue)) {
+      return 'La cola ya fluye bien; no la cambié.';
+    }
+    queueBeforeArrange = [...queue];
+    queue
+      ..clear()
+      ..addAll(order);
+    notifyListeners();
+    final jumps = before > after
+        ? 'Quité ${before - after} cambio${before - after == 1 ? '' : 's'} brusco${before - after == 1 ? '' : 's'}.'
+        : 'Ahora el ambiente cambia poco a poco.';
+    final unknown = queue.length - known;
+    return 'Ordené ${queue.length} canciones. $jumps'
+        '${unknown > 0 ? ' De $unknown no sé el ambiente y las dejé cerca de donde estaban.' : ''}';
+  }
+
+  /// Vuelve al orden que tenía la cola antes de ordenarla.
+  bool undoArrange() {
+    final b = queueBeforeArrange;
+    if (b == null) return false;
+    queue
+      ..clear()
+      ..addAll(b.where((q) => q.trim().isNotEmpty));
+    queueBeforeArrange = null;
+    notifyListeners();
+    return true;
+  }
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void removeFromQueue(int index) {
@@ -587,6 +1125,14 @@ class Assistant extends ChangeNotifier {
   Future<bool> _playNextQueued() async {
     if (queue.isEmpty) return false;
     final q = queue.removeAt(0);
+    final j = journey;
+    if (j != null) {
+      if (journeyIndex < j.steps.length - 1 && j.steps[journeyIndex + 1].query == q) {
+        journeyIndex++;
+      } else {
+        journey = null; // la cola cambió: el viaje terminó
+      }
+    }
     notifyListeners();
     await _smooth(() => handleSearch(SearchRequest(q)));
     return true;
@@ -616,6 +1162,9 @@ class Assistant extends ChangeNotifier {
   /// «Pon algo para entrenar»: tu lista automática si ya existe, si no, búsqueda.
   Future<void> playMood(String mood, String query) async {
     profile.setMood(mood);
+    // «Pon algo para entrenar» también cuenta como actividad (para aprender).
+    final act = ActivityEngine.fromMood(mood);
+    if (act != null) activity.start(act);
     if (mood == 'nostálgica') {
       // Nostalgia de verdad: tus favoritas que hace tiempo no suenan.
       final old = forYou(n: 10).where((r) => r.kind == RecKind.rediscover).toList();
@@ -688,6 +1237,11 @@ class Assistant extends ChangeNotifier {
   // ------------------------------------------------ Repetir y adelantar
 
   Future<void> restart() async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.seek(0);
+      return;
+    }
     final a = active;
     if (a == null) {
       await _say('No hay música sonando.');
@@ -702,6 +1256,11 @@ class Assistant extends ChangeNotifier {
   }
 
   Future<void> seekBy(int seconds) async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.seek((p.positionMs + seconds * 1000).clamp(0, p.durationMs ?? 1 << 30));
+      return;
+    }
     final a = active;
     if (a == null) {
       await _say('No hay música sonando.');
@@ -769,6 +1328,11 @@ class Assistant extends ChangeNotifier {
 
   /// «Deshacer»: vuelve a la canción de antes y al punto donde iba.
   Future<void> undo() async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.previous();
+      return;
+    }
     final u = _undo;
     if (u == null || !canUndo) {
       await _say('No hay nada que deshacer.');
@@ -853,7 +1417,8 @@ class Assistant extends ChangeNotifier {
       final changed = _lastKey != null;
       _lastKey = key;
       if (settings?.isBlocked(status!.title, status.artist) ?? false) {
-        unawaited(controller.sendVoice(MusicCommand.next)); // bloqueada: se salta sola
+        // Bloqueada: se salta sola (en SmartBuds o en la app de música).
+        unawaited(inAppInControl ? inAppNext() : controller.sendVoice(MusicCommand.next));
         _wasPlaying = playing;
         return;
       }

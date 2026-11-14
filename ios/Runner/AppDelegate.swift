@@ -40,6 +40,7 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
 
   private let media: AppleMusicBridge
   private let voice: VoiceBridge
+  private let audioPlayer: InAppAudioPlayer
   private let actions: FlutterMethodChannel
 
   static func register(with registrar: FlutterPluginRegistrar) {
@@ -66,6 +67,7 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
   private init(messenger: FlutterBinaryMessenger) {
     media = AppleMusicBridge(messenger: messenger)
     voice = VoiceBridge(messenger: messenger)
+    audioPlayer = InAppAudioPlayer(messenger: messenger)
     // Accesos rápidos (en Android). En iPhone solo se contesta «listo».
     actions = FlutterMethodChannel(name: "smartbuds/actions", binaryMessenger: messenger)
     super.init()
@@ -407,7 +409,7 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     events.setStreamHandler(self)
     let center = NotificationCenter.default
     center.addObserver(
-      self, selector: #selector(routeChanged),
+      self, selector: #selector(routeChanged(_:)),
       name: AVAudioSession.routeChangeNotification, object: nil)
     center.addObserver(
       self, selector: #selector(interrupted(_:)),
@@ -423,7 +425,10 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
   }
 
   @objc private func engineChanged() {
-    if wanted && !paused && !speaking { restart(after: 0.3, recovering: true) }
+    emit("audio", ["event": "engine_change", "running": audioEngine.isRunning])
+    // Solo si el motor realmente se detuvo (un cambio de configuración no siempre lo detiene).
+    guard wanted, !paused, !speaking, !audioEngine.isRunning, allowAutoRestart("engine") else { return }
+    restart(after: 0.3, recovering: true)
   }
 
   @objc private func becameActive() { ensure() }
@@ -445,6 +450,14 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       result(recognizer?.isAvailable ?? false)
     case "hasPermission":
       result(hasPermission())
+    case "openAppSettings":
+      // Ajustes de SmartBuds en el sistema (permiso de micrófono y voz).
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        DispatchQueue.main.async { UIApplication.shared.open(url) }
+        result(true)
+      } else {
+        result(false)
+      }
     case "requestPermission":
       SFSpeechRecognizer.requestAuthorization { status in
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
@@ -470,6 +483,7 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       emit("state", ["listening": wanted && !paused, "paused": paused])
       result(true)
     case "speak":
+      duckOnReply = args["duck"] as? Bool ?? false
       speak(
         args["text"] as? String ?? "",
         rate: (args["rate"] as? NSNumber)?.floatValue ?? 1,
@@ -512,12 +526,7 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       return
     }
     do {
-      let audio = AVAudioSession.sharedInstance()
-      // Mezclar con otras apps: la música de Apple Music sigue sonando.
-      try audio.setCategory(
-        .playAndRecord, mode: .default,
-        options: [.mixWithOthers, .allowBluetoothA2DP, .defaultToSpeaker])
-      try audio.setActive(true, options: .notifyOthersOnDeactivation)
+      try configureSession()
 
       let req = SFSpeechAudioBufferRecognitionRequest()
       req.shouldReportPartialResults = true
@@ -572,6 +581,73 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     }
     let delay = benign ? 0.3 : min(0.6 * pow(2.0, Double(max(errorStreak - 1, 0))), 10)
     restart(after: delay, recovering: !benign)
+  }
+
+  // MARK: Sesión de audio (volumen estable)
+
+  /// Opciones para ESCUCHAR: mezclar con la música de otras apps y nunca
+  /// atenuarla (sin .duckOthers). Antes se volvía a fijar la categoría y a
+  /// activar la sesión en CADA frase; eso disparaba un cambio de ruta, el
+  /// cambio de ruta reiniciaba la escucha, y así en bucle: la música subía y
+  /// bajaba mientras hablabas o cantabas. Ahora se configura una sola vez.
+  private let listenOptions: AVAudioSession.CategoryOptions = [.mixWithOthers, .allowBluetoothA2DP, .defaultToSpeaker]
+  private var sessionActive = false
+  /// Atenuar la música solo mientras Jarvis responde (ajuste; apagado por defecto).
+  private var duckOnReply = false
+  private var ducking = false
+  private var autoRestarts: [Date] = []
+
+  private func configureSession() throws {
+    let audio = AVAudioSession.sharedInstance()
+    if audio.category != .playAndRecord || audio.mode != .default || audio.categoryOptions != listenOptions {
+      try audio.setCategory(.playAndRecord, mode: .default, options: listenOptions)
+      emit("audio", ["event": "category", "duck": false])
+    }
+    if !sessionActive {
+      try audio.setActive(true)
+      sessionActive = true
+      emit("audio", ["event": "active"])
+    }
+  }
+
+  /// Atenúa la música de otras apps mientras Jarvis habla (solo con el ajuste).
+  private func beginReplyDuck() {
+    guard duckOnReply, !ducking else { return }
+    let audio = AVAudioSession.sharedInstance()
+    do {
+      try audio.setCategory(.playAndRecord, mode: .default, options: listenOptions.union(.duckOthers))
+      try audio.setActive(true)
+      sessionActive = true
+      ducking = true
+      emit("audio", ["event": "duck_on"])
+    } catch {
+      emit("audio", ["event": "duck_failed"])
+    }
+  }
+
+  /// Quita la atenuación: iOS solo devuelve el volumen a las otras apps al
+  /// desactivar la sesión, así que se desactiva una vez y se vuelve a escuchar.
+  private func endReplyDuck() {
+    guard ducking else { return }
+    ducking = false
+    let audio = AVAudioSession.sharedInstance()
+    try? audio.setActive(false, options: .notifyOthersOnDeactivation)
+    sessionActive = false
+    try? audio.setCategory(.playAndRecord, mode: .default, options: listenOptions)
+    emit("audio", ["event": "duck_off"])
+  }
+
+  /// Freno: si el sistema pide reiniciar la escucha más de 4 veces en 15 s
+  /// (cambios de ruta o del motor de audio en cadena), se ignora para no
+  /// entrar en un ciclo. El vigilante de Dart la reabre si queda caída.
+  private func allowAutoRestart(_ why: String) -> Bool {
+    let now = Date()
+    autoRestarts = autoRestarts.filter { now.timeIntervalSince($0) < 15 } + [now]
+    if autoRestarts.count > 4 {
+      emit("audio", ["event": "restart_blocked", "why": why])
+      return false
+    }
+    return true
   }
 
   private func stopListening() {
@@ -647,18 +723,21 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     u.voice = AVSpeechSynthesisVoice(language: "es-CO") ?? AVSpeechSynthesisVoice(language: "es-ES")
     speaking = true
     stopListening() // que SmartBuds no se escuche a sí mismo
+    beginReplyDuck()
     emit("speaking", ["on": true])
     synth.speak(u)
   }
 
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
     speaking = false
+    endReplyDuck()
     emit("speaking", ["on": false])
     restart(after: 0.3)
   }
 
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
     speaking = false
+    endReplyDuck()
     emit("speaking", ["on": false])
     restart(after: 0.3)
   }
@@ -672,17 +751,29 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     return AVAudioSession.sharedInstance().currentRoute.outputs.contains { kinds.contains($0.portType) }
   }
 
-  @objc private func routeChanged() {
+  @objc private func routeChanged(_ note: Notification) {
+    let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+    let reason = AVAudioSession.RouteChangeReason(rawValue: raw) ?? .unknown
     emit("headphones", ["connected": headphonesConnected()])
-    // El cambio de ruta reinicia el audio: se reabre la escucha (si debe estar activa).
-    if wanted && !paused && !speaking { restart(after: 0.4, recovering: true) }
+    emit("audio", ["event": "route", "reason": raw])
+    // Solo reabrir la escucha si cambió el aparato (audífonos conectados o
+    // quitados). Un cambio de categoría (.categoryChange) lo provoca la propia
+    // sesión: reiniciar ahí era el bucle que hacía subir y bajar la música.
+    guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
+    if wanted && !paused && !speaking && allowAutoRestart("route") { restart(after: 0.4, recovering: true) }
   }
 
   @objc private func interrupted(_ note: Notification) {
     guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
       let type = AVAudioSession.InterruptionType(rawValue: raw)
     else { return }
-    if type == .began { stopListening() } else { restart(after: 0.5) } // p. ej. una llamada
+    emit("audio", ["event": "interruption", "began": type == .began])
+    if type == .began {
+      sessionActive = false // el sistema desactivó la sesión (llamada, Siri, alarma)
+      stopListening()
+    } else {
+      restart(after: 0.5)
+    }
   }
 
   // MARK: Eventos hacia Dart
@@ -699,6 +790,123 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
   {
     sink = events
     emit("headphones", ["connected": headphonesConnected()])
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    sink = nil
+    return nil
+  }
+}
+
+
+// MARK: - Reproductor integrado (audio por dirección)
+
+/// Reproductor propio de SmartBuds en iPhone: canciones completas de Audius y
+/// vistas previas de Deezer, dentro de la app (AVPlayer). Usa la misma sesión
+/// de audio que la escucha de Jarvis (playAndRecord, mezclable), así que no
+/// la reconfigura ni corta el micrófono.
+final class InAppAudioPlayer: NSObject, FlutterStreamHandler {
+  private let channel: FlutterMethodChannel
+  private let events: FlutterEventChannel
+  private var sink: FlutterEventSink?
+  private var player: AVPlayer?
+  private var timeObserver: Any?
+  private var endObserver: NSObjectProtocol?
+  private var state = "stopped"
+  private var volume: Float = 1
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "smartbuds/player", binaryMessenger: messenger)
+    events = FlutterEventChannel(name: "smartbuds/player/events", binaryMessenger: messenger)
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result) }
+    events.setStreamHandler(self)
+  }
+
+  private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let args = call.arguments as? [String: Any] ?? [:]
+    switch call.method {
+    case "play":
+      guard let s = args["url"] as? String, let url = URL(string: s), url.scheme == "https" else {
+        result(FlutterError(code: "ARG", message: "url", details: nil))
+        return
+      }
+      play(url)
+      result(true)
+    case "pause":
+      player?.pause()
+      setState("paused")
+      result(true)
+    case "resume":
+      player?.play()
+      setState("playing")
+      result(true)
+    case "stop":
+      release()
+      setState("stopped")
+      result(true)
+    case "seek":
+      let ms = (args["positionMs"] as? NSNumber)?.doubleValue ?? 0
+      player?.seek(to: CMTime(seconds: ms / 1000, preferredTimescale: 600))
+      result(true)
+    case "setVolume":
+      volume = Float(((args["percent"] as? NSNumber)?.doubleValue ?? 100) / 100)
+      player?.volume = volume
+      result(true)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func play(_ url: URL) {
+    release()
+    let item = AVPlayerItem(url: url)
+    let p = AVPlayer(playerItem: item)
+    p.volume = volume
+    player = p
+    setState("buffering")
+    timeObserver = p.addPeriodicTimeObserver(
+      forInterval: CMTime(seconds: 1, preferredTimescale: 600), queue: .main
+    ) { [weak self] _ in
+      guard let self = self, let p = self.player else { return }
+      if p.timeControlStatus == .playing && self.state != "playing" { self.state = "playing" }
+      self.emit()
+    }
+    endObserver = NotificationCenter.default.addObserver(
+      forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+    ) { [weak self] _ in
+      self?.setState("completed")
+    }
+    p.play()
+  }
+
+  private func release() {
+    if let t = timeObserver { player?.removeTimeObserver(t) }
+    timeObserver = nil
+    if let e = endObserver { NotificationCenter.default.removeObserver(e) }
+    endObserver = nil
+    player?.pause()
+    player = nil
+  }
+
+  private func setState(_ s: String) {
+    state = s
+    emit()
+  }
+
+  private func emit() {
+    var payload: [String: Any] = ["type": "state", "state": state]
+    if let p = player {
+      let pos = p.currentTime().seconds
+      if pos.isFinite { payload["positionMs"] = Int(pos * 1000) }
+      if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 { payload["durationMs"] = Int(d * 1000) }
+    }
+    DispatchQueue.main.async { [weak self] in self?.sink?(payload) }
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    sink = events
     return nil
   }
 

@@ -9,6 +9,7 @@ import 'changelog.dart';
 import '../control/control_center_screen.dart';
 import '../modules/extensions_screen.dart';
 import '../modules/modules.dart';
+import '../diagnostics/self_check_screen.dart';
 
 /// Privacidad y ayuda: tus datos, permisos, diagnóstico, funciones de prueba,
 /// compatibilidad y novedades, en una sola pantalla.
@@ -131,7 +132,7 @@ class PrivacyScreen extends StatelessWidget {
                         context: context,
                         builder: (c) => AlertDialog(
                           title: const Text('¿Borrar todo?'),
-                          content: const Text('Se borran tus gustos, historial y mezclas de este teléfono. '
+                          content: const Text('Se borran tus gustos, historial, conversaciones con Jarvis y mezclas de este teléfono. '
                               'No se puede deshacer.'),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
@@ -139,7 +140,12 @@ class PrivacyScreen extends StatelessWidget {
                           ],
                         ),
                       );
-                      if (ok == true) await profile.clear();
+                      if (ok == true) {
+                        await profile.clear();
+                        await voice?.clearHistory();
+                        assistant.activity.clear();
+                        assistant.repetition.clear();
+                      }
                     },
                   ),
                 ],
@@ -198,6 +204,15 @@ class PrivacyScreen extends StatelessWidget {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.monitor_heart_rounded),
+                    title: const Text('Autodiagnóstico'),
+                    subtitle: const Text('Voz, permisos, reproducción, conexión y audífonos: qué pasó y cómo arreglarlo. '
+                        'También puedes decir «haz un diagnóstico».'),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => SelfCheckScreen(assistant: assistant, onOpenPermissions: onOpenPermissions),
+                    )),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.healing_rounded),
                     title: const Text('Revisar todo'),

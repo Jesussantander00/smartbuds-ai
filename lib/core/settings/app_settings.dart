@@ -61,6 +61,27 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// más canciones nuevas a medida que sigue sonando.
   bool gradualDiscovery = true;
 
+  /// Cola inteligente automática: ordena lo que sigue al agregar canciones.
+  bool smartQueue = false;
+
+  /// Bajar la música solo mientras Jarvis responde (escuchar nunca la baja).
+  bool duckOnReply = false;
+
+  /// Reproducir la música dentro de SmartBuds (si una fuente lo permite).
+  bool playInApp = true;
+
+  /// Prioridad de fuentes del reproductor integrado (las completas van antes).
+  List<String> sourceOrder = const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'];
+
+  void setSourceOrder(List<String> order) {
+    sourceOrder = [...order];
+    _persist();
+    notifyListeners();
+  }
+
+  /// Jarvis empieza a escuchar al abrir la app (se apaga si tú lo apagas).
+  bool listenOnStart = true;
+
   /// Pausar la música al desconectar los audífonos.
   bool pauseOnUnplug = true;
 
@@ -513,6 +534,14 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
     gradualDiscovery = d['gradualDiscovery'] != false;
+    smartQueue = d['smartQueue'] == true;
+    duckOnReply = d['duckOnReply'] == true;
+    playInApp = d['playInApp'] != false;
+    final so = (d['sourceOrder'] as List?)?.whereType<String>().toList();
+    if (so != null && so.isNotEmpty) {
+      sourceOrder = [...so, ...const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'].where((x) => !so.contains(x))];
+    }
+    listenOnStart = d['listenOnStart'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
     smoothTransitions = d['smoothTransitions'] == true;
     volumeCaps = {
@@ -636,6 +665,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     int? seedColor,
     bool? shortReplies,
     bool? gradualDiscovery,
+    bool? smartQueue,
+    bool? duckOnReply,
+    bool? playInApp,
+    bool? listenOnStart,
     bool? compact,
     bool? smoothTransitions,
     bool? carAutoOpen,
@@ -658,6 +691,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   }) {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
+    if (smartQueue != null) this.smartQueue = smartQueue;
+    if (duckOnReply != null) this.duckOnReply = duckOnReply;
+    if (playInApp != null) this.playInApp = playInApp;
+    if (listenOnStart != null) this.listenOnStart = listenOnStart;
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
@@ -760,6 +797,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'designVersion': 4,
         'shortReplies': shortReplies,
         'gradualDiscovery': gradualDiscovery,
+        'smartQueue': smartQueue,
+        'duckOnReply': duckOnReply,
+        'playInApp': playInApp,
+        'sourceOrder': sourceOrder,
+        'listenOnStart': listenOnStart,
         'lastHeadphone': lastHeadphone,
         'smoothTransitions': smoothTransitions,
         'volumeCaps': volumeCaps,

@@ -21,6 +21,7 @@ class JarvisCore extends StatefulWidget {
         JarvisState.responding => 'Respondiendo',
         JarvisState.recovering => 'Recuperando',
         JarvisState.error => 'Error',
+        JarvisState.noPermission => 'Micrófono sin permiso',
       };
 
   static Color color(JarvisState s) => switch (s) {
@@ -32,6 +33,7 @@ class JarvisCore extends StatefulWidget {
         JarvisState.responding => const Color(0xFF1FD1A0),
         JarvisState.recovering => const Color(0xFFF5B83D),
         JarvisState.error => const Color(0xFFE5484D),
+        JarvisState.noPermission => const Color(0xFFE5484D),
       };
 
   @override
@@ -120,6 +122,7 @@ class _CorePainter extends CustomPainter {
       JarvisState.responding => 1.8,
       JarvisState.recovering => 5.0,
       JarvisState.error => 0.0,
+      JarvisState.noPermission => 0.0,
     };
     final a = t * 2 * pi * speed;
 

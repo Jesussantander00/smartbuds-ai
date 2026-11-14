@@ -1,8 +1,108 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 29;
+const latestChangelog = 40;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 40,
+    title: 'Centro musical',
+    items: [
+      'Buscador unificado: YouTube, Audius, Deezer y Apple en una sola lista, sin duplicados, con álbumes.',
+      'Cada canción dice si suena completa o solo 30 s. Prioridad de fuentes configurable.',
+      'SmartBuds nunca abre otra app por su cuenta. Por voz: «reproduce la segunda», «busca otra versión», «pon el álbum…».',
+    ],
+  ),
+  (
+    version: 39,
+    title: 'La música suena dentro de SmartBuds',
+    items: [
+      'Reproductor integrado: busca y reproduce aquí (YouTube oficial, Audius completo o vista previa de Deezer).',
+      'Barra del reproductor en todas las secciones; Jarvis la controla por voz.',
+      'Jarvis escucha al abrir la app y recuerda si lo apagaste. Nuevo estado «Micrófono sin permiso».',
+    ],
+  ),
+  (
+    version: 38,
+    title: 'Inteligencia musical, todo junto',
+    items: [
+      'Viajes y actividades evitan lo que se está repitiendo y lo que ya suena.',
+      'La cola inteligente respeta el orden de un viaje musical; «termina el viaje» lo cierra.',
+      'Autodiagnóstico → Inteligencia musical: cuánto sabe SmartBuds de tu música y cómo enseñarle más.',
+    ],
+  ),
+  (
+    version: 37,
+    title: 'Viajes musicales',
+    items: [
+      'Arco (tranquilo → pico → relajado), subida o bajada, de 20 a 90 minutos.',
+      'Usa tu música para cada tramo y muestra en qué parte del viaje vas.',
+      'Inicio → Accesos rápidos → «Viaje musical», o di «viaje musical de una hora» / «bájame la energía».',
+    ],
+  ),
+  (
+    version: 36,
+    title: 'Detector de repeticiones',
+    items: [
+      'Avisa cuando una canción suena mucho (5 veces en un día o 12 en una semana) o un artista acapara lo que escuchas.',
+      '«Variar» pone un artista parecido u otra de tus favoritas; «Está bien, me gusta» calla el aviso una semana.',
+      'Por voz: «¿estoy repitiendo mucho?», «varía un poco», «cambia de artista».',
+    ],
+  ),
+  (
+    version: 35,
+    title: 'Descubrir por conexiones',
+    items: [
+      'Artistas nuevos que colaboraron con los tuyos o tienen su estilo, con la razón de cada uno.',
+      'Los que conectan a varios de tus artistas salen primero («Puente»).',
+      'En Inicio → Accesos rápidos, en la ficha de cada artista y por voz: «descubre por colaboraciones».',
+    ],
+  ),
+  (
+    version: 34,
+    title: 'Música según lo que haces',
+    items: [
+      'Inicio → «Según lo que haces»: estudiar, trabajar, descansar o ejercicio.',
+      'Aprende qué terminas y qué saltas en cada actividad, y te lo recomienda con su razón.',
+      'Por voz: «estoy estudiando», «voy a entrenar», «terminé». Te sugiere la actividad que sueles hacer a esa hora.',
+    ],
+  ),
+  (
+    version: 33,
+    title: 'Volumen estable mientras Jarvis escucha',
+    items: [
+      'Arreglado: la música subía y bajaba al hablar o cantar mientras Jarvis escuchaba.',
+      '«Sube» y «baja» seguidos que parecen conversación se ignoran; «sube el volumen» siempre funciona.',
+      'Nuevo ajuste: bajar la música solo mientras Jarvis responde (apagado por defecto).',
+    ],
+  ),
+  (
+    version: 32,
+    title: 'Cola inteligente',
+    items: [
+      '«Ordenar por ambiente» en «Sigue después»: el ambiente cambia poco a poco, sin saltos bruscos.',
+      'Evita el mismo artista dos veces seguidas. Puedes deshacerlo.',
+      'Modo automático y por voz: «ordena la cola».',
+    ],
+  ),
+  (
+    version: 31,
+    title: 'Autodiagnóstico',
+    items: [
+      'Privacidad → Autodiagnóstico: revisa voz, permisos, reproducción, conexión y audífonos.',
+      'Explica qué pasó en palabras simples y cómo resolverlo, con el botón para arreglarlo.',
+      'Di «haz un diagnóstico» o «¿qué te pasa?» y Jarvis te lo dice en voz alta.',
+    ],
+  ),
+  (
+    version: 30,
+    title: 'Jarvis recuerda la conversación',
+    items: [
+      '«Busca Feid» y luego «pon una de él»: Jarvis sabe de quién hablas.',
+      'Si dices solo «pon» o «quiero escuchar», te pregunta qué artista o género quieres.',
+      '«No, la otra» o «eso no era» corrige lo último que hizo.',
+      'El historial de voz se guarda en el teléfono (sin audio) y puedes borrarlo cuando quieras.',
+    ],
+  ),
   (
     version: 29,
     title: 'Jarvis te escucha sin parar',

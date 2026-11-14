@@ -7,6 +7,8 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../automations/automation_engine.dart';
 import '../automations/automations_screen.dart';
 import 'assistant.dart';
+import '../../connectors/youtube/youtube_search.dart';
+import '../player/sources_screen.dart';
 
 /// Asistente: qué puedes decir y cómo responde SmartBuds.
 class AssistantScreen extends StatefulWidget {
@@ -217,6 +219,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 settings.update(voiceFeedback: v);
                 voice?.feedbackEnabled = v;
               }),
+              _switch('Escuchar al abrir SmartBuds',
+                  'Jarvis empieza a escuchar solo al entrar (si diste permiso). Si apagas el micrófono, lo recuerda.',
+                  settings.listenOnStart, (v) => settings.update(listenOnStart: v)),
+              _switch('Bajar la música cuando Jarvis responde',
+                  'Solo mientras habla (1–3 s) y vuelve sola. Escucharte nunca cambia el volumen.',
+                  settings.duckOnReply, (v) {
+                settings.update(duckOnReply: v);
+                voice?.duckOnReply = v;
+              }),
               if (_match('Voz personalizada', 'estilo velocidad tono breve conversacional técnico'))
                 _VoiceStyle(settings: settings, voice: voice),
               _switch('Respuestas cortas', 'Solo lo esencial: una frase por respuesta.',
@@ -248,6 +259,22 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 ),
             ]),
             ..._section(context, 'Música', Icons.library_music, [
+              _switch('Reproducir dentro de SmartBuds',
+                  'Busca y suena aquí: YouTube (reproductor oficial, se ve el video), Audius completo o vista previa de '
+                      'Deezer. Si lo apagas, se abre tu app de música.',
+                  settings.playInApp, (v) => settings.update(playInApp: v)),
+              if (_match('Fuentes musicales', 'spotify apple music youtube deezer soundcloud prioridad'))
+                ListTile(
+                  leading: const Icon(Icons.hub_rounded),
+                  title: const Text('Fuentes musicales'),
+                  subtitle: const Text('Qué permite cada plataforma y en qué orden se usan.'),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => SourcesScreen(
+                      settings: settings,
+                      youtubeConfigured: YouTubeSearch.keyFromEnvironment.isNotEmpty,
+                    ),
+                  )),
+                ),
               _switch('Radio SmartBuds', 'Cuando termina una canción, SmartBuds elige la siguiente.',
                   settings.radioMode, (v) => settings.update(radioMode: v)),
               _switch('Anunciar cada canción', 'Dice suavemente el nombre de la canción nueva.',
@@ -554,6 +581,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
           ],
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+        child: Text('Se guarda solo en este teléfono (no el audio). En modo privado no se guarda nada.',
+            style: theme.textTheme.bodySmall),
+      ),
       Card(
         child: v.history.isEmpty
             ? const ListTile(
@@ -575,15 +607,41 @@ class _AssistantScreenState extends State<AssistantScreen> {
                         if (e.reply != null) 'Dijo: «${e.reply}»',
                       ].join('\n')),
                     ),
-                  if (v.history.length > 5)
-                    TextButton(
-                      onPressed: () => setState(() => _allHistory = !_allHistory),
-                      child: Text(_allHistory ? 'Ver menos' : 'Ver todo (${v.history.length})'),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Borrar historial'),
+                        onPressed: () => _confirmClear(context, v),
+                      ),
+                      if (v.history.length > 5)
+                        TextButton(
+                          onPressed: () => setState(() => _allHistory = !_allHistory),
+                          child: Text(_allHistory ? 'Ver menos' : 'Ver todo (${v.history.length})'),
+                        ),
+                    ],
+                  ),
                 ],
               ),
       ),
     ];
+  }
+
+  Future<void> _confirmClear(BuildContext context, VoiceEngine v) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('¿Borrar el historial de conversación?'),
+        content: const Text('Se borran las órdenes, las respuestas y lo que Jarvis recuerda de esta '
+            'conversación. No se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Borrar')),
+        ],
+      ),
+    );
+    if (ok == true) await v.clearHistory();
   }
 
   static IconData _iconFor(String action) {
