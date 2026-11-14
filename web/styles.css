@@ -305,3 +305,5 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
   .glow, .arc, .scan, .disc, body.is-playing .eq i, body.is-listening .ring, body.is-playing .progress i { animation: none !important; }
   * { transition: none !important; }
 }
+
+.results-title { display: block; opacity: .75; margin: 4px 6px 6px; }

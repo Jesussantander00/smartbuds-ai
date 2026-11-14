@@ -241,6 +241,7 @@
         },
         onStateChange: (e) => {
           const isPlaying = e.data === YT.PlayerState.PLAYING;
+          if (isPlaying || e.data === YT.PlayerState.BUFFERING) clearTapToPlay();
           if (isPlaying && pendingConfirm && pendingConfirm === current) {
             current.startedAt = Date.now(); // el tiempo escuchado empieza ahora
             record(current, 'play');
@@ -303,14 +304,23 @@
 
   async function findVideo(query) { return (await findVideos(query))[0]; }
 
-  /** Búsqueda escrita: muestra las opciones para que elijas (la voz pone la primera). */
+  /** Búsqueda escrita: pone la primera de una vez y deja las demás por si no era esa. */
   async function showResults(query) {
     const box = $('results');
     status('Buscando…');
     try {
       const list = await findVideos(query);
       box.innerHTML = '';
-      for (const v of list.slice(0, 5)) {
+      const first = list[0];
+      const firstInfo = parseTitle(first);
+      play({ ...firstInfo, videoId: first.id });
+      if (list.length > 1) {
+        const h = document.createElement('small');
+        h.className = 'results-title';
+        h.textContent = '¿No era esa? Elige otra:';
+        box.appendChild(h);
+      }
+      for (const v of list.slice(1, 6)) {
         const info = parseTitle(v);
         const b = document.createElement('button');
         b.className = 'result';
@@ -320,8 +330,7 @@
         b.onclick = () => { box.classList.add('hidden'); play({ ...info, videoId: v.id }); };
         box.appendChild(b);
       }
-      box.classList.remove('hidden');
-      status('Elige la que buscabas.');
+      box.classList.toggle('hidden', list.length <= 1);
     } catch (e) {
       status(e.message);
     }
@@ -398,10 +407,49 @@
 
   function showOpenCard(url, label) {
     const a = $('openApp');
+    a.onclick = null;
     a.href = url;
     a.textContent = `▶ Abrir en ${label}`;
     $('openCard').classList.remove('hidden');
   }
+
+  // ---------------------------------------------------------- Sonido permitido
+  // Los navegadores del teléfono no dejan sonar música hasta que tocas la
+  // página una vez. Si Jarvis arrancó solo (con el permiso ya dado) y pides una
+  // canción por voz, el video carga pero queda quieto: se detecta y se pide un
+  // solo toque; después de eso, todo lo que pidas por voz suena directo.
+  let autoplayTimer = null;
+  let blockedInfo = null;
+
+  function clearTapToPlay() {
+    clearTimeout(autoplayTimer);
+    autoplayTimer = null;
+    if (blockedInfo) {
+      blockedInfo = null;
+      $('openCard').classList.add('hidden');
+    }
+  }
+
+  function watchAutoplay(info) {
+    clearTimeout(autoplayTimer);
+    autoplayTimer = setTimeout(() => {
+      if (!playerReady || !current?.videoId) return;
+      const st = player.getPlayerState?.();
+      if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING || st === YT.PlayerState.PAUSED) return;
+      blockedInfo = info;
+      const a = $('openApp');
+      a.href = '#';
+      a.textContent = `▶ Toca para escuchar «${info.title}»`;
+      a.onclick = (ev) => { ev.preventDefault(); player.playVideo(); clearTapToPlay(); };
+      $('openCard').classList.remove('hidden');
+      status('El navegador pide un toque para dejar sonar la música. Toca una vez y lo demás sonará solo.');
+    }, 3500);
+  }
+
+  // Cualquier toque en la página sirve para desbloquear el sonido pendiente.
+  document.addEventListener('pointerdown', () => {
+    if (blockedInfo && playerReady) { player.playVideo(); clearTapToPlay(); status(''); }
+  }, { capture: true });
 
   /** Pone una canción {title, artist} o una búsqueda libre {query}. */
   async function play(item, { fromHistory = false, skipped = false } = {}) {
@@ -434,6 +482,7 @@
         $('playerWrap').classList.remove('empty');
         $('openCard').classList.add('hidden');
         if (playerReady) player.loadVideoById(videoId); else pendingVideo = videoId;
+        watchAutoplay(info);
       } else {
         $('playerWrap').classList.add('empty');
         if (playerReady) player.pauseVideo();
@@ -804,7 +853,11 @@
       : listening ? 'ESCUCHANDO'
       : wantOn ? 'PREPARADO' : 'APAGADO';
     $('micStatus').textContent = listening
-      ? (continuous ? 'Escuchando… di «Cambia», «Pausa», «Busca …»' : 'Te escucho…')
+      ? (continuous
+        ? (navigator.userActivation && !navigator.userActivation.hasBeenActive
+          ? 'Escuchando… toca la pantalla una vez para que el navegador deje sonar la música'
+          : 'Escuchando… di «Busca …», «Cambia», «Pausa»')
+        : 'Te escucho…')
       : wantOn ? 'Preparado: reabriendo el micrófono…'
       : 'Toca y di: «Cambia», «Pausa», «Sube», «Busca …»';
   }
