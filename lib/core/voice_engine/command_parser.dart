@@ -269,6 +269,14 @@ class ActivityIntent extends VoiceIntent {
   final String? activity;
 }
 
+/// «Descubre por colaboraciones» / «¿con quién ha colaborado Feid?»:
+/// artistas nuevos conectados con tu música. [current]: el artista que suena.
+class ConnectionsIntent extends VoiceIntent {
+  const ConnectionsIntent([this.artist, this.current = false]);
+  final String? artist;
+  final bool current;
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -554,6 +562,7 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'descubre por colaboraciones', 'artistas conectados', 'colaboraciones de este artista',
     'estoy estudiando', 'voy a estudiar', 'estoy trabajando', 'voy a trabajar',
     'voy a descansar', 'quiero descansar', 'voy a entrenar', 'estoy entrenando', 'voy al gimnasio',
     'terminé', 'ya terminé',
@@ -572,6 +581,14 @@ class CommandParser {
     'hora de entrenar': 'ejercicio',
     'termine': null, 'ya termine': null, 'termine de estudiar': null, 'termine de trabajar': null,
     'termine de entrenar': null, 'termine de descansar': null,
+  };
+  static const _connections = {
+    'descubre por colaboraciones', 'artistas conectados', 'descubre artistas conectados',
+    'descubrir por conexiones', 'descubre por conexiones', 'artistas relacionados con lo que escucho',
+  };
+  static const _connectionsCurrent = {
+    'con quien ha colaborado este artista', 'quien ha colaborado con este artista',
+    'colaboraciones de este artista', 'artistas parecidos a este',
   };
   static const _corrections = {
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
@@ -725,6 +742,11 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    if (_connections.contains(text)) return const ConnectionsIntent();
+    if (_connectionsCurrent.contains(text)) return const ConnectionsIntent(null, true);
+    for (final p in const ['con quien ha colaborado ', 'colaboraciones de ']) {
+      if (text.startsWith(p) && text.length > p.length + 1) return ConnectionsIntent(text.substring(p.length).trim());
+    }
     if (_diagnose.contains(text)) return const DiagnoseIntent();
     if (_arrangeQueue.contains(text)) return const ArrangeQueueIntent();
     if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();

@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 34;
+const latestChangelog = 35;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 35,
+    title: 'Descubrir por conexiones',
+    items: [
+      'Artistas nuevos que colaboraron con los tuyos o tienen su estilo, con la razón de cada uno.',
+      'Los que conectan a varios de tus artistas salen primero («Puente»).',
+      'En Inicio → Accesos rápidos, en la ficha de cada artista y por voz: «descubre por colaboraciones».',
+    ],
+  ),
   (
     version: 34,
     title: 'Música según lo que haces',

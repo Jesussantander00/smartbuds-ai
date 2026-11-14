@@ -24,6 +24,7 @@ import '../diagnostics/online_probe.dart';
 import '../diagnostics/self_check.dart';
 import 'smart_queue.dart';
 import '../activity/activity.dart';
+import '../discovery/connections.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -399,6 +400,8 @@ class Assistant extends ChangeNotifier {
         await sayDiagnosis();
       case ArrangeQueueIntent():
         await _say(arrangeQueue());
+      case ConnectionsIntent(:final artist, :final current):
+        await sayConnections(current ? active?.artist : artist, aroundRequested: current || artist != null);
       case ActivityIntent(:final activity):
         final a = ActivityEngine.byName(activity);
         if (a == null) {
@@ -655,6 +658,78 @@ class Assistant extends ChangeNotifier {
     if (settings?.smartQueue ?? false) arrangeQueue();
     notifyListeners();
     return add.length;
+  }
+
+  // ------------------------------------------ Descubrimiento por conexiones
+
+  List<ArtistDiscovery>? _connections;
+  DateTime? _connectionsAt;
+
+  /// Artistas nuevos conectados con tu música (colaboraciones y estilo).
+  /// [around]: solo alrededor de ese artista. Sin él, tus 4 artistas principales
+  /// (se guarda 6 horas para no gastar datos).
+  Future<List<ArtistDiscovery>> discoverConnections({String? around, bool refresh = false}) async {
+    final now = _clock();
+    if (around == null && !refresh && _connections != null && _connectionsAt != null &&
+        now.difference(_connectionsAt!) < const Duration(hours: 6)) {
+      return _connections!;
+    }
+    final Map<String, double> seeds;
+    if (around != null && around.trim().isNotEmpty) {
+      seeds = {around.trim(): 1.0};
+    } else {
+      final top = profile.topArtists(4);
+      if (top.isEmpty) return const [];
+      final maxScore = top.first.$2;
+      seeds = {for (final (a, sc) in top) a: maxScore <= 0 ? 0.5 : sc / maxScore};
+    }
+    final s = similar;
+    final collabs = <String, List<Collaboration>>{};
+    final related = <String, List<SimilarArtist>>{};
+    await Future.wait([
+      for (final seed in seeds.keys) () async {
+        if (s == null) return;
+        try {
+          collabs[seed] = await s.collaboratorsOf(seed);
+        } catch (_) {}
+        try {
+          related[seed] = await s.similarTo(seed, max: 4);
+        } catch (_) {}
+      }(),
+    ]);
+    final list = ConnectionGraph.build(
+      seeds: seeds,
+      known: {for (final t in profile.tracks.values) if ((t.artist ?? '').isNotEmpty) t.artist!.toLowerCase().trim()},
+      blocked: settings?.blockedArtists ?? const {},
+      mineCollabs: {for (final seed in seeds.keys) seed: collaborationsOf(seed)},
+      collabs: collabs,
+      similar: related,
+    );
+    if (around == null) {
+      _connections = list;
+      _connectionsAt = now;
+    }
+    return list;
+  }
+
+  /// «Descubre por colaboraciones»: presenta el mejor y lo pone.
+  Future<void> sayConnections(String? around, {bool aroundRequested = false}) async {
+    if (aroundRequested && (around == null || around.trim().isEmpty)) {
+      await _say('No hay música sonando. Dime el artista: «colaboraciones de Feid».');
+      return;
+    }
+    final list = await discoverConnections(around: around);
+    if (list.isEmpty) {
+      await _say(around == null
+          ? 'Todavía no tengo suficientes artistas tuyos o no hay internet para buscar conexiones.'
+          : 'No encontré artistas nuevos conectados con $around.');
+      return;
+    }
+    final first = list.first;
+    final more = list.skip(1).take(2).map((d) => d.name).toList();
+    await _say('Te presento a ${first.name}: ${first.reason}.'
+        '${more.isEmpty ? '' : ' También te pueden gustar ${more.join(' y ')}.'}');
+    await handleSearch(SearchRequest(first.query));
   }
 
   // ------------------------------------------- Según lo que haces (actividad)
