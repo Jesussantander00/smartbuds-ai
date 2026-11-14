@@ -109,11 +109,11 @@ class BackupService extends ChangeNotifier {
   Future<bool> saveToCloud({required String device}) async {
     if (!cloudAvailable) return false;
     final ok = await _run(() async {
-      await _call('POST', '/rest/v1/user_backups?on_conflict=user_id', {
+      await _send('POST', '/rest/v1/user_backups?on_conflict=user_id', {
         'user_id': settings.authUserId,
         'device': device.length > 40 ? device.substring(0, 40) : device,
         'data': build(device: device),
-      }, prefer: 'resolution=merge-duplicates,return=minimal');
+      }, 'resolution=merge-duplicates,return=minimal');
       settings.markBackup(_clock());
     });
     if (ok) await refreshCloud();
@@ -168,7 +168,9 @@ class BackupService extends ChangeNotifier {
     }
   }
 
-  Future<dynamic> _call(String method, String path, [Object? body, String? prefer]) async {
+  Future<dynamic> _call(String method, String path, [Object? body]) async => _send(method, path, body, null);
+
+  Future<dynamic> _send(String method, String path, Object? body, String? prefer) async {
     final token = await auth!.validToken();
     if (token == null) throw const _BackupException('Entra con tu cuenta.');
     final req = await _client.openUrl(method, Uri.parse('$url$path')).timeout(const Duration(seconds: 12));
