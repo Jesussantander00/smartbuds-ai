@@ -144,19 +144,32 @@ class _Results extends StatelessWidget {
   const _Results({required this.player});
   final SmartBudsPlayer player;
 
+  static String _dur(int? ms) {
+    if (ms == null) return '';
+    final s = (ms / 1000).round();
+    return ' · ${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final r = player.results;
     if (player.searching) return const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator());
-    if (r.isEmpty) {
+    final q = player.lastQuery;
+    if (r.isEmpty && player.albums.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(
-          player.lastQuery == null
-              ? 'Di «busca …» o escribe en Buscar: los resultados aparecen aquí.'
-              : 'Ninguna fuente integrada tiene «${player.lastQuery}».',
-          style: theme.textTheme.bodySmall,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              q == null
+                  ? 'Di «busca …» o escribe en Buscar: los resultados aparecen aquí.'
+                  : 'No puedo reproducir «$q» dentro de SmartBuds: ninguna fuente integrada la tiene.',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (q != null) _external(context, q),
+          ],
         ),
       );
     }
@@ -164,32 +177,87 @@ class _Results extends StatelessWidget {
       shrinkWrap: true,
       padding: const EdgeInsets.only(top: 6),
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text('Resultados para «${player.lastQuery}»', style: theme.textTheme.labelLarge),
-        ),
-        for (final t in r)
+        if (q != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('Resultados para «$q»', style: theme.textTheme.labelLarge),
+          ),
+        if (player.albums.isNotEmpty)
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final a in player.albums)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6, top: 4),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.album_rounded, size: 16),
+                      label: Text('${a.title}${a.artist == null ? '' : ' · ${a.artist}'}'),
+                      onPressed: player.onAlbum == null ? null : () => player.onAlbum!(a),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        for (final (i, res) in r.indexed)
           ListTile(
             dense: true,
-            selected: t.id == player.current?.id,
-            leading: Icon(switch (t.source) {
-              InAppSource.youtube => Icons.ondemand_video_rounded,
-              InAppSource.audius => Icons.graphic_eq_rounded,
-              InAppSource.deezerPreview => Icons.timer_rounded,
-            }),
-            title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${t.artist ?? ''} · ${t.sourceLabel}', maxLines: 1, overflow: TextOverflow.ellipsis),
-            onTap: () => player.play(t),
+            selected: res.key == player.currentResult?.key,
+            leading: CircleAvatar(radius: 14, child: Text('${i + 1}', style: const TextStyle(fontSize: 12))),
+            title: Text(res.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${res.artist ?? ''}${res.album == null ? '' : ' · ${res.album}'}${_dur(res.durationMs)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Wrap(
+                  spacing: 4,
+                  children: [
+                    for (final (j, o) in res.options.indexed)
+                      InkWell(
+                        onTap: () => player.playResult(res, option: j),
+                        child: Text(
+                          o.sourceLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: o.isPreview ? Colors.amber : Neon.cyan,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            trailing: Icon(res.hasFull ? Icons.play_circle_rounded : Icons.timer_rounded,
+                color: res.hasFull ? Neon.cyan : Colors.amber),
+            onTap: () => player.playResult(res),
           ),
+        if (q != null) _external(context, q),
         Padding(
           padding: const EdgeInsets.all(6),
           child: Text(
-            'Completa: YouTube (reproductor oficial, el video se ve) y Audius. Deezer: solo 30 s de vista previa. '
-            'Spotify y Apple Music no permiten reproducir su catálogo dentro de otra app.',
+            'Completas: YouTube (reproductor oficial, el video se ve) y Audius. Deezer y Apple: 30 s de vista previa. '
+            'Spotify, Apple Music y SoundCloud no se pueden reproducir dentro de SmartBuds hoy (ver Fuentes musicales).',
             style: theme.textTheme.bodySmall,
           ),
         ),
       ],
     );
   }
+
+  /// Abrir en otra app: solo si tú lo tocas (nunca automático).
+  Widget _external(BuildContext context, String q) => player.onOpenExternal == null
+      ? const SizedBox.shrink()
+      : Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: const Text('Buscarla en mi app de música (sale de SmartBuds)'),
+            onPressed: () => player.onOpenExternal!(q),
+          ),
+        );
 }

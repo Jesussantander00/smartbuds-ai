@@ -532,6 +532,10 @@ class VoiceEngine extends ChangeNotifier {
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
         DiagnoseIntent() => 'Autodiagnóstico',
         ArrangeQueueIntent() => 'Ordenar la cola',
+        ResultPickIntent(:final index) => 'Resultado $index',
+        OtherVersionIntent() => 'Otra versión',
+        QueueCurrentIntent() => 'Agregar a la cola',
+        AlbumIntent(:final query) => 'Álbum: $query',
         JourneyIntent(:final shape, :final minutes) => shape == 'fin'
             ? 'Terminar viaje musical'
             : 'Viaje musical: $shape${minutes == null ? '' : ' ($minutes min)'}',
@@ -923,6 +927,10 @@ class VoiceEngine extends ChangeNotifier {
             TasteEvolutionIntent() ||
             DiagnoseIntent() ||
             ArrangeQueueIntent() ||
+            ResultPickIntent() ||
+            OtherVersionIntent() ||
+            QueueCurrentIntent() ||
+            AlbumIntent() ||
             JourneyIntent() ||
             RepetitionIntent() ||
             ConnectionsIntent() ||

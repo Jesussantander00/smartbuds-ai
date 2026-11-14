@@ -7,6 +7,8 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../automations/automation_engine.dart';
 import '../automations/automations_screen.dart';
 import 'assistant.dart';
+import '../../connectors/youtube/youtube_search.dart';
+import '../player/sources_screen.dart';
 
 /// Asistente: qué puedes decir y cómo responde SmartBuds.
 class AssistantScreen extends StatefulWidget {
@@ -261,6 +263,18 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   'Busca y suena aquí: YouTube (reproductor oficial, se ve el video), Audius completo o vista previa de '
                       'Deezer. Si lo apagas, se abre tu app de música.',
                   settings.playInApp, (v) => settings.update(playInApp: v)),
+              if (_match('Fuentes musicales', 'spotify apple music youtube deezer soundcloud prioridad'))
+                ListTile(
+                  leading: const Icon(Icons.hub_rounded),
+                  title: const Text('Fuentes musicales'),
+                  subtitle: const Text('Qué permite cada plataforma y en qué orden se usan.'),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => SourcesScreen(
+                      settings: settings,
+                      youtubeConfigured: YouTubeSearch.keyFromEnvironment.isNotEmpty,
+                    ),
+                  )),
+                ),
               _switch('Radio SmartBuds', 'Cuando termina una canción, SmartBuds elige la siguiente.',
                   settings.radioMode, (v) => settings.update(radioMode: v)),
               _switch('Anunciar cada canción', 'Dice suavemente el nombre de la canción nueva.',

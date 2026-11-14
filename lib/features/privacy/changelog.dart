@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 39;
+const latestChangelog = 40;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 40,
+    title: 'Centro musical',
+    items: [
+      'Buscador unificado: YouTube, Audius, Deezer y Apple en una sola lista, sin duplicados, con álbumes.',
+      'Cada canción dice si suena completa o solo 30 s. Prioridad de fuentes configurable.',
+      'SmartBuds nunca abre otra app por su cuenta. Por voz: «reproduce la segunda», «busca otra versión», «pon el álbum…».',
+    ],
+  ),
   (
     version: 39,
     title: 'La música suena dentro de SmartBuds',

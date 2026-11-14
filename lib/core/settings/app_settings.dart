@@ -70,6 +70,15 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Reproducir la música dentro de SmartBuds (si una fuente lo permite).
   bool playInApp = true;
 
+  /// Prioridad de fuentes del reproductor integrado (las completas van antes).
+  List<String> sourceOrder = const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'];
+
+  void setSourceOrder(List<String> order) {
+    sourceOrder = [...order];
+    _persist();
+    notifyListeners();
+  }
+
   /// Jarvis empieza a escuchar al abrir la app (se apaga si tú lo apagas).
   bool listenOnStart = true;
 
@@ -528,6 +537,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     smartQueue = d['smartQueue'] == true;
     duckOnReply = d['duckOnReply'] == true;
     playInApp = d['playInApp'] != false;
+    final so = (d['sourceOrder'] as List?)?.whereType<String>().toList();
+    if (so != null && so.isNotEmpty) {
+      sourceOrder = [...so, ...const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'].where((x) => !so.contains(x))];
+    }
     listenOnStart = d['listenOnStart'] != false;
     lastHeadphone = d['lastHeadphone'] as String?;
     smoothTransitions = d['smoothTransitions'] == true;
@@ -787,6 +800,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'smartQueue': smartQueue,
         'duckOnReply': duckOnReply,
         'playInApp': playInApp,
+        'sourceOrder': sourceOrder,
         'listenOnStart': listenOnStart,
         'lastHeadphone': lastHeadphone,
         'smoothTransitions': smoothTransitions,

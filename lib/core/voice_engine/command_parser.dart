@@ -291,6 +291,28 @@ class JourneyIntent extends VoiceIntent {
   final int? minutes;
 }
 
+/// «Reproduce la primera / segunda…» de los resultados (índice desde 1).
+class ResultPickIntent extends VoiceIntent {
+  const ResultPickIntent(this.index);
+  final int index;
+}
+
+/// «Busca otra versión»: otra fuente u otra versión de la misma canción.
+class OtherVersionIntent extends VoiceIntent {
+  const OtherVersionIntent();
+}
+
+/// «Agrega esta canción a la cola».
+class QueueCurrentIntent extends VoiceIntent {
+  const QueueCurrentIntent();
+}
+
+/// «Pon el álbum X» / «busca el disco X».
+class AlbumIntent extends VoiceIntent {
+  const AlbumIntent(this.query);
+  final String query;
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -576,6 +598,8 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'reproduce la primera', 'pon la primera', 'pon la segunda', 'pon la tercera', 'busca otra versión',
+    'otra versión', 'agrega esta canción a la cola', 'agrega esta a la cola',
     'termina el viaje', 'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
     'bájame la energía', 'baja la energía poco a poco', 'ayúdame a relajarme',
     'estoy repitiendo mucho', 'varía un poco', 'cambia de artista', 'algo de otro artista',
@@ -651,6 +675,29 @@ class CommandParser {
       if (minutes == null) return null;
     }
     return JourneyIntent(shape, minutes: minutes);
+  }
+
+  static const _ordinals = {
+    'primera': 1, 'primero': 1, 'segunda': 2, 'segundo': 2, 'tercera': 3, 'tercero': 3,
+    'cuarta': 4, 'cuarto': 4, 'quinta': 5, 'quinto': 5, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5,
+  };
+  static const _otherVersion = {
+    'busca otra version', 'otra version', 'pon otra version', 'otra version de esta', 'busca otra version de esta',
+  };
+  static const _queueCurrent = {
+    'agrega esta cancion a la cola', 'agrega esta a la cola', 'anade esta cancion a la cola', 'anade esta a la cola',
+    'pon esta en la cola', 'agregala a la cola', 'guarda esta para despues',
+  };
+
+  /// «reproduce la primera (canción)», «pon la segunda», «la tercera».
+  static ResultPickIntent? parsePick(String text) {
+    final m = RegExp(r'^(reproduce |pon |ponme |toca )?(la |el )?(cancion |opcion |resultado )?(numero )?(\w+)( cancion| opcion| resultado)?$')
+        .firstMatch(text);
+    if (m == null) return null;
+    final explicit = m.group(1) != null || m.group(2) != null || m.group(3) != null || m.group(4) != null;
+    final n = _ordinals[m.group(5)];
+    if (n == null || !explicit) return null;
+    return ResultPickIntent(n);
   }
 
   static const _corrections = {
@@ -805,6 +852,13 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    final pick = parsePick(text);
+    if (pick != null) return pick;
+    if (_otherVersion.contains(text)) return const OtherVersionIntent();
+    if (_queueCurrent.contains(text)) return const QueueCurrentIntent();
+    for (final p in const ['pon el album ', 'busca el album ', 'pon el disco ', 'busca el disco ', 'reproduce el album ']) {
+      if (text.startsWith(p) && text.length > p.length + 1) return AlbumIntent(text.substring(p.length).trim());
+    }
     final journey = parseJourney(text);
     if (journey != null) return journey;
     if (_repetitionAsk.contains(text)) return const RepetitionIntent();

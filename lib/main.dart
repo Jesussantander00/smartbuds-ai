@@ -205,15 +205,26 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
     // incrustado si hay clave, Audius completo, vistas previas de Deezer).
     if (Platform.isAndroid || Platform.isIOS) {
       final inApp = SmartBudsPlayer(
-        catalog: MusicCatalog([
-          if (finder != null) YouTubeCatalog(finder),
-          AudiusCatalog(),
-          DeezerPreviewCatalog(),
-        ]),
+        catalog: MusicCatalog(
+          [
+            if (finder != null) YouTubeCatalog(finder),
+            AudiusCatalog(),
+            DeezerPreviewCatalog(),
+            ITunesCatalog(),
+          ],
+          // Prioridad configurable en Asistente → Fuentes musicales.
+          order: () => [
+            for (final n in widget.settings.sourceOrder)
+              ...InAppSource.values.where((s) => s.name == n),
+          ],
+        ),
         engineFor: (s) => s == InAppSource.youtube ? YouTubeEngine() : NativeAudioEngine(),
       );
       assistant.inApp = inApp;
-      inApp.onNextRequested = assistant.inAppNext;
+      inApp
+        ..onNextRequested = assistant.inAppNext
+        ..onAlbum = assistant.playAlbum
+        ..onOpenExternal = assistant.openExternally;
       // Lo que suena en SmartBuds alimenta el perfil, la cola y Jarvis igual que
       // una app externa.
       inApp.addListener(() {

@@ -37,7 +37,7 @@ class FakeEngine extends PlaybackEngine {
   Future<void> setVolume(int percent) async => calls.add('vol:$percent');
 }
 
-class FakeCatalog implements InAppCatalog {
+class FakeCatalog extends InAppCatalog {
   FakeCatalog(this.source, this.items);
   @override
   final InAppSource source;
@@ -57,14 +57,18 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('qué suena dentro de SmartBuds', () {
-    test('YouTube (completa) primero; Audius solo si coincide; si no, vista previa', () {
+    test('completa (YouTube o Audius que coincide) antes que vista previa; Audius ajeno no se finge', () {
       final a = audius('1', 'Lofi para estudiar', 'Beatmaker');
       final p = preview('2', 'Normal', 'Feid');
-      expect(MusicCatalog.best([a, p, yt('abc123', 'Feid - Normal')], 'Feid Normal')!.source, InAppSource.youtube);
-      expect(MusicCatalog.best([a, p], 'Feid Normal')!.source, InAppSource.deezerPreview,
-          reason: 'Audius no tiene esa canción: no se finge');
-      expect(MusicCatalog.best([audius('3', 'Normal', 'Feid'), p], 'Feid Normal')!.source, InAppSource.audius);
-      expect(MusicCatalog.best(const [], 'x'), isNull);
+      final order = InAppSource.values;
+      expect(MusicCatalog.merge([a, p, yt('abc123', 'Normal')], 'Feid Normal', order).first.best.source,
+          InAppSource.deezerPreview,
+          reason: 'el video sin artista no coincide con «Feid»; la vista previa sí');
+      expect(MusicCatalog.merge([a, p], 'Feid Normal', order).map((r) => r.title), ['Normal'],
+          reason: 'Audius ajeno se descarta');
+      expect(MusicCatalog.merge([audius('3', 'Normal', 'Feid'), p], 'Feid Normal', order).single.best.source,
+          InAppSource.audius);
+      expect(MusicCatalog.merge(const [], 'x', order), isEmpty);
     });
 
     test('Audius: solo canciones reproducibles; Deezer: solo las que tienen vista previa', () {
@@ -95,14 +99,14 @@ void main() {
       engines = {};
       player = SmartBudsPlayer(
         catalog: MusicCatalog([
-          FakeCatalog(InAppSource.youtube, [yt('aaaaaa1', 'Uno'), yt('aaaaaa2', 'Dos')]),
+          FakeCatalog(InAppSource.youtube, [yt('aaaaaa1', 'Uno Tema'), yt('aaaaaa2', 'Dos Tema')]),
         ]),
         engineFor: (s) => engines.putIfAbsent(s, FakeEngine.new),
       );
     });
 
     test('busca, pone la mejor y se presenta como «SmartBuds» (no como otra app)', () async {
-      final t = await player.playQuery('uno');
+      final t = await player.playQuery('tema');
       expect(t!.id, 'yt:aaaaaa1');
       expect(engines[InAppSource.youtube]!.calls.first, 'load:yt:aaaaaa1');
       expect(player.status!.appName, 'SmartBuds');
@@ -111,23 +115,23 @@ void main() {
     });
 
     test('video que YouTube no deja incrustar: pasa al siguiente resultado', () async {
-      await player.playQuery('uno');
+      await player.playQuery('tema');
       engines[InAppSource.youtube]!.onState!(const EngineState(PlaybackState.stopped, error: 'not_embeddable'));
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(player.current!.id, 'yt:aaaaaa2');
     });
 
     test('al terminar avisa (para que siga la cola)', () async {
       var ended = 0;
       player.onEnded = () => ended++;
-      await player.playQuery('uno');
+      await player.playQuery('tema');
       engines[InAppSource.youtube]!.onState!(const EngineState(PlaybackState.stopped, ended: true));
       expect(ended, 1);
       expect(player.status!.state, PlaybackState.stopped);
     });
 
     test('minimizar el video lo pausa; reanudar lo vuelve a mostrar', () async {
-      await player.playQuery('uno');
+      await player.playQuery('tema');
       await player.toggleMinimized();
       expect(engines[InAppSource.youtube]!.calls, contains('pause'));
       await player.resume();
@@ -135,7 +139,7 @@ void main() {
     });
 
     test('anterior: si va avanzada vuelve al inicio', () async {
-      await player.playQuery('uno');
+      await player.playQuery('tema');
       player.positionMs = 30000;
       await player.previous();
       expect(engines[InAppSource.youtube]!.calls.last, 'seek:0');
@@ -171,7 +175,7 @@ void main() {
       engine = FakeEngine();
       a.inApp = SmartBudsPlayer(
         catalog: MusicCatalog([
-          FakeCatalog(InAppSource.audius, [audius('1', 'Normal', 'Feid'), audius('2', 'Otra', 'Feid')]),
+          FakeCatalog(InAppSource.audius, [audius('1', 'Normal', 'Feid'), audius('2', 'Normal Remix', 'Feid')]),
         ]),
         engineFor: (_) => engine,
       );
