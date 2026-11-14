@@ -1,5 +1,5 @@
 // Guarda la página para que abra rápido y sin internet (los datos sí necesitan conexión).
-const CACHE = 'smartbuds-v9';
+const CACHE = 'smartbuds-v10';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 

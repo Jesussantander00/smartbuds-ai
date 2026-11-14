@@ -15,7 +15,6 @@ import '../../core/ui/futuristic.dart';
 import '../../core/ui/art_color.dart';
 import '../../core/settings/app_settings.dart';
 import '../assistant/assistant.dart';
-import 'car_mode_screen.dart';
 import '../devices/detected_player_controller.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
@@ -148,8 +147,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 children: [
-                  Text('Personalizar Inicio', style: theme.textTheme.titleLarge),
-                  Text('Arrastra para ordenar; apaga lo que no quieras ver.', style: theme.textTheme.bodySmall),
+                  Text('Escritorio: ${AppSettings.desktopNames[settings.activeDesktop]}',
+                      style: theme.textTheme.titleLarge),
+                  Text('Arrastra para ordenar; apaga lo que no quieras ver. Cada escritorio guarda su propio orden.',
+                      style: theme.textTheme.bodySmall),
                   const SizedBox(height: 8),
                   ReorderableListView(
                     shrinkWrap: true,
@@ -189,6 +190,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const Divider(height: 24),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Cambiar de escritorio solo'),
+                    subtitle: const Text('«Modo estudio» abre Estudio y «modo viaje» abre Carro.'),
+                    value: settings.autoDesktop,
+                    onChanged: (v) {
+                      settings.update(autoDesktop: v);
+                      setSheet(() {});
+                    },
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Modo compacto'),
@@ -322,13 +333,8 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Modo carro',
             icon: const Icon(Icons.directions_car),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => CarModeScreen(
-                controller: widget.controller,
-                assistant: widget.assistant,
-                voice: widget.voice,
-              ),
-            )),
+            // Un solo modo carro (el del panel principal, que también se abre por voz o Bluetooth).
+            onPressed: () => widget.assistant.setCarMode(true),
           ),
         ],
       ),
@@ -337,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 120),
           children: [
+            if (widget.assistant.settings != null) _DesktopBar(settings: widget.assistant.settings!),
             if (voice != null) _MicStatus(voice: voice),
             if (voice != null) VoiceActionsCard(voice: voice),
             for (final id in widget.assistant.settings?.homeSections ?? AppSettings.allHomeSections)
@@ -1007,4 +1014,39 @@ class _ExtrasRow extends StatelessWidget {
     );
     if (minutes != null) await assistant.sleepIn(minutes);
   }
+}
+
+/// Escritorios de Inicio: Casa, Trabajo, Estudio y Carro, cada uno con sus secciones.
+class _DesktopBar extends StatelessWidget {
+  const _DesktopBar({required this.settings});
+  final AppSettings settings;
+
+  static const _icons = {
+    'casa': Icons.home_rounded,
+    'trabajo': Icons.work_rounded,
+    'estudio': Icons.school_rounded,
+    'carro': Icons.directions_car_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final e in AppSettings.desktopNames.entries)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    avatar: Icon(_icons[e.key], size: 18),
+                    label: Text(e.value),
+                    selected: settings.activeDesktop == e.key,
+                    onSelected: (_) => settings.setDesktop(e.key),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
 }

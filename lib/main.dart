@@ -27,6 +27,7 @@ import 'connectors/knowledge/music_knowledge.dart';
 import 'features/audio/eq_controller.dart';
 import 'features/audio/transition_watcher.dart';
 import 'features/automations/automation_engine.dart';
+import 'features/smarthome/home_link.dart';
 import 'features/devices/detected_player_controller.dart';
 import 'features/music_profile/music_profile.dart';
 import 'features/music_profile/supabase_sync.dart';
@@ -115,6 +116,22 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   late final Assistant assistant;
   late final AutomationEngine automations;
   TransitionWatcher? transitions;
+  String? _homeTrack, _homeMood;
+
+  /// Avisos al hogar inteligente: cada canción nueva y cada cambio de ambiente.
+  void _notifyHome(PlayerStatus? s) {
+    final home = assistant.home;
+    if (home == null || widget.settings.homeHooks.isEmpty) return;
+    if (s != null && s.isPlaying && s.title != null && s.trackKey != _homeTrack) {
+      _homeTrack = s.trackKey;
+      unawaited(home.notify('track', title: s.title, artist: s.artist, mood: widget.profile.currentMood));
+    }
+    final mood = assistant.brain.ambience()?.mood;
+    if (mood != null && mood != _homeMood) {
+      _homeMood = mood;
+      unawaited(home.notify('mood', title: s?.title, artist: s?.artist, mood: mood));
+    }
+  }
   VoiceEngine? voice;
 
   @override
@@ -159,6 +176,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       weather: WeatherService(),
     );
     assistant.knowledge = MusicKnowledge();
+    // Hogar inteligente: avisa a tus servicios (Home Assistant, IFTTT…) si lo configuras.
+    assistant.home = HomeLink(settings: widget.settings);
     // Ecualizador inteligente y transiciones al final de cada canción (Android).
     assistant.eq = EqController(assistant: assistant, settings: widget.settings, media: android);
     if (Platform.isAndroid && android != null) {
@@ -176,6 +195,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       widget.profile.observe(status);
       assistant.onPlayerUpdate(status);
       unawaited(transitions?.update(status) ?? Future.value());
+      _notifyHome(status);
       unawaited(voice?.setFreeMode(!(status?.isPlaying ?? false)) ?? Future.value());
     };
 

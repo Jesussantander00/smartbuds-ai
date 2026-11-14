@@ -184,6 +184,7 @@ class VoiceEngine extends ChangeNotifier {
         BlockIntent(:final artist) => artist ? 'Bloquear artista' : 'Nunca más esta',
         MultiIntent(:final parts) => parts.map(describe).join(' + '),
         StopListeningIntent() => 'Dejar de escuchar',
+        HomeSceneIntent(:final name) => 'Escena $name',
         ForgottenIntent() => 'Favoritas olvidadas',
         ShareWeekIntent() => 'Compartir mi semana',
         SimilarIntent() => 'Algo parecido',
@@ -488,6 +489,7 @@ class VoiceEngine extends ChangeNotifier {
             MacroIntent() ||
             ArtistInfoIntent() ||
             TasteEvolutionIntent() ||
+            HomeSceneIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

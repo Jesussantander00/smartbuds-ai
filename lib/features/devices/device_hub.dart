@@ -19,6 +19,9 @@ class RemoteDevice {
     this.app,
     this.playing = false,
     required this.updatedAt,
+    this.queue = const [],
+    this.mood,
+    this.usage,
   });
 
   final String id;
@@ -29,6 +32,11 @@ class RemoteDevice {
   final String? app;
   final bool playing;
   final DateTime updatedAt;
+
+  /// Continuidad: su cola, el ambiente y el perfil de uso.
+  final List<String> queue;
+  final String? mood;
+  final String? usage;
 
   /// Se reportó hace menos de 3 minutos.
   bool onlineAt(DateTime now) => now.difference(updatedAt) < const Duration(minutes: 3);
@@ -42,6 +50,9 @@ class RemoteDevice {
         app: j['app'] as String?,
         playing: j['playing'] == true,
         updatedAt: DateTime.tryParse('${j['updated_at']}')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
+        queue: [for (final q in (j['queue'] as List?) ?? const []) if (q is String) q],
+        mood: j['mood'] as String?,
+        usage: j['usage'] as String?,
       );
 }
 
@@ -92,11 +103,11 @@ class DeviceHub extends ChangeNotifier {
   /// Decide si hay que publicar: cambió la canción o el estado, o pasó 1 minuto
   /// (para seguir apareciendo «en línea»). Nunca en modo privado.
   @visibleForTesting
-  bool shouldPublish(PlayerStatus? s) {
+  bool shouldPublish(PlayerStatus? s, {List<String> queue = const [], String? mood, String? usage}) {
     if (!settings.signedIn || !settings.shareDevices || settings.privateMode || !settings.moduleOn('multidevice')) {
       return false;
     }
-    final key = '${s?.title}|${s?.artist}|${s?.isPlaying}';
+    final key = '${s?.title}|${s?.artist}|${s?.isPlaying}|${queue.join('/')}|$mood|$usage';
     final now = _clock();
     if (key == _lastKey && _lastAt != null && now.difference(_lastAt!) < const Duration(minutes: 1)) {
       return false;
@@ -107,18 +118,36 @@ class DeviceHub extends ChangeNotifier {
   }
 
   /// Publica lo que suena en este teléfono (si toca).
-  Future<void> publish(PlayerStatus? s) async {
-    if (!shouldPublish(s)) return;
+  /// Si la base aún no tiene continuidad (falta continuidad.sql), usa la versión simple.
+  bool _v2 = true;
+
+  Future<void> publish(PlayerStatus? s, {List<String> queue = const [], String? mood, String? usage}) async {
+    if (!shouldPublish(s, queue: queue, mood: mood, usage: usage)) return;
+    final base = {
+      'p_device_id': settings.deviceId,
+      'p_name': myName,
+      'p_platform': platform,
+      'p_title': s?.title,
+      'p_artist': s?.artist,
+      'p_app': s?.appName,
+      'p_playing': s?.isPlaying ?? false,
+    };
     try {
-      await _call('POST', '/rest/v1/rpc/upsert_my_device', {
-        'p_device_id': settings.deviceId,
-        'p_name': myName,
-        'p_platform': platform,
-        'p_title': s?.title,
-        'p_artist': s?.artist,
-        'p_app': s?.appName,
-        'p_playing': s?.isPlaying ?? false,
-      });
+      if (_v2) {
+        try {
+          await _call('POST', '/rest/v1/rpc/upsert_my_device2', {
+            ...base,
+            'p_queue': queue.take(20).toList(),
+            'p_mood': mood,
+            'p_usage': usage,
+          });
+          return;
+        } on DeviceHubException catch (e) {
+          if (!e.message.contains('Falta activar')) rethrow;
+          _v2 = false;
+        }
+      }
+      await _call('POST', '/rest/v1/rpc/upsert_my_device', base);
     } catch (_) {
       // Sin conexión o falta el SQL: se intenta de nuevo en el próximo cambio.
       _lastKey = null;

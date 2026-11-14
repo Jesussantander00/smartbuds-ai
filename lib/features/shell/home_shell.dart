@@ -116,7 +116,7 @@ class _HomeShellState extends State<HomeShell> {
   /// cuando el asistente lo pide (voz o Bluetooth del carro).
   void _onAssistant() {
     final a = widget.assistant;
-    _hub?.publish(a.active);
+    _hub?.publish(a.active, queue: a.queue, mood: a.profile.currentMood, usage: widget.settings.usageProfile);
     // Fuera del ciclo de dibujo: el aviso puede llegar mientras se construye.
     Future.microtask(_syncCarMode);
   }

@@ -191,6 +191,12 @@ class StopListeningIntent extends VoiceIntent {
   const StopListeningIntent();
 }
 
+/// «Escena Fiesta» / «Activa la escena Relajarme»: avisa a tu hogar inteligente.
+class HomeSceneIntent extends VoiceIntent {
+  const HomeSceneIntent(this.name);
+  final String name;
+}
+
 /// «Pon media hora de música»: una lista de tus canciones para ese tiempo.
 class DurationIntent extends VoiceIntent {
   const DurationIntent(this.minutes);
@@ -597,6 +603,12 @@ class CommandParser {
     if (_carOn.contains(text)) return const CarModeIntent(true);
     if (_carOff.contains(text)) return const CarModeIntent(false);
     if (_stopListening.contains(text)) return const StopListeningIntent();
+    for (final p in const ['activa la escena ', 'pon la escena ', 'enciende la escena ', 'escena ']) {
+      if (text.startsWith(p)) {
+        final name = text.substring(p.length).trim();
+        if (name.isNotEmpty) return HomeSceneIntent(name);
+      }
+    }
     if (_evolution.contains(text)) return const TasteEvolutionIntent();
     if (_aboutCurrent.contains(text)) return const ArtistInfoIntent();
     for (final p in _aboutPrefixes) {

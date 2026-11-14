@@ -209,6 +209,13 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
 .open-btn { display: inline-block; color: #fff; font-weight: 600; text-decoration: none; padding: 12px 22px; border-radius: 24px;
   background: linear-gradient(160deg, #ffa064, var(--accent-deep)); }
 
+/* ---------- Continuidad ---------- */
+.continue-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.continue-row div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.continue-row b, .continue-row small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.continue-row small { color: var(--muted); }
+.continue-row .primary { padding: 10px 14px; border-radius: 14px; flex: none; }
+
 /* ---------- Elegir app y buscar ---------- */
 .target { padding: 10px 12px; }
 .target-label { flex: 1; color: var(--muted); white-space: nowrap; }
