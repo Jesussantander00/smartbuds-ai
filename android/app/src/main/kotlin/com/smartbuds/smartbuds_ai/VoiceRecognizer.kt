@@ -58,6 +58,7 @@ class VoiceRecognizer(
         private const val ASSET_SPK = "model-spk"
         private const val SAMPLE_RATE = 16000f
         private const val MIN_CONFIDENCE = 0.6
+        private const val MAX_RETRIES = 5
 
         private val HEADPHONE_TYPES = buildSet {
             add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
@@ -93,6 +94,13 @@ class VoiceRecognizer(
 
     /** Cada frase reconocida es una sesión; Dart la usa para no repetir comandos. */
     private var session = 0
+
+    /** Errores seguidos del micrófono (para reintentar con pausas crecientes). */
+    private var errorStreak = 0
+    private var retryPending = false
+
+    /** «¿Qué canción?» en curso: mientras tanto no se abre otro reconocedor. */
+    private var onceActive = false
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -186,6 +194,13 @@ class VoiceRecognizer(
                 reloadRecognizer()
                 result.success(true)
             }
+            // Dart pide comprobar que de verdad esté escuchando (al volver a la app,
+            // o si lleva un rato sin oír). Reabre el micrófono si se cayó.
+            "ensure" -> {
+                errorStreak = 0
+                if (wanted && !pausedByUser && speechService == null && !onceActive) startVosk()
+                result.success(speechService != null)
+            }
             "headphonesConnected" -> result.success(headphonesConnected())
             "speakerAvailable" -> result.success(assetBundled(ASSET_SPK))
             else -> result.notImplemented()
@@ -240,7 +255,8 @@ class VoiceRecognizer(
     // ------------------------------------------------------------- Vosk
 
     private fun startVosk() {
-        if (speechService != null || !wanted || pausedByUser) return
+        // Nunca dos reconocedores a la vez (ni con «¿Qué canción?» en curso).
+        if (speechService != null || !wanted || pausedByUser || onceActive) return
         emit("state", mapOf("listening" to false, "loading" to true))
         worker.execute {
             try {
@@ -254,7 +270,7 @@ class VoiceRecognizer(
                 }
                 val recognizer = buildRecognizer(m)
                 main.post {
-                    if (!wanted || pausedByUser || speechService != null) {
+                    if (!wanted || pausedByUser || speechService != null || onceActive) {
                         recognizer.close()
                         return@post
                     }
@@ -268,7 +284,7 @@ class VoiceRecognizer(
                     }
                 }
             } catch (e: Exception) {
-                emitError("No se pudo cargar el modelo de voz: ${e.message}")
+                emit("error", mapOf("message" to "No se pudo cargar el modelo de voz: ${e.message}", "fatal" to true))
             }
         }
     }
@@ -342,6 +358,7 @@ class VoiceRecognizer(
         } catch (_: Exception) {
             JSONObject()
         }
+        errorStreak = 0 // el micrófono funciona
         val raw = json.optString("text", "").trim()
         if (raw.isNotEmpty() && !raw.contains("[unk]") && confident(json)) {
             val spkArray = json.optJSONArray("spk")
@@ -367,16 +384,31 @@ class VoiceRecognizer(
     }
 
     override fun onError(exception: Exception?) {
-        emitError("Error del micrófono: ${exception?.message}")
         stopVosk()
-        emit("state", mapOf("listening" to false))
-        // Reintenta solo: el micrófono puede estar ocupado un momento.
-        main.postDelayed({ if (wanted && !pausedByUser) startVosk() }, 1500)
+        errorStreak++
+        if (errorStreak > MAX_RETRIES) {
+            // No reintentar sin fin (batería): Dart muestra el error y «Reintentar».
+            emit("state", mapOf("listening" to false, "recovering" to false))
+            emit("error", mapOf("message" to "El micrófono no responde: ${exception?.message ?: "error desconocido"}", "fatal" to true))
+            return
+        }
+        emit("state", mapOf("listening" to false, "recovering" to true))
+        emitError("Error del micrófono: ${exception?.message}")
+        // Reintenta solo, con pausas crecientes: 1,5 s, 3 s, 6 s… (máx. 15 s).
+        if (retryPending) return
+        retryPending = true
+        val delay = minOf(1500L shl (errorStreak - 1), 15_000L)
+        main.postDelayed({
+            retryPending = false
+            if (wanted && !pausedByUser) startVosk()
+        }, delay)
     }
 
     override fun onTimeout() {
+        // Sin límite de tiempo no debería pasar, pero si pasa se vuelve a escuchar.
         stopVosk()
-        emit("state", mapOf("listening" to false))
+        emit("state", mapOf("listening" to false, "recovering" to true))
+        if (wanted && !pausedByUser) startVosk()
     }
 
     // ------------------------------------------------------- Respuesta hablada
@@ -459,6 +491,7 @@ class VoiceRecognizer(
             return
         }
         stopVosk()
+        onceActive = true
         var answered = false
         fun finish(text: String?) {
             if (answered) return
@@ -467,7 +500,8 @@ class VoiceRecognizer(
                 oneShotService?.stop()
                 oneShotService?.shutdown()
                 oneShotService = null
-                startVosk()
+                onceActive = false
+                startVosk() // vuelve la escucha continua
                 result.success(text)
             }
         }

@@ -380,6 +380,19 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
   private var silenceTimer: Timer?
   private var phrases: [String] = []
 
+  /// Cada tarea de reconocimiento tiene su número: las respuestas de una tarea
+  /// vieja (cancelada) se ignoran. Antes, al cancelar una tarea, su aviso de
+  /// error llegaba tarde y reiniciaba —y mataba— la tarea nueva, en bucle:
+  /// Jarvis dejaba de oír hasta tocar el micrófono.
+  private var generation = 0
+
+  /// Un solo reinicio pendiente a la vez.
+  private var pendingRestart: DispatchWorkItem?
+
+  /// Errores seguidos (pausas crecientes; sin reintentos infinitos).
+  private var errorStreak = 0
+  private static let maxRetries = 5
+
   /// «¿Qué canción?» → la siguiente frase va a quien la pidió (listenOnce).
   private var once: FlutterResult?
   private var onceFrom = Date.distantPast
@@ -399,6 +412,30 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     center.addObserver(
       self, selector: #selector(interrupted(_:)),
       name: AVAudioSession.interruptionNotification, object: nil)
+    // Al conectar o quitar audífonos el motor de audio se detiene solo: hay que reabrirlo.
+    center.addObserver(
+      self, selector: #selector(engineChanged),
+      name: .AVAudioEngineConfigurationChange, object: audioEngine)
+    // Al volver a la app (desbloquear, cambiar de app) se comprueba que siga escuchando.
+    center.addObserver(
+      self, selector: #selector(becameActive),
+      name: UIApplication.didBecomeActiveNotification, object: nil)
+  }
+
+  @objc private func engineChanged() {
+    if wanted && !paused && !speaking { restart(after: 0.3, recovering: true) }
+  }
+
+  @objc private func becameActive() { ensure() }
+
+  /// Reabre la escucha si debería estar activa y no lo está. Devuelve si escucha.
+  @discardableResult
+  private func ensure() -> Bool {
+    errorStreak = 0
+    if wanted && !paused && !speaking && (task == nil || !audioEngine.isRunning) {
+      restart(after: 0.1, recovering: true)
+    }
+    return task != nil && audioEngine.isRunning
   }
 
   private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -422,6 +459,8 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       result(true)
     case "stop":
       wanted = false
+      pendingRestart?.cancel()
+      pendingRestart = nil
       stopListening()
       emit("state", ["listening": false])
       result(true)
@@ -439,6 +478,8 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       result(true)
     case "listenOnce":
       listenOnce(result)
+    case "ensure":
+      result(ensure())
     case "headphonesConnected":
       result(headphonesConnected())
     case "speakerAvailable":
@@ -494,25 +535,47 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       audioEngine.prepare()
       try audioEngine.start()
 
+      generation += 1
+      let gen = generation
       task = recognizer.recognitionTask(with: req) { [weak self] result, error in
         DispatchQueue.main.async {
-          guard let self = self else { return }
+          // Respuesta de una tarea vieja (ya cancelada): no tocar la actual.
+          guard let self = self, gen == self.generation else { return }
           if let result = result {
+            self.errorStreak = 0
             self.lastText = result.bestTranscription.formattedString
             if result.isFinal { self.finishUtterance() } else { self.armSilenceTimer() }
-          } else if error != nil {
-            self.restart(after: 0.6)
+          } else if let error = error {
+            self.recognitionFailed(error)
           }
         }
       }
-      emit("state", ["listening": true])
+      emit("state", ["listening": true, "recovering": false])
     } catch {
-      emit("error", ["message": "No se pudo abrir el micrófono: \(error.localizedDescription)"])
       stopListening()
+      recognitionFailed(error)
     }
   }
 
+  /// Error de reconocimiento: reintenta con pausas crecientes (0,6 s, 1,2 s,
+  /// 2,4 s… hasta 10 s) y, si sigue fallando, avisa a Dart en vez de insistir.
+  private func recognitionFailed(_ error: Error) {
+    let ns = error as NSError
+    // 1110 = no se oyó nada; 216/301 = cancelada. No cuentan como fallo del micrófono.
+    let benign = [1110, 216, 301, 203].contains(ns.code)
+    if !benign { errorStreak += 1 }
+    if errorStreak > Self.maxRetries {
+      stopListening()
+      emit("state", ["listening": false, "recovering": false])
+      emit("error", ["message": "El reconocimiento de voz no responde: \(ns.localizedDescription)", "fatal": true])
+      return
+    }
+    let delay = benign ? 0.3 : min(0.6 * pow(2.0, Double(max(errorStreak - 1, 0))), 10)
+    restart(after: delay, recovering: !benign)
+  }
+
   private func stopListening() {
+    generation += 1 // lo que llegue de la tarea anterior se ignora
     silenceTimer?.invalidate()
     silenceTimer = nil
     if audioEngine.isRunning { audioEngine.stop() }
@@ -523,11 +586,16 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     request = nil
   }
 
-  private func restart(after seconds: Double) {
+  private func restart(after seconds: Double, recovering: Bool = false) {
     stopListening()
-    DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+    if recovering { emit("state", ["listening": false, "recovering": true]) }
+    pendingRestart?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      self?.pendingRestart = nil
       self?.startListening()
     }
+    pendingRestart = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
   }
 
   /// Un segundo sin palabras nuevas = terminaste la frase.
@@ -606,6 +674,8 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
 
   @objc private func routeChanged() {
     emit("headphones", ["connected": headphonesConnected()])
+    // El cambio de ruta reinicia el audio: se reabre la escucha (si debe estar activa).
+    if wanted && !paused && !speaking { restart(after: 0.4, recovering: true) }
   }
 
   @objc private func interrupted(_ note: Notification) {

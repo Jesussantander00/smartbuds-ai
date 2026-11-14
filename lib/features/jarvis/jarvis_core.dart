@@ -13,19 +13,25 @@ class JarvisCore extends StatefulWidget {
   final bool showLabel;
 
   static String label(JarvisState s) => switch (s) {
-        JarvisState.off => 'Apagado',
-        JarvisState.waiting => 'Esperando',
+        JarvisState.off => 'Desactivado',
+        JarvisState.ready => 'Preparado',
         JarvisState.listening => 'Escuchando',
+        JarvisState.processing => 'Procesando',
         JarvisState.working => 'Ejecutando',
         JarvisState.responding => 'Respondiendo',
+        JarvisState.recovering => 'Recuperando',
+        JarvisState.error => 'Error',
       };
 
   static Color color(JarvisState s) => switch (s) {
         JarvisState.off => const Color(0xFF8A8F98),
-        JarvisState.waiting => const Color(0xFFE8833A),
+        JarvisState.ready => const Color(0xFFE8833A),
         JarvisState.listening => const Color(0xFF2FB5FF),
+        JarvisState.processing => const Color(0xFF7AA7FF),
         JarvisState.working => const Color(0xFFB07CFF),
         JarvisState.responding => const Color(0xFF1FD1A0),
+        JarvisState.recovering => const Color(0xFFF5B83D),
+        JarvisState.error => const Color(0xFFE5484D),
       };
 
   @override
@@ -107,10 +113,13 @@ class _CorePainter extends CustomPainter {
     final color = JarvisCore.color(state);
     final speed = switch (state) {
       JarvisState.off => 0.0,
-      JarvisState.waiting => 1.0,
+      JarvisState.ready => 1.0,
       JarvisState.listening => 2.5,
+      JarvisState.processing => 3.2,
       JarvisState.working => 4.0,
       JarvisState.responding => 1.8,
+      JarvisState.recovering => 5.0,
+      JarvisState.error => 0.0,
     };
     final a = t * 2 * pi * speed;
 

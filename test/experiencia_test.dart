@@ -16,7 +16,7 @@ void main() {
     final v = VoiceEngine(onCommand: (_) async {}, onIntent: (_) async {}, clock: () => now);
     expect(v.jarvisState, JarvisState.off);
     v.enabled = true;
-    expect(v.jarvisState, JarvisState.waiting);
+    expect(v.jarvisState, JarvisState.ready);
     v.handleEvent({'type': 'state', 'listening': true});
     expect(v.jarvisState, JarvisState.listening);
     v.runIntent(const LikeIntent());

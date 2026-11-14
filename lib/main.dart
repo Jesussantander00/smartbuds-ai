@@ -116,6 +116,10 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   late final Assistant assistant;
   late final AutomationEngine automations;
   TransitionWatcher? transitions;
+
+  /// Al volver a la app (desbloquear, regresar de otra app): comprobar que Jarvis
+  /// siga escuchando y reabrir el micrófono si el sistema lo cerró.
+  AppLifecycleListener? _lifecycle;
   String? _homeTrack, _homeMood;
 
   /// Avisos al hogar inteligente: cada canción nueva y cada cambio de ambiente.
@@ -240,6 +244,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
       if (widget.settings.onboardingDone) unawaited(v.autoStart());
+      _lifecycle = AppLifecycleListener(onResume: () => unawaited(v.ensureListening()));
     }
   }
 
@@ -275,6 +280,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
 
   @override
   void dispose() {
+    _lifecycle?.dispose();
     transitions?.dispose();
     assistant.eq?.dispose();
     automations.dispose();
