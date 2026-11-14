@@ -43,3 +43,9 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Automatización a una hora | Sí, con SmartBuds abierto o escuchando en segundo plano | Solo con la app abierta | No | — | Temporizador de la app. Con la app cerrada del todo no se despierta sola |
 | Enlaces smartbuds:// (Atajos, Tasker, MacroDroid, NFC) | Sí | Sí (app Atajos) | No | — | Esquema de URL propio; solo acciones que ya existen en la app |
 | Hogar inteligente (Google Home, Alexa) | **No por ahora** | **No por ahora** | — | — | Exigen registrar la app como dispositivo o «skill» en sus servicios en la nube. Los Atajos y Tasker sí pueden disparar SmartBuds |
+| Estadísticas avanzadas (artistas por tiempo, rachas, horario, descubrimientos) | Sí | Sí | No | Ninguno | Tu historial en el teléfono. Sin género ni álbum: las apps de música no los comparten |
+| Copia de seguridad en la nube | Sí | Sí | No | Cuenta | Supabase (`supabase/respaldo.sql`): una copia por cuenta, solo tú la ves, máx. ~2 MB. Sin sesión ni huella de voz |
+| Copia como texto (exportar / importar) | Sí | Sí | — | — | Compartir o portapapeles |
+| Conocimiento musical («cuéntame de…») | Sí | Sí | No | Internet | Wikipedia en español (resumen, solo si el artículo es de música) y Deezer (seguidores, álbumes, parecidos). Colaboraciones: solo tus canciones. Nada inventado |
+| Extensiones (encender o apagar módulos) | Sí | Sí | — | — | Módulos incluidos en la app. Las tiendas no permiten descargar código nuevo después de instalar |
+| SmartBuds Premium | **Aún no** | **Aún no** | — | — | Requiere cuentas de desarrollador y facturación de Google Play / App Store. Lo básico seguirá gratis |

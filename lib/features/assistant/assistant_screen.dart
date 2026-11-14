@@ -175,7 +175,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
           children: [
             if (voice != null && _filter.isEmpty) _hero(context, voice!),
             if (widget.assistant != null && _filter.isEmpty) _quick(context),
-            if (widget.assistant?.automations case final AutomationEngine engine when _filter.isEmpty)
+            if (widget.assistant?.automations case final AutomationEngine engine
+                when _filter.isEmpty && settings.moduleOn('automations'))
               Card(
                 child: ListTile(
                   leading: const AppIcon(Icons.auto_awesome_rounded, colors: AppColors.home, size: 38),

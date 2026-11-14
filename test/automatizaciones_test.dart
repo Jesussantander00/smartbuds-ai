@@ -130,6 +130,13 @@ void main() {
       expect(engine.save(mk()), contains('esa frase'));
     });
 
+    test('con la extensión apagada no responde nada', () {
+      final a = automationTemplates().first;
+      engine.save(a);
+      settings.setModule('automations', false);
+      expect(engine.match(a.phrase!), isNull);
+    });
+
     test('apagada no responde', () {
       final a = automationTemplates().first;
       engine.save(a);

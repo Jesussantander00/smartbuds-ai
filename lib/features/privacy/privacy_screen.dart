@@ -6,6 +6,8 @@ import '../assistant/assistant.dart';
 import '../devices/connectivity.dart';
 import '../devices/detected_player_controller.dart';
 import 'changelog.dart';
+import '../modules/extensions_screen.dart';
+import '../modules/modules.dart';
 
 /// Privacidad y ayuda: tus datos, permisos, diagnóstico, funciones de prueba,
 /// compatibilidad y novedades, en una sola pantalla.
@@ -35,6 +37,20 @@ class PrivacyScreen extends StatelessWidget {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 40),
           children: [
+            // ------------------------------------------------- Extensiones
+            if (assistant.settings != null)
+              Card(
+                child: ListTile(
+                  leading: const AppIcon(Icons.extension_rounded, colors: AppColors.radio, size: 38),
+                  title: const Text('Extensiones'),
+                  subtitle: Text('${smartBudsModules.where((m) => assistant.settings!.moduleOn(m.id)).length} de '
+                      '${smartBudsModules.length} activas · SmartBuds Premium'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => ExtensionsScreen(settings: assistant.settings!),
+                  )),
+                ),
+              ),
             // ------------------------------------------------ Modo privado
             NeonCard(
               child: SwitchListTile(

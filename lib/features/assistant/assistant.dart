@@ -13,6 +13,7 @@ import '../../core/voice_engine/voice_engine.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/telemetry/error_reporter.dart';
+import '../../connectors/knowledge/music_knowledge.dart';
 import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../devices/detected_player_controller.dart';
@@ -172,7 +173,7 @@ class Assistant extends ChangeNotifier {
       headphoneName = name;
       // Te subiste al carro: abre el modo carro si ese Bluetooth es el auto.
       final st = settings;
-      if (name != null && st != null && st.carAutoOpen && st.carDevices.contains(name)) {
+      if (name != null && st != null && st.moduleOn('car') && st.carAutoOpen && st.carDevices.contains(name)) {
         carMode = true;
       }
       notifyListeners();
@@ -328,6 +329,8 @@ class Assistant extends ChangeNotifier {
         await playSimilar();
       case WhyIntent():
         await explainCurrent();
+      case ArtistInfoIntent(:final artist):
+        await tellAboutArtist(artist);
       case DurationIntent(:final minutes):
         await playFor(minutes);
       case UsageProfileIntent(:final profile):
@@ -341,6 +344,8 @@ class Assistant extends ChangeNotifier {
             : 'Listo, vuelvo a aprender de lo que escuchas.');
       case MacroIntent(:final id):
         await automations?.runById(id);
+      case CarModeIntent(:final on) when on && !(settings?.moduleOn('car') ?? true):
+        await _say('El modo carro está apagado en Extensiones.');
       case CarModeIntent(:final on):
         setCarMode(on);
         await _say(on
@@ -444,6 +449,50 @@ class Assistant extends ChangeNotifier {
     queue.insert(index.clamp(0, queue.length), query);
     notifyListeners();
   }
+
+  /// Conocimiento musical (Wikipedia + Deezer). Null = sin internet o desactivado.
+  MusicKnowledge? knowledge;
+
+  /// Lo último que se consultó de un artista (la interfaz lo muestra).
+  final lastArtistInfo = ValueNotifier<ArtistInfo?>(null);
+
+  /// Colaboraciones de un artista en TU música.
+  List<String> collaborationsOf(String artist) => collaborationsIn(
+        [for (final t in profile.tracks.values) (title: t.title, artist: t.artist)],
+        artist,
+      );
+
+  /// «Cuéntame de Feid»: resumen con fuente, seguidores y colaboraciones en
+  /// tu música. Si no hay datos confiables, lo dice (no inventa).
+  Future<ArtistInfo?> tellAboutArtist(String? name) async {
+    if (settings != null && !settings!.moduleOn('knowledge')) {
+      await _say('El conocimiento musical está apagado en Extensiones.');
+      return null;
+    }
+    final who = (name ?? active?.artist)?.trim();
+    if (who == null || who.isEmpty) {
+      await _say('Dime de qué artista quieres saber, o pon una canción.');
+      return null;
+    }
+    final info = await knowledge?.artist(who);
+    final collabs = collaborationsOf(who).take(3).toList();
+    lastArtistInfo.value = info;
+    final parts = <String>[];
+    final summary = info?.shortSummary(settings?.shortReplies ?? false ? 1 : 2);
+    if (summary != null) parts.add('Según Wikipedia: $summary');
+    if (info?.fans != null && !(settings?.shortReplies ?? false)) {
+      parts.add('Tiene ${_fansText(info!.fans!)} seguidores en Deezer.');
+    }
+    if (collabs.isNotEmpty) parts.add('En tu música aparece con ${collabs.join(', ')}.');
+    await _say(parts.isEmpty ? 'No encontré información confiable de $who.' : parts.join(' '));
+    return info;
+  }
+
+  static String _fansText(int n) => n >= 1000000
+      ? '${(n / 1000000).toStringAsFixed(n >= 10000000 ? 0 : 1)} millones de'
+      : n >= 1000
+          ? '${(n / 1000).round()} mil'
+          : '$n';
 
   Future<void> explainCurrent() async {
     final a = active;

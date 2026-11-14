@@ -10,6 +10,10 @@ import 'supabase_sync.dart';
 import 'year_in_music_screen.dart';
 import 'insights.dart';
 import '../audio/playback_analysis_screen.dart';
+import '../backup/backup_screen.dart';
+import '../backup/backup_service.dart';
+import '../stats/advanced_stats_screen.dart';
+import '../knowledge/artist_info_sheet.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 
@@ -21,12 +25,18 @@ class MyMusicScreen extends StatelessWidget {
     required this.assistant,
     this.sync,
     this.auth,
+    this.backup,
+    this.deviceName = 'Este teléfono',
   });
 
   final MusicProfile profile;
   final Assistant assistant;
   final SupabaseSync? sync;
   final SupabaseAuth? auth;
+
+  /// Copia de seguridad (nube y texto) y nombre de este teléfono.
+  final BackupService? backup;
+  final String deviceName;
 
   static String _eventLabel(ListenEventType t) => switch (t) {
         ListenEventType.play => 'Sonó',
@@ -110,6 +120,14 @@ class MyMusicScreen extends StatelessWidget {
                     label: const Text('Compartir mi semana'),
                     onPressed: () => assistant.shareSummary(days: 7),
                   ),
+                  if (assistant.settings?.moduleOn('stats') ?? true)
+                  ActionChip(
+                    avatar: const Icon(Icons.insights_rounded, size: 18),
+                    label: const Text('Estadísticas avanzadas'),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => AdvancedStatsScreen(profile: profile),
+                    )),
+                  ),
                   ActionChip(
                     avatar: const Icon(Icons.analytics_outlined, size: 18),
                     label: const Text('Análisis de reproducción'),
@@ -171,6 +189,20 @@ class MyMusicScreen extends StatelessWidget {
                       subtitle: const Text('Envía tu código y pega el de tu amigo.'),
                       onTap: () => _compare(context),
                     ),
+                    if (backup != null)
+                      ListTile(
+                        leading: const Icon(Icons.cloud_done_outlined),
+                        title: const Text('Copia de seguridad'),
+                        subtitle: const Text('Ajustes, automatizaciones y gustos, en la nube o como texto.'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => BackupScreen(
+                            backup: backup!,
+                            deviceName: deviceName,
+                            share: (t) async => await assistant.media?.shareText(t) ?? false,
+                          ),
+                        )),
+                      ),
                     ListTile(
                       leading: const Icon(Icons.backup_outlined),
                       title: const Text('Exportar copia de mis gustos'),
@@ -441,7 +473,9 @@ class _ArtistCarousel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Card(
               clipBehavior: Clip.antiAlias,
-              child: Stack(
+              child: InkWell(
+                onTap: () => showArtistInfo(context, assistant, name),
+                child: Stack(
                 fit: StackFit.expand,
                 children: [
                   FutureBuilder<String?>(
@@ -500,6 +534,7 @@ class _ArtistCarousel extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           );

@@ -8,12 +8,16 @@ import '../assistant/assistant_screen.dart';
 import '../devices/detected_player_controller.dart';
 import '../devices/detected_player_screen.dart';
 import '../devices/device_hub.dart';
+import '../backup/backup_service.dart';
 import '../car/car_mode_screen.dart';
 import '../home/home_screen.dart';
 import '../music_profile/music_profile.dart';
 import '../music_profile/my_music_screen.dart';
 import '../music_profile/supabase_sync.dart';
 import 'glass_sidebar.dart';
+import '../modules/extensions_screen.dart';
+import '../modules/modules.dart';
+import '../../core/ui/futuristic.dart';
 import '../privacy/privacy_screen.dart';
 import '../social/social_screen.dart';
 import '../social/social_service.dart';
@@ -56,6 +60,7 @@ class _HomeShellState extends State<HomeShell> {
   SocialService? _social;
   ListenParty? _party;
   DeviceHub? _hub;
+  late final BackupService _backup;
   Route<void>? _carRoute;
 
   @override
@@ -66,11 +71,45 @@ class _HomeShellState extends State<HomeShell> {
       _social = SocialService(url: auth.url, anonKey: auth.anonKey, auth: auth, settings: widget.settings);
       _social!.refresh();
       _party = ListenParty(social: _social!, assistant: widget.assistant, controller: widget.controller);
-      if (widget.settings.signedIn) _party!.resume();
+      if (widget.settings.signedIn && widget.settings.moduleOn('social')) _party!.resume();
       _hub = DeviceHub(url: auth.url, anonKey: auth.anonKey, auth: auth, settings: widget.settings);
     }
+    _backup = BackupService(
+      settings: widget.settings,
+      profile: widget.profile,
+      auth: auth,
+      url: auth?.url,
+      anonKey: auth?.anonKey,
+    );
     widget.assistant.addListener(_onAssistant);
     widget.controller.addListener(_onAssistant);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _backupCheck());
+  }
+
+  String get _deviceName => _hub?.myName ?? widget.settings.deviceName ?? 'Este teléfono';
+
+  /// Copia diaria y, si este teléfono está vacío y hay copia en la nube, ofrecerla.
+  Future<void> _backupCheck() async {
+    if (!widget.settings.signedIn) return;
+    if (await _backup.shouldOfferRestore()) {
+      if (!mounted) return;
+      final c = _backup.cloud!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text('Tienes una copia de ${c.device ?? 'otro teléfono'} con ${c.songs} canciones.'),
+        action: SnackBarAction(
+          label: 'Restaurar',
+          onPressed: () async {
+            final r = await _backup.restoreFromCloud();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(r == null ? (_backup.error ?? 'No se pudo restaurar.') : 'Listo: tu SmartBuds volvió.')));
+          },
+        ),
+      ));
+      return;
+    }
+    await _backup.autoBackup(device: _deviceName);
   }
 
   /// Publica lo que suena para tus otros dispositivos y abre el modo carro
@@ -107,6 +146,7 @@ class _HomeShellState extends State<HomeShell> {
     widget.assistant.removeListener(_onAssistant);
     widget.controller.removeListener(_onAssistant);
     _hub?.dispose();
+    _backup.dispose();
     _party?.dispose();
     _social?.dispose();
     super.dispose();
@@ -127,8 +167,15 @@ class _HomeShellState extends State<HomeShell> {
         assistant: widget.assistant,
         sync: widget.sync,
         auth: widget.auth,
+        backup: _backup,
+        deviceName: _deviceName,
       ),
-      SocialScreen(assistant: widget.assistant, social: _social, party: _party),
+      ListenableBuilder(
+        listenable: widget.settings,
+        builder: (context, _) => widget.settings.moduleOn('social')
+            ? SocialScreen(assistant: widget.assistant, social: _social, party: _party)
+            : _ModuleOff(settings: widget.settings, id: 'social'),
+      ),
       // Diagnóstico de reproductores y capacidades (sin micrófono propio).
       DetectedPlayerScreen(
         controller: widget.controller,
@@ -190,6 +237,42 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Página de un módulo apagado: qué es y cómo volver a encenderlo.
+class _ModuleOff extends StatelessWidget {
+  const _ModuleOff({required this.settings, required this.id});
+  final AppSettings settings;
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = moduleById(id);
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon(m.icon, colors: m.colors, size: 64),
+            const SizedBox(height: 16),
+            Text('${m.name} está apagado', style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(m.description, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: () => settings.setModule(id, true), child: const Text('Encender')),
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => ExtensionsScreen(settings: settings)),
+              ),
+              child: const Text('Ver extensiones'),
+            ),
+          ],
+        ),
       ),
     );
   }

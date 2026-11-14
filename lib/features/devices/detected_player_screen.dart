@@ -99,6 +99,7 @@ class _DetectedPlayerScreenState extends State<DetectedPlayerScreen>
                 ),
               if (widget.assistant != null) ...[
                 _HeadphonesCard(assistant: widget.assistant!),
+                if (widget.assistant!.settings?.moduleOn('multidevice') ?? true)
                 Card(
                   child: ListTile(
                     leading: const AppIcon(Icons.devices_rounded, colors: AppColors.devices, size: 36),

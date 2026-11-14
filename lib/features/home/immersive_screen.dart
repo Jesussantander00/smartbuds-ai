@@ -165,7 +165,9 @@ class _ImmersiveScreenState extends State<ImmersiveScreen> {
                             LiveVisualizer(
                               playing: playing,
                               height: 44,
-                              enabled: (settings?.realVisualizer ?? true) && !widget.assistant.lowBattery,
+                              enabled: (settings?.realVisualizer ?? true) &&
+                                  (settings?.moduleOn('visualizer') ?? true) &&
+                                  !widget.assistant.lowBattery,
                               color: accent,
                             ),
                             const SizedBox(height: 12),

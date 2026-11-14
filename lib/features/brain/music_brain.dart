@@ -89,6 +89,9 @@ class MusicBrain {
   final SimilarArtistsFinder? similar;
   final DateTime Function() _clock;
 
+  /// Hora según el cerebro (inyectable en las pruebas).
+  DateTime get now => _clock();
+
   // ----------------------------------------------------- Aprendizaje
 
   /// Peso de cada fuente (0,5 – 2). Sube cuando aciertas, baja cuando saltas.

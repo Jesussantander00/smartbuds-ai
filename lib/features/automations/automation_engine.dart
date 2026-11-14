@@ -94,7 +94,10 @@ class AutomationEngine extends ChangeNotifier implements AutomationRunner {
   }
 
   /// ¿La frase dicha es uno de tus comandos? (se revisa antes que los de SmartBuds).
+  bool get _on => settings.moduleOn('automations');
+
   VoiceIntent? match(String heard) {
+    if (!_on) return null;
     final text = CommandParser.normalize(heard).trim();
     if (text.isEmpty) return null;
     for (final a in automations) {
@@ -140,7 +143,7 @@ class AutomationEngine extends ChangeNotifier implements AutomationRunner {
     final name = assistant.headphoneName;
     if (name == _lastHeadphone) return;
     _lastHeadphone = name;
-    if (name == null) return;
+    if (name == null || !_on) return;
     for (final a in automations) {
       if (a.enabled && a.kind == TriggerKind.headphones && a.device == name) {
         unawaited(runById(a.id));
@@ -151,6 +154,7 @@ class AutomationEngine extends ChangeNotifier implements AutomationRunner {
   /// Revisa las de hora (cada 30 s). Cada una corre una vez por día.
   @visibleForTesting
   Future<void> tick() async {
+    if (!_on) return;
     final now = _clock();
     final minute = now.hour * 60 + now.minute;
     for (final a in automations) {

@@ -559,7 +559,9 @@ class _NowPlayingState extends State<_NowPlaying> {
                 LiveVisualizer(
                   playing: true,
                   height: 16,
-                  enabled: (widget.assistant.settings?.realVisualizer ?? true) && !widget.assistant.lowBattery,
+                  enabled: (widget.assistant.settings?.realVisualizer ?? true) &&
+                      (widget.assistant.settings?.moduleOn('visualizer') ?? true) &&
+                      !widget.assistant.lowBattery,
                   color: _artColor,
                 ),
                 const SizedBox(width: 8),
