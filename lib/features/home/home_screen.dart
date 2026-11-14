@@ -190,6 +190,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const Divider(height: 24),
+                  Text('Efectos visuales por canción', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 0, label: Text('Apagados')),
+                      ButtonSegment(value: 1, label: Text('Suaves')),
+                      ButtonSegment(value: 2, label: Text('Normales')),
+                      ButtonSegment(value: 3, label: Text('Intensos')),
+                    ],
+                    selected: {settings.visualIntensity},
+                    onSelectionChanged: (v) {
+                      settings.update(visualIntensity: v.first);
+                      setSheet(() {});
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'El color sale de la carátula y el ritmo del ambiente (enérgico = más rápido). Intensos gastan más '
+                    'batería; con batería baja se apagan solos.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Cambiar de escritorio solo'),
@@ -503,6 +526,8 @@ class _NowPlayingState extends State<_NowPlaying> {
                 playing: playing,
                 enabled: (widget.assistant.settings?.liveArt ?? true) && !widget.assistant.lowBattery,
                 glow: _artColor,
+                intensity: widget.assistant.settings?.visualFactor ?? 1,
+                tempo: songTempo(widget.assistant.brain.ambience()?.mood),
                 child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 450),
                 child: Container(

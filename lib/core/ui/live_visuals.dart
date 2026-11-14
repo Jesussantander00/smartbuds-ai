@@ -191,7 +191,21 @@ class _LiveVisualizerState extends State<LiveVisualizer> {
 /// Carátula viva: «respira» suavemente y brilla con su color mientras suena.
 /// Se apaga en Ajustes o si el teléfono pide menos movimiento.
 class LiveArt extends StatefulWidget {
-  const LiveArt({super.key, required this.child, required this.playing, this.enabled = true, this.glow});
+  const LiveArt({
+    super.key,
+    required this.child,
+    required this.playing,
+    this.enabled = true,
+    this.glow,
+    this.intensity = 1,
+    this.tempo = 1,
+  });
+
+  /// Fuerza del efecto (0 = nada, 1 = normal, 2 = intenso).
+  final double intensity;
+
+  /// Velocidad según la canción (ambiente enérgico = más rápido).
+  final double tempo;
 
   final Widget child;
   final bool playing;
@@ -241,20 +255,36 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
   }
 
   @override
+  void didUpdateWidget(LiveArt old) {
+    super.didUpdateWidget(old);
+    if (old.tempo != widget.tempo) {
+      _c.duration = Duration(milliseconds: (6000 / widget.tempo.clamp(.5, 3)).round());
+      if (_c.isAnimating) _c.repeat(reverse: true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!widget.enabled || _reduce) return widget.child;
+    if (!widget.enabled || _reduce || widget.intensity <= 0) return widget.child;
+    final k = widget.intensity;
     final glow = widget.glow ?? Neon.cyan;
     return AnimatedBuilder(
       animation: _c,
       builder: (context, child) {
         final t = Curves.easeInOut.transform(_c.value);
         return Transform.scale(
-          scale: 1 + .03 * t,
+          scale: 1 + .03 * k * t,
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               boxShadow: widget.playing
-                  ? [BoxShadow(color: glow.withValues(alpha: .25 + .25 * t), blurRadius: 30 + 20 * t, spreadRadius: 2)]
+                  ? [
+                      BoxShadow(
+                        color: glow.withValues(alpha: ((.25 + .25 * t) * k).clamp(0, 1).toDouble()),
+                        blurRadius: (30 + 20 * t) * k,
+                        spreadRadius: 2,
+                      ),
+                    ]
                   : null,
             ),
             child: child,
@@ -264,4 +294,13 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
       child: widget.child,
     );
   }
+}
+
+/// Velocidad del efecto según el ambiente de la canción (no se analiza el
+/// audio: las apps no comparten el ritmo). Enérgica = más rápido, tranquila = lento.
+double songTempo(String? mood) {
+  final m = (mood ?? '').toLowerCase();
+  if (RegExp(r'entrenar|fiesta|bailar|energ|perrear|correr').hasMatch(m)) return 2;
+  if (RegExp(r'dormir|tranquil|relaj|calma|triste').hasMatch(m)) return .6;
+  return 1;
 }
