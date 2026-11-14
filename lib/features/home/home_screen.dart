@@ -938,6 +938,42 @@ class _QueueCard extends StatelessWidget {
                 ],
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (assistant.queue.length >= 2)
+                  ActionChip(
+                    avatar: const Icon(Icons.auto_graph_rounded, size: 18),
+                    label: const Text('Ordenar por ambiente'),
+                    onPressed: () {
+                      final msg = assistant.arrangeQueue();
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(SnackBar(
+                          content: Text(msg),
+                          action: assistant.queueBeforeArrange == null
+                              ? null
+                              : SnackBarAction(label: 'Deshacer', onPressed: assistant.undoArrange),
+                        ));
+                    },
+                  ),
+                if (assistant.settings case final st?)
+                  ListenableBuilder(
+                    listenable: st,
+                    builder: (context, _) => FilterChip(
+                      label: const Text('Automática'),
+                      tooltip: 'Ordenar sola cada vez que agregas canciones',
+                      selected: st.smartQueue,
+                      onSelected: (v) => st.update(smartQueue: v),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
