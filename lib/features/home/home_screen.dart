@@ -18,6 +18,7 @@ import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
 import '../activity/activity.dart';
 import '../discovery/connections_screen.dart';
+import '../discovery/repetition.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
 class HomeScreen extends StatefulWidget {
@@ -53,7 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 assistant: widget.assistant,
                 controller: widget.controller),
           ],
-        'foryou' => [_ActivityCard(assistant: widget.assistant), _ForYou(assistant: widget.assistant)],
+        'foryou' => [
+            _RepeatCard(assistant: widget.assistant),
+            _ActivityCard(assistant: widget.assistant),
+            _ForYou(assistant: widget.assistant),
+          ],
         'extras' => [_ExtrasRow(assistant: widget.assistant)],
         'queue' => [
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
@@ -788,6 +793,47 @@ class _ConnectionPill extends StatelessWidget {
 
 /// «Para ti ahora»: lo que el cerebro musical cree que quieres escuchar,
 /// con el porqué. Solo suena si lo tocas.
+/// Aviso amable cuando algo se repite demasiado.
+class _RepeatCard extends StatelessWidget {
+  const _RepeatCard({required this.assistant});
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final alerts = assistant.repeatAlerts;
+    if (alerts.isEmpty) return const SizedBox.shrink();
+    final a = alerts.first;
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(a.kind == RepeatKind.song ? Icons.repeat_one_rounded : Icons.person_rounded,
+                    size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Text('Se está repitiendo', style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(a.message, style: theme.textTheme.bodyMedium),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(onPressed: () => assistant.keepRepeating(a), child: const Text('Está bien, me gusta')),
+                FilledButton.tonal(onPressed: () => assistant.varyMusic(a), child: const Text('Variar')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// «Según lo que haces»: estudiar, trabajar, descansar o ejercicio.
 class _ActivityCard extends StatelessWidget {
   const _ActivityCard({required this.assistant});

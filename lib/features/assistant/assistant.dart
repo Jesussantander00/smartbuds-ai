@@ -25,6 +25,7 @@ import '../diagnostics/self_check.dart';
 import 'smart_queue.dart';
 import '../activity/activity.dart';
 import '../discovery/connections.dart';
+import '../discovery/repetition.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -402,6 +403,13 @@ class Assistant extends ChangeNotifier {
         await _say(arrangeQueue());
       case ConnectionsIntent(:final artist, :final current):
         await sayConnections(current ? active?.artist : artist, aroundRequested: current || artist != null);
+      case RepetitionIntent(:final vary):
+        if (vary) {
+          await varyMusic();
+        } else {
+          final a = repeatAlerts;
+          await _say(a.isEmpty ? 'No, estás variando bien.' : a.first.message);
+        }
       case ActivityIntent(:final activity):
         final a = ActivityEngine.byName(activity);
         if (a == null) {
@@ -658,6 +666,43 @@ class Assistant extends ChangeNotifier {
     if (settings?.smartQueue ?? false) arrangeQueue();
     notifyListeners();
     return add.length;
+  }
+
+  // ------------------------------------------------ Repeticiones
+
+  late RepetitionDetector repetition = RepetitionDetector(clock: _clock);
+
+  /// Lo que se está repitiendo demasiado (canciones y artistas).
+  List<RepeatAlert> get repeatAlerts => repetition.scan(profile);
+
+  /// «Está bien, me gusta»: no avisar de esto por una semana.
+  void keepRepeating(RepeatAlert a) {
+    repetition.snooze(a);
+    notifyListeners();
+  }
+
+  /// Pone algo diferente a [alert] (o al artista que suena): otro artista
+  /// parecido, o una favorita que hace rato no suena.
+  Future<void> varyMusic([RepeatAlert? alert]) async {
+    final a = alert ?? repeatAlerts.firstOrNull;
+    final artist = a?.kind == RepeatKind.artist ? a!.name : (profile.tracks[a?.key]?.artist ?? active?.artist);
+    if (artist != null && artist.trim().isNotEmpty) {
+      final list = await discoverConnections(around: artist);
+      if (list.isNotEmpty) {
+        await _say('Para variar: ${list.first.name}. ${list.first.reason}.');
+        await handleSearch(SearchRequest(list.first.query));
+        return;
+      }
+    }
+    final skipKey = a?.kind == RepeatKind.song ? a!.key : null;
+    final rec = forYou(n: 8).where((r) =>
+        r.track.key != skipKey && (artist == null || (r.track.artist ?? '').toLowerCase() != artist.toLowerCase()));
+    if (rec.isNotEmpty) {
+      await _say('Para variar, una de las tuyas que no es de ${artist ?? 'lo mismo'}.');
+      await playRecommendation(rec.first);
+      return;
+    }
+    await playForgotten();
   }
 
   // ------------------------------------------ Descubrimiento por conexiones
