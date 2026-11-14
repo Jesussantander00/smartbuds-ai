@@ -23,6 +23,7 @@ import '../devices/detected_player_controller.dart';
 import '../diagnostics/online_probe.dart';
 import '../diagnostics/self_check.dart';
 import 'smart_queue.dart';
+import '../activity/activity.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -398,6 +399,13 @@ class Assistant extends ChangeNotifier {
         await sayDiagnosis();
       case ArrangeQueueIntent():
         await _say(arrangeQueue());
+      case ActivityIntent(:final activity):
+        final a = ActivityEngine.byName(activity);
+        if (a == null) {
+          await endActivity();
+        } else {
+          await startActivity(a);
+        }
       case SearchPromptIntent() ||
             ArtistPromptIntent() ||
             WakeIntent() ||
@@ -513,6 +521,7 @@ class Assistant extends ChangeNotifier {
     radioSongs = 0;
     switch (name) {
       case 'estudio':
+        activity.start(Activity.estudiar);
         await _say('Modo estudio: pocas interrupciones.');
         await playMood('para concentrarme', 'musica para concentrarse estudiar instrumental');
       case 'viaje':
@@ -648,6 +657,46 @@ class Assistant extends ChangeNotifier {
     return add.length;
   }
 
+  // ------------------------------------------- Según lo que haces (actividad)
+
+  /// Tus actividades y lo que te sirvió en cada una (el de la app lo pone main).
+  late ActivityTracker activity = ActivityTracker(clock: _clock);
+
+  /// Recomendaciones para [a] según lo que has escuchado haciendo eso.
+  List<ActivityPick> forActivity(Activity a, {int n = 5}) => activity.recommend(a, profile, n: n);
+
+  /// «Estoy estudiando»: empieza la actividad, pone la música que te sirve
+  /// para eso y deja algunas en la cola.
+  Future<void> startActivity(Activity a) async {
+    final rule = ActivityEngine.rules[a]!;
+    activity.start(a);
+    profile.setMood(rule.mood);
+    notifyListeners();
+    final picks = forActivity(a, n: 4);
+    if (picks.isEmpty) {
+      await _say('${rule.label}: música ${rule.blurb}. Voy aprendiendo qué te sirve.');
+      await handleSearch(SearchRequest(rule.query));
+      return;
+    }
+    await _say('${rule.label}: música ${rule.blurb}. Di «terminé» cuando acabes.');
+    await handleSearch(SearchRequest(picks.first.query));
+    if (queue.isEmpty && picks.length > 1) addToQueue(picks.skip(1).map((p) => p.query));
+  }
+
+  /// «Terminé»: cierra la actividad y dice cuánto duró.
+  Future<void> endActivity() async {
+    final c = activity.current;
+    if (c == null) {
+      await _say('No tenías ninguna actividad en curso.');
+      return;
+    }
+    activity.stop();
+    notifyListeners();
+    final mins = _clock().difference(c.start).inMinutes;
+    final label = ActivityEngine.rules[c.activity]!.label.toLowerCase();
+    await _say(mins < 1 ? 'Listo, terminaste de $label.' : 'Listo: $mins minutos de $label. Lo tendré en cuenta.');
+  }
+
   // ---------------------------------------------------- Cola inteligente
 
   /// Orden de la cola antes de ordenarla (para «Deshacer»).
@@ -759,6 +808,9 @@ class Assistant extends ChangeNotifier {
   /// «Pon algo para entrenar»: tu lista automática si ya existe, si no, búsqueda.
   Future<void> playMood(String mood, String query) async {
     profile.setMood(mood);
+    // «Pon algo para entrenar» también cuenta como actividad (para aprender).
+    final act = ActivityEngine.fromMood(mood);
+    if (act != null) activity.start(act);
     if (mood == 'nostálgica') {
       // Nostalgia de verdad: tus favoritas que hace tiempo no suenan.
       final old = forYou(n: 10).where((r) => r.kind == RecKind.rediscover).toList();

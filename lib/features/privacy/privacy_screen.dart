@@ -143,6 +143,7 @@ class PrivacyScreen extends StatelessWidget {
                       if (ok == true) {
                         await profile.clear();
                         await voice?.clearHistory();
+                        assistant.activity.clear();
                       }
                     },
                   ),

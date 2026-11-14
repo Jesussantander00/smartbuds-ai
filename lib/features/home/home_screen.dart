@@ -16,6 +16,7 @@ import '../../core/ui/art_color.dart';
 import '../../core/settings/app_settings.dart';
 import '../assistant/assistant.dart';
 import '../devices/detected_player_controller.dart';
+import '../activity/activity.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
 class HomeScreen extends StatefulWidget {
@@ -51,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 assistant: widget.assistant,
                 controller: widget.controller),
           ],
-        'foryou' => [_ForYou(assistant: widget.assistant)],
+        'foryou' => [_ActivityCard(assistant: widget.assistant), _ForYou(assistant: widget.assistant)],
         'extras' => [_ExtrasRow(assistant: widget.assistant)],
         'queue' => [
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
@@ -786,6 +787,90 @@ class _ConnectionPill extends StatelessWidget {
 
 /// «Para ti ahora»: lo que el cerebro musical cree que quieres escuchar,
 /// con el porqué. Solo suena si lo tocas.
+/// «Según lo que haces»: estudiar, trabajar, descansar o ejercicio.
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.assistant});
+  final Assistant assistant;
+
+  static const _icons = {
+    Activity.estudiar: Icons.menu_book_rounded,
+    Activity.trabajar: Icons.work_rounded,
+    Activity.descansar: Icons.self_improvement_rounded,
+    Activity.ejercicio: Icons.fitness_center_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tracker = assistant.activity;
+    final current = tracker.current;
+    final routine = tracker.routineSuggestion();
+    final picks = current == null ? const <ActivityPick>[] : assistant.forActivity(current.activity, n: 3);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.directions_run_rounded, size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Según lo que haces', style: theme.textTheme.titleMedium)),
+                if (current != null)
+                  TextButton(onPressed: assistant.endActivity, child: const Text('Terminé')),
+              ],
+            ),
+            if (current != null)
+              Text(
+                '${ActivityEngine.rules[current.activity]!.label} · '
+                '${DateTime.now().difference(current.start).inMinutes} min · '
+                'música ${ActivityEngine.rules[current.activity]!.blurb}',
+                style: theme.textTheme.bodySmall,
+              )
+            else if (routine != null)
+              Text('Sueles ${ActivityEngine.rules[routine]!.label.toLowerCase()} a esta hora. ¿Empezamos?',
+                  style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final a in Activity.values)
+                  ChoiceChip(
+                    avatar: Icon(_icons[a], size: 18),
+                    label: Text(ActivityEngine.rules[a]!.label),
+                    selected: current?.activity == a || (current == null && routine == a),
+                    onSelected: (_) => assistant.startActivity(a),
+                  ),
+              ],
+            ),
+            if (current != null && picks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('Aún estoy aprendiendo qué te sirve para esto: lo que termines o saltes ahora me enseña.',
+                    style: theme.textTheme.bodySmall),
+              ),
+            for (final p in picks)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.music_note_rounded),
+                title: Text(p.query, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(p.reasons.first, maxLines: 2),
+                trailing: IconButton(
+                  tooltip: 'Poner',
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  onPressed: () => assistant.handleSearch(SearchRequest(p.query)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ForYou extends StatelessWidget {
   const _ForYou({required this.assistant});
   final Assistant assistant;

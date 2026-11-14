@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 33;
+const latestChangelog = 34;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 34,
+    title: 'Música según lo que haces',
+    items: [
+      'Inicio → «Según lo que haces»: estudiar, trabajar, descansar o ejercicio.',
+      'Aprende qué terminas y qué saltas en cada actividad, y te lo recomienda con su razón.',
+      'Por voz: «estoy estudiando», «voy a entrenar», «terminé». Te sugiere la actividad que sueles hacer a esa hora.',
+    ],
+  ),
   (
     version: 33,
     title: 'Volumen estable mientras Jarvis escucha',
