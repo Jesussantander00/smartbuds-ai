@@ -35,6 +35,9 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/shell/home_shell.dart';
 import 'features/activity/activity.dart';
 import 'features/discovery/repetition.dart';
+import 'features/player/catalog.dart';
+import 'features/player/smartbuds_player.dart';
+import 'features/player/youtube_engine.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -122,6 +125,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   /// Al volver a la app (desbloquear, regresar de otra app): comprobar que Jarvis
   /// siga escuchando y reabrir el micrófono si el sistema lo cerró.
   AppLifecycleListener? _lifecycle;
+  AppLifecycleListener? _playerLifecycle;
   String? _homeTrack, _homeMood;
 
   /// Avisos al hogar inteligente: cada canción nueva y cada cambio de ambiente.
@@ -197,7 +201,37 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
 
     // Cada cambio del reproductor: perfil, asistente (radio, anuncios…) y
     // modo de escucha (abierta si no suena nada).
+    // Reproductor integrado: busca y suena dentro de SmartBuds (YouTube oficial
+    // incrustado si hay clave, Audius completo, vistas previas de Deezer).
+    if (Platform.isAndroid || Platform.isIOS) {
+      final inApp = SmartBudsPlayer(
+        catalog: MusicCatalog([
+          if (finder != null) YouTubeCatalog(finder),
+          AudiusCatalog(),
+          DeezerPreviewCatalog(),
+        ]),
+        engineFor: (s) => s == InAppSource.youtube ? YouTubeEngine() : NativeAudioEngine(),
+      );
+      assistant.inApp = inApp;
+      inApp.onNextRequested = assistant.inAppNext;
+      // Lo que suena en SmartBuds alimenta el perfil, la cola y Jarvis igual que
+      // una app externa.
+      inApp.addListener(() {
+        final st = inApp.status;
+        if (st == null) return;
+        widget.profile.observe(st);
+        assistant.onPlayerUpdate(st);
+        unawaited(voice?.setFreeMode(!st.isPlaying) ?? Future.value());
+      });
+      // YouTube no permite seguir sonando con la app en segundo plano.
+      _playerLifecycle = AppLifecycleListener(onHide: () {
+        if (inApp.current?.source == InAppSource.youtube && inApp.isPlaying) unawaited(inApp.pause());
+      });
+    }
+
     controller.onActivePlayer = (status) {
+      // Si SmartBuds está sonando, las apps externas no le quitan el control.
+      if (assistant.inApp?.isPlaying ?? false) return;
       widget.profile.observe(status);
       assistant.onPlayerUpdate(status);
       unawaited(transitions?.update(status) ?? Future.value());
@@ -256,7 +290,11 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       unawaited(android?.setTapGestures(widget.settings.headphoneTaps));
       _listenForShortcuts();
       // Manos libres: si ya terminó la bienvenida, empieza a escuchar solo.
-      if (widget.settings.onboardingDone) unawaited(v.autoStart());
+      // Recuerda si apagaste la escucha a propósito.
+      v.onPreferenceChanged = (on) {
+        if (widget.settings.listenOnStart != on) widget.settings.update(listenOnStart: on);
+      };
+      if (widget.settings.onboardingDone && widget.settings.listenOnStart) unawaited(v.autoStart());
       _lifecycle = AppLifecycleListener(onResume: () => unawaited(v.ensureListening()));
     }
   }
@@ -294,6 +332,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   @override
   void dispose() {
     _lifecycle?.dispose();
+    _playerLifecycle?.dispose();
     transitions?.dispose();
     assistant.eq?.dispose();
     automations.dispose();

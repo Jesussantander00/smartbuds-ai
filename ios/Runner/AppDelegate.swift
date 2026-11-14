@@ -40,6 +40,7 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
 
   private let media: AppleMusicBridge
   private let voice: VoiceBridge
+  private let audioPlayer: InAppAudioPlayer
   private let actions: FlutterMethodChannel
 
   static func register(with registrar: FlutterPluginRegistrar) {
@@ -66,6 +67,7 @@ final class SmartBudsNative: NSObject, FlutterPlugin {
   private init(messenger: FlutterBinaryMessenger) {
     media = AppleMusicBridge(messenger: messenger)
     voice = VoiceBridge(messenger: messenger)
+    audioPlayer = InAppAudioPlayer(messenger: messenger)
     // Accesos rápidos (en Android). En iPhone solo se contesta «listo».
     actions = FlutterMethodChannel(name: "smartbuds/actions", binaryMessenger: messenger)
     super.init()
@@ -788,6 +790,123 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
   {
     sink = events
     emit("headphones", ["connected": headphonesConnected()])
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    sink = nil
+    return nil
+  }
+}
+
+
+// MARK: - Reproductor integrado (audio por dirección)
+
+/// Reproductor propio de SmartBuds en iPhone: canciones completas de Audius y
+/// vistas previas de Deezer, dentro de la app (AVPlayer). Usa la misma sesión
+/// de audio que la escucha de Jarvis (playAndRecord, mezclable), así que no
+/// la reconfigura ni corta el micrófono.
+final class InAppAudioPlayer: NSObject, FlutterStreamHandler {
+  private let channel: FlutterMethodChannel
+  private let events: FlutterEventChannel
+  private var sink: FlutterEventSink?
+  private var player: AVPlayer?
+  private var timeObserver: Any?
+  private var endObserver: NSObjectProtocol?
+  private var state = "stopped"
+  private var volume: Float = 1
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "smartbuds/player", binaryMessenger: messenger)
+    events = FlutterEventChannel(name: "smartbuds/player/events", binaryMessenger: messenger)
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in self?.handle(call, result) }
+    events.setStreamHandler(self)
+  }
+
+  private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    let args = call.arguments as? [String: Any] ?? [:]
+    switch call.method {
+    case "play":
+      guard let s = args["url"] as? String, let url = URL(string: s), url.scheme == "https" else {
+        result(FlutterError(code: "ARG", message: "url", details: nil))
+        return
+      }
+      play(url)
+      result(true)
+    case "pause":
+      player?.pause()
+      setState("paused")
+      result(true)
+    case "resume":
+      player?.play()
+      setState("playing")
+      result(true)
+    case "stop":
+      release()
+      setState("stopped")
+      result(true)
+    case "seek":
+      let ms = (args["positionMs"] as? NSNumber)?.doubleValue ?? 0
+      player?.seek(to: CMTime(seconds: ms / 1000, preferredTimescale: 600))
+      result(true)
+    case "setVolume":
+      volume = Float(((args["percent"] as? NSNumber)?.doubleValue ?? 100) / 100)
+      player?.volume = volume
+      result(true)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func play(_ url: URL) {
+    release()
+    let item = AVPlayerItem(url: url)
+    let p = AVPlayer(playerItem: item)
+    p.volume = volume
+    player = p
+    setState("buffering")
+    timeObserver = p.addPeriodicTimeObserver(
+      forInterval: CMTime(seconds: 1, preferredTimescale: 600), queue: .main
+    ) { [weak self] _ in
+      guard let self = self, let p = self.player else { return }
+      if p.timeControlStatus == .playing && self.state != "playing" { self.state = "playing" }
+      self.emit()
+    }
+    endObserver = NotificationCenter.default.addObserver(
+      forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+    ) { [weak self] _ in
+      self?.setState("completed")
+    }
+    p.play()
+  }
+
+  private func release() {
+    if let t = timeObserver { player?.removeTimeObserver(t) }
+    timeObserver = nil
+    if let e = endObserver { NotificationCenter.default.removeObserver(e) }
+    endObserver = nil
+    player?.pause()
+    player = nil
+  }
+
+  private func setState(_ s: String) {
+    state = s
+    emit()
+  }
+
+  private func emit() {
+    var payload: [String: Any] = ["type": "state", "state": state]
+    if let p = player {
+      let pos = p.currentTime().seconds
+      if pos.isFinite { payload["positionMs"] = Int(pos * 1000) }
+      if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 { payload["durationMs"] = Int(d * 1000) }
+    }
+    DispatchQueue.main.async { [weak self] in self?.sink?(payload) }
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    sink = events
     return nil
   }
 

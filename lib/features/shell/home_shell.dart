@@ -22,6 +22,7 @@ import '../privacy/privacy_screen.dart';
 import '../social/social_screen.dart';
 import '../social/social_service.dart';
 import '../social/listen_party.dart';
+import '../player/player_dock.dart';
 
 /// Navegación principal: Inicio · Asistente · Mi música · Dispositivos.
 class HomeShell extends StatefulWidget {
@@ -217,6 +218,14 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
             ),
+          // Reproductor integrado: visible abajo en todas las secciones.
+          if (widget.assistant.inApp != null)
+            Positioned(
+              left: railSpace,
+              right: 10,
+              bottom: media.padding.bottom + 10,
+              child: InAppPlayerDock(player: widget.assistant.inApp!),
+            ),
           // Escucha continua: indicador visible en todas las secciones, con «Detener».
           if (widget.voice != null && _tab != 0)
             Positioned(
@@ -305,7 +314,8 @@ class _ListeningPill extends StatelessWidget {
             JarvisState.recovering => 'Recuperando…',
             JarvisState.error => 'Sin escuchar',
             JarvisState.ready => voice.paused ? 'En pausa' : 'Preparado',
-            JarvisState.off => 'Apagado',
+            JarvisState.off => 'Escucha desactivada',
+            JarvisState.noPermission => 'Micrófono sin permiso',
           };
           return Material(
             color: Colors.transparent,
@@ -322,9 +332,16 @@ class _ListeningPill extends StatelessWidget {
                 children: [
                   Icon(Icons.circle,
                       size: 10,
-                      color: state == JarvisState.error ? Colors.redAccent : (on ? Neon.cyan : Colors.grey)),
+                      color: state == JarvisState.error || state == JarvisState.noPermission ? Colors.redAccent : (on ? Neon.cyan : Colors.grey)),
                   const SizedBox(width: 6),
                   Text(label, style: Theme.of(context).textTheme.labelMedium),
+                  if (state == JarvisState.noPermission || state == JarvisState.off)
+                    IconButton(
+                      tooltip: state == JarvisState.noPermission ? 'Dar permiso' : 'Activar escucha',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.mic_rounded, size: 18),
+                      onPressed: voice.start,
+                    ),
                   if (state == JarvisState.error)
                     IconButton(
                       tooltip: 'Reintentar',

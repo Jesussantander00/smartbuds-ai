@@ -11,7 +11,7 @@ import 'speaker_guard.dart';
 /// Estados de Jarvis (máquina de estados de la escucha):
 /// desactivado, preparado, escuchando, procesando, ejecutando, respondiendo,
 /// recuperando (reabriendo el micrófono) y error (necesita que toques «Reintentar»).
-enum JarvisState { off, ready, listening, processing, working, responding, recovering, error }
+enum JarvisState { off, ready, listening, processing, working, responding, recovering, error, noPermission }
 
 /// Cómo responde SmartBuds en voz alta.
 enum ReplyStyle { brief, normal, conversational, technical }
@@ -350,8 +350,15 @@ class VoiceEngine extends ChangeNotifier {
   }
 
   /// Estado de Jarvis (para el núcleo animado y los avisos).
+  /// No hay permiso de micrófono (se pide con el mecanismo del sistema al tocar).
+  bool micDenied = false;
+
+  /// Cambió la preferencia de escucha por decisión del usuario (encender / apagar):
+  /// se recuerda para la próxima vez que abra la app.
+  void Function(bool on)? onPreferenceChanged;
+
   JarvisState get jarvisState {
-    if (!enabled) return JarvisState.off;
+    if (!enabled) return micDenied ? JarvisState.noPermission : JarvisState.off;
     if (failed) return JarvisState.error;
     if (speaking) return JarvisState.responding;
     final now = _clock();
@@ -647,6 +654,7 @@ class VoiceEngine extends ChangeNotifier {
       if (await hasPermission()) {
         await start();
       } else {
+        micDenied = true;
         _diag('Sin permiso de micrófono: hay que tocar el micrófono una vez');
         notifyListeners();
       }
@@ -670,9 +678,11 @@ class VoiceEngine extends ChangeNotifier {
     }
     if (!await requestPermission()) {
       error = 'Sin permiso de micrófono, SmartBuds no puede escucharte.';
+      micDenied = true;
       notifyListeners();
       return;
     }
+    micDenied = false;
     attach();
     try {
       await _method.invokeMethod('start', {'grammar': grammar, 'grammarEnabled': !freeMode});
@@ -680,6 +690,7 @@ class VoiceEngine extends ChangeNotifier {
       error = e.code == 'PERMISSION'
           ? 'Sin permiso de micrófono, SmartBuds no puede escucharte.'
           : 'No se pudo abrir el micrófono: ${e.message ?? e.code}';
+      if (e.code == 'PERMISSION') micDenied = true;
       _diag('Error al iniciar: $error');
       notifyListeners();
       return;
@@ -691,6 +702,7 @@ class VoiceEngine extends ChangeNotifier {
     _deafSince = null;
     _diag('Escucha continua activada');
     _startWatchdog();
+    onPreferenceChanged?.call(true);
     notifyListeners();
   }
 
@@ -728,6 +740,7 @@ class VoiceEngine extends ChangeNotifier {
     _watchdog?.cancel();
     _watchdog = null;
     _diag('Escucha detenida');
+    onPreferenceChanged?.call(false);
     await _method.invokeMethod('stop');
     notifyListeners();
   }
@@ -789,8 +802,9 @@ class VoiceEngine extends ChangeNotifier {
         }
         if (was != listening) _diag(listening ? 'Escuchando' : (recovering ? 'Reabriendo el micrófono' : 'Micrófono cerrado'));
         if (event['stopped'] == true) {
-          // Detenido desde el botón de la notificación.
+          // Detenido desde el botón de la notificación (decisión del usuario).
           enabled = false;
+          onPreferenceChanged?.call(false);
           paused = false;
           _watchdog?.cancel();
           _watchdog = null;

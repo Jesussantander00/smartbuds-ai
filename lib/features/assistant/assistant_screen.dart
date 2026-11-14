@@ -217,6 +217,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 settings.update(voiceFeedback: v);
                 voice?.feedbackEnabled = v;
               }),
+              _switch('Escuchar al abrir SmartBuds',
+                  'Jarvis empieza a escuchar solo al entrar (si diste permiso). Si apagas el micrófono, lo recuerda.',
+                  settings.listenOnStart, (v) => settings.update(listenOnStart: v)),
               _switch('Bajar la música cuando Jarvis responde',
                   'Solo mientras habla (1–3 s) y vuelve sola. Escucharte nunca cambia el volumen.',
                   settings.duckOnReply, (v) {
@@ -254,6 +257,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 ),
             ]),
             ..._section(context, 'Música', Icons.library_music, [
+              _switch('Reproducir dentro de SmartBuds',
+                  'Busca y suena aquí: YouTube (reproductor oficial, se ve el video), Audius completo o vista previa de '
+                      'Deezer. Si lo apagas, se abre tu app de música.',
+                  settings.playInApp, (v) => settings.update(playInApp: v)),
               _switch('Radio SmartBuds', 'Cuando termina una canción, SmartBuds elige la siguiente.',
                   settings.radioMode, (v) => settings.update(radioMode: v)),
               _switch('Anunciar cada canción', 'Dice suavemente el nombre de la canción nueva.',

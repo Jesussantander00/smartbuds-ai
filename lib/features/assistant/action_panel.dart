@@ -66,6 +66,16 @@ class VoiceActionsCard extends StatelessWidget {
                   label: const Text('Reintentar'),
                 ),
                 const SizedBox(height: 8),
+              ] else if (voice.jarvisState == JarvisState.noPermission) ...[
+                Text('Jarvis necesita permiso para usar el micrófono. Solo escucha tus órdenes; no graba audio.',
+                    style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 6),
+                FilledButton.icon(
+                  onPressed: voice.start, // pide el permiso con el aviso oficial del sistema
+                  icon: const Icon(Icons.mic_rounded),
+                  label: const Text('Dar permiso'),
+                ),
+                const SizedBox(height: 8),
               ] else if (!voice.enabled) ...[
                 Text('Jarvis está desactivado. Toca el micrófono grande para que escuche sin parar.',
                     style: theme.textTheme.bodyMedium),
