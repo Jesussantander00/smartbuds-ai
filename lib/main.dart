@@ -24,6 +24,8 @@ import 'core/ui/futuristic.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
 import 'connectors/knowledge/music_knowledge.dart';
+import 'features/audio/eq_controller.dart';
+import 'features/audio/transition_watcher.dart';
 import 'features/automations/automation_engine.dart';
 import 'features/devices/detected_player_controller.dart';
 import 'features/music_profile/music_profile.dart';
@@ -112,6 +114,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
   late final DetectedPlayerController controller;
   late final Assistant assistant;
   late final AutomationEngine automations;
+  TransitionWatcher? transitions;
   VoiceEngine? voice;
 
   @override
@@ -156,6 +159,11 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       weather: WeatherService(),
     );
     assistant.knowledge = MusicKnowledge();
+    // Ecualizador inteligente y transiciones al final de cada canción (Android).
+    assistant.eq = EqController(assistant: assistant, settings: widget.settings, media: android);
+    if (Platform.isAndroid && android != null) {
+      transitions = TransitionWatcher(settings: widget.settings, fader: _MediaFader(android!));
+    }
     // Automatizaciones y comandos personalizados: los ejecuta el mismo asistente.
     automations = AutomationEngine(assistant: assistant, settings: widget.settings);
     assistant.automations = automations;
@@ -167,6 +175,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
     controller.onActivePlayer = (status) {
       widget.profile.observe(status);
       assistant.onPlayerUpdate(status);
+      unawaited(transitions?.update(status) ?? Future.value());
       unawaited(voice?.setFreeMode(!(status?.isPlaying ?? false)) ?? Future.value());
     };
 
@@ -246,6 +255,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
 
   @override
   void dispose() {
+    transitions?.dispose();
+    assistant.eq?.dispose();
     automations.dispose();
     voice?.dispose();
     assistant.dispose();
@@ -309,4 +320,16 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       ),
     );
   }
+}
+
+/// Baja y sube el volumen con el lado nativo (para las transiciones).
+class _MediaFader implements VolumeFader {
+  _MediaFader(this.media);
+  final AndroidMediaSource media;
+
+  @override
+  Future<int?> volumePercent() => media.volumePercent();
+
+  @override
+  Future<void> fadeVolume(int to, {int ms = 2000}) => media.fadeVolume(to, ms: ms);
 }

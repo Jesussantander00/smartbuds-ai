@@ -140,6 +140,14 @@ class MediaSessionConnector(
                     result.success(true)
                 }
                 "openSystemEqualizer" -> result.success(openSystemEqualizer())
+                "eqInfo" -> result.success(GlobalEqualizer.info())
+                "eqApply" -> result.success(
+                    GlobalEqualizer.apply((call.argument<List<Number>>("levels") ?: emptyList()).map { it.toInt() })
+                )
+                "eqRelease" -> {
+                    GlobalEqualizer.release()
+                    result.success(true)
+                }
                 "audioOutputInfo" -> result.success(audioOutputInfo())
                 "fadeVolume" -> {
                     fadeVolume(

@@ -216,7 +216,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   List<HeadphoneEvent> connectionLog = [];
 
   void logConnection(bool connected, String? name, DateTime at) {
-    connectionLog = [HeadphoneEvent(at, connected, name), ...connectionLog].take(60).toList();
+    connectionLog = [HeadphoneEvent(at, connected, name), ...connectionLog].take(200).toList();
     _persist();
     notifyListeners();
   }
@@ -266,6 +266,33 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   void setVolumeCap(String device, int? cap) {
     volumeCaps = {...volumeCaps}..remove(device);
     if (cap != null) volumeCaps[device] = cap.clamp(20, 100);
+    _persist();
+    notifyListeners();
+  }
+
+  /// Ecualizador de SmartBuds: encendido, perfil por audífono y por tipo de
+  /// música (ambiente), y tu perfil manual (5 bandas en dB).
+  bool eqEnabled = false;
+  Map<String, String> eqByDevice = {};
+  Map<String, String> eqByMood = {};
+  List<double> eqCustom = [0, 0, 0, 0, 0];
+
+  void setEqForDevice(String device, String? preset) {
+    eqByDevice = {...eqByDevice}..remove(device);
+    if (preset != null) eqByDevice[device] = preset;
+    _persist();
+    notifyListeners();
+  }
+
+  void setEqForMood(String mood, String? preset) {
+    eqByMood = {...eqByMood}..remove(mood);
+    if (preset != null) eqByMood[mood] = preset;
+    _persist();
+    notifyListeners();
+  }
+
+  void setEqCustom(List<double> db) {
+    eqCustom = [for (final v in db.take(5)) v.clamp(-12.0, 12.0)];
     _persist();
     notifyListeners();
   }
@@ -482,6 +509,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         e.key as String: (e.value as num).toInt(),
     };
     disabledModules = {...((d['disabledModules'] as List?) ?? const []).cast<String>()};
+    eqEnabled = d['eqEnabled'] == true;
+    eqByDevice = ((d['eqByDevice'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
+    eqByMood = ((d['eqByMood'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
+    final custom = (d['eqCustom'] as List?)?.map((e) => (e as num).toDouble()).toList();
+    eqCustom = custom != null && custom.length == 5 ? custom : [0, 0, 0, 0, 0];
     speechRate = ((d['speechRate'] as num?) ?? 1.0).toDouble().clamp(0.5, 2.0);
     speechPitch = ((d['speechPitch'] as num?) ?? 1.0).toDouble().clamp(0.5, 2.0);
     replyStyle = (d['replyStyle'] as String?) ?? 'normal';
@@ -531,6 +563,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? smoothTransitions,
     bool? carAutoOpen,
     bool? autoBackup,
+    bool? eqEnabled,
     double? speechRate,
     double? speechPitch,
     String? replyStyle,
@@ -550,6 +583,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
     if (autoBackup != null) this.autoBackup = autoBackup;
+    if (eqEnabled != null) this.eqEnabled = eqEnabled;
     if (speechRate != null) this.speechRate = speechRate.clamp(0.5, 2.0);
     if (speechPitch != null) this.speechPitch = speechPitch.clamp(0.5, 2.0);
     if (replyStyle != null) this.replyStyle = replyStyle;
@@ -673,6 +707,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
         'disabledModules': disabledModules.toList(),
+        'eqEnabled': eqEnabled,
+        'eqByDevice': eqByDevice,
+        'eqByMood': eqByMood,
+        'eqCustom': eqCustom,
         'speechRate': speechRate,
         'speechPitch': speechPitch,
         'replyStyle': replyStyle,
