@@ -321,11 +321,6 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   List<Map<String, String>> homeHooks = [];
 
   void setHomeHooks(List<Map<String, String>> hooks) {
-    visualIntensity = ((d['visualIntensity'] as num?) ?? 2).toInt().clamp(0, 3);
-    curatedLists = [
-      for (final l in (d['curatedLists'] as List?) ?? const [])
-        if (l is Map) l.cast<String, dynamic>(),
-    ];
     homeHooks = [for (final h in hooks.take(10)) Map.of(h)];
     _persist();
     notifyListeners();
@@ -585,6 +580,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     homeHooks = [
       for (final h in (d['homeHooks'] as List?) ?? const [])
         if (h is Map) h.map((k, v) => MapEntry('$k', '$v')),
+    ];
+    visualIntensity = ((d['visualIntensity'] as num?) ?? 2).toInt().clamp(0, 3);
+    curatedLists = [
+      for (final l in (d['curatedLists'] as List?) ?? const [])
+        if (l is Map) l.cast<String, dynamic>(),
     ];
     eqEnabled = d['eqEnabled'] == true;
     eqByDevice = ((d['eqByDevice'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));

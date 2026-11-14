@@ -236,6 +236,11 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
   @override
   void didUpdateWidget(LiveArt old) {
     super.didUpdateWidget(old);
+    // Ritmo por canción: ambiente enérgico = más rápido.
+    if (old.tempo != widget.tempo) {
+      _c.duration = Duration(milliseconds: (6000 / widget.tempo.clamp(.5, 3)).round());
+      if (_c.isAnimating) _c.repeat(reverse: true);
+    }
     _sync();
   }
 
@@ -252,15 +257,6 @@ class _LiveArtState extends State<LiveArt> with SingleTickerProviderStateMixin {
   void dispose() {
     _c.dispose();
     super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(LiveArt old) {
-    super.didUpdateWidget(old);
-    if (old.tempo != widget.tempo) {
-      _c.duration = Duration(milliseconds: (6000 / widget.tempo.clamp(.5, 3)).round());
-      if (_c.isAnimating) _c.repeat(reverse: true);
-    }
   }
 
   @override
