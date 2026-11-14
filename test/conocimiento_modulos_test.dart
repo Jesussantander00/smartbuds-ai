@@ -64,7 +64,8 @@ void main() {
     await tester.tap(find.byType(Switch).first);
     await tester.pump();
     expect(s.moduleOn('knowledge'), isFalse);
-    await tester.scrollUntilVisible(find.textContaining('Premium'), 300);
-    expect(find.textContaining('próximamente'), findsOneWidget);
+    final soon = find.textContaining('próximamente');
+    await tester.scrollUntilVisible(soon, 300, scrollable: find.byType(Scrollable).first);
+    expect(soon, findsOneWidget);
   });
 }
