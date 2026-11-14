@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 35;
+const latestChangelog = 36;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 36,
+    title: 'Detector de repeticiones',
+    items: [
+      'Avisa cuando una canción suena mucho (5 veces en un día o 12 en una semana) o un artista acapara lo que escuchas.',
+      '«Variar» pone un artista parecido u otra de tus favoritas; «Está bien, me gusta» calla el aviso una semana.',
+      'Por voz: «¿estoy repitiendo mucho?», «varía un poco», «cambia de artista».',
+    ],
+  ),
   (
     version: 35,
     title: 'Descubrir por conexiones',

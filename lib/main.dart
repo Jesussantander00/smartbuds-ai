@@ -34,6 +34,7 @@ import 'features/music_profile/supabase_sync.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/shell/home_shell.dart';
 import 'features/activity/activity.dart';
+import 'features/discovery/repetition.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -232,6 +233,8 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       assistant.activity = ActivityTracker(store: FileJsonStore('activity.json'))
         ..isPrivate = (() => widget.settings.privateMode);
       unawaited(assistant.activity.load());
+      assistant.repetition = RepetitionDetector(store: FileJsonStore('repetition.json'));
+      unawaited(assistant.repetition.load());
       unawaited(v.loadHistory());
       voice = v;
       assistant.voice = v;

@@ -277,6 +277,12 @@ class ConnectionsIntent extends VoiceIntent {
   final bool current;
 }
 
+/// «¿Estoy repitiendo mucho?» (vary = false) o «varía un poco» (vary = true).
+class RepetitionIntent extends VoiceIntent {
+  const RepetitionIntent({this.vary = false});
+  final bool vary;
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -562,6 +568,7 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'estoy repitiendo mucho', 'varía un poco', 'cambia de artista', 'algo de otro artista',
     'descubre por colaboraciones', 'artistas conectados', 'colaboraciones de este artista',
     'estoy estudiando', 'voy a estudiar', 'estoy trabajando', 'voy a trabajar',
     'voy a descansar', 'quiero descansar', 'voy a entrenar', 'estoy entrenando', 'voy al gimnasio',
@@ -589,6 +596,13 @@ class CommandParser {
   static const _connectionsCurrent = {
     'con quien ha colaborado este artista', 'quien ha colaborado con este artista',
     'colaboraciones de este artista', 'artistas parecidos a este',
+  };
+  static const _repetitionAsk = {
+    'estoy repitiendo mucho', 'que estoy repitiendo', 'repito mucho', 'estoy escuchando lo mismo',
+  };
+  static const _repetitionVary = {
+    'varia', 'varia un poco', 'varia la musica', 'cambia de artista', 'algo de otro artista',
+    'otro artista', 'ya me aburri de este artista',
   };
   static const _corrections = {
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
@@ -742,6 +756,8 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    if (_repetitionAsk.contains(text)) return const RepetitionIntent();
+    if (_repetitionVary.contains(text)) return const RepetitionIntent(vary: true);
     if (_connections.contains(text)) return const ConnectionsIntent();
     if (_connectionsCurrent.contains(text)) return const ConnectionsIntent(null, true);
     for (final p in const ['con quien ha colaborado ', 'colaboraciones de ']) {
