@@ -14,6 +14,7 @@ import '../backup/backup_screen.dart';
 import '../backup/backup_service.dart';
 import '../stats/advanced_stats_screen.dart';
 import '../stats/evolution_screen.dart';
+import '../curator/curator_screen.dart';
 import '../knowledge/artist_info_sheet.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
@@ -121,6 +122,14 @@ class MyMusicScreen extends StatelessWidget {
                     label: const Text('Compartir mi semana'),
                     onPressed: () => assistant.shareSummary(days: 7),
                   ),
+                  if (assistant.settings != null)
+                    ActionChip(
+                      avatar: const Icon(Icons.library_music_rounded, size: 18),
+                      label: const Text('Curador'),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => CuratorScreen(assistant: assistant),
+                      )),
+                    ),
                   ActionChip(
                     avatar: const Icon(Icons.timeline_rounded, size: 18),
                     label: const Text('Tu evolución'),

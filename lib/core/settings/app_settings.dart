@@ -300,6 +300,21 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Listas del curador (aprobadas por ti).
+  List<Map<String, dynamic>> curatedLists = [];
+
+  void setCuratedLists(List<Map<String, dynamic>> lists) {
+    curatedLists = lists;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Efectos visuales por canción: 0 apagados, 1 suaves, 2 normales, 3 intensos.
+  int visualIntensity = 2;
+
+  /// Multiplicador del efecto (0–2) según la intensidad elegida.
+  double get visualFactor => const [0.0, .5, 1.0, 1.8][visualIntensity.clamp(0, 3)];
+
   /// Hogar inteligente: avisos (webhooks) que TÚ configuras en tu propio
   /// servicio (Home Assistant, IFTTT…). Cada uno: nombre, URL y cuándo se envía
   /// («track» = cada canción, «mood» = cambio de ambiente, «manual» = escena).
@@ -566,6 +581,11 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
       for (final h in (d['homeHooks'] as List?) ?? const [])
         if (h is Map) h.map((k, v) => MapEntry('$k', '$v')),
     ];
+    visualIntensity = ((d['visualIntensity'] as num?) ?? 2).toInt().clamp(0, 3);
+    curatedLists = [
+      for (final l in (d['curatedLists'] as List?) ?? const [])
+        if (l is Map) l.cast<String, dynamic>(),
+    ];
     eqEnabled = d['eqEnabled'] == true;
     eqByDevice = ((d['eqByDevice'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
     eqByMood = ((d['eqByMood'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
@@ -622,6 +642,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? autoBackup,
     bool? eqEnabled,
     bool? autoDesktop,
+    int? visualIntensity,
     double? speechRate,
     double? speechPitch,
     String? replyStyle,
@@ -643,6 +664,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (autoBackup != null) this.autoBackup = autoBackup;
     if (eqEnabled != null) this.eqEnabled = eqEnabled;
     if (autoDesktop != null) this.autoDesktop = autoDesktop;
+    if (visualIntensity != null) this.visualIntensity = visualIntensity.clamp(0, 3);
     if (speechRate != null) this.speechRate = speechRate.clamp(0.5, 2.0);
     if (speechPitch != null) this.speechPitch = speechPitch.clamp(0.5, 2.0);
     if (replyStyle != null) this.replyStyle = replyStyle;
@@ -769,6 +791,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
         'disabledModules': disabledModules.toList(),
+        'visualIntensity': visualIntensity,
+        'curatedLists': curatedLists,
         'homeHooks': homeHooks,
         'eqEnabled': eqEnabled,
         'eqByDevice': eqByDevice,

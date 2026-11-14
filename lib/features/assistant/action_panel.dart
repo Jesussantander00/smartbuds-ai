@@ -4,6 +4,7 @@ import '../../core/models.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../../core/voice_engine/voice_engine.dart';
+import '../jarvis/jarvis_core.dart';
 
 /// Panel de acciones: lo que Jarvis te escuchó, lo que entendió (paso por
 /// paso si encadenaste órdenes) y acciones rápidas para hacerlas con un toque.
@@ -35,9 +36,18 @@ class VoiceActionsCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const AppIcon(Icons.auto_awesome_rounded, colors: AppColors.assistant, size: 34),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text('Jarvis', style: theme.textTheme.titleMedium)),
+                  JarvisCore(voice: voice, size: 64, showLabel: false),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Jarvis', style: theme.textTheme.titleMedium),
+                        Text(JarvisCore.label(voice.jarvisState),
+                            style: theme.textTheme.labelMedium?.copyWith(color: JarvisCore.color(voice.jarvisState))),
+                      ],
+                    ),
+                  ),
                   if (voice.enabled)
                     TextButton.icon(
                       onPressed: voice.stop,

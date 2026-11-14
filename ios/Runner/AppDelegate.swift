@@ -579,16 +579,19 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
     u.voice = AVSpeechSynthesisVoice(language: "es-CO") ?? AVSpeechSynthesisVoice(language: "es-ES")
     speaking = true
     stopListening() // que SmartBuds no se escuche a sí mismo
+    emit("speaking", ["on": true])
     synth.speak(u)
   }
 
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
     speaking = false
+    emit("speaking", ["on": false])
     restart(after: 0.3)
   }
 
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
     speaking = false
+    emit("speaking", ["on": false])
     restart(after: 0.3)
   }
 

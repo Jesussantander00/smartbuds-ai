@@ -241,6 +241,7 @@ class Assistant extends ChangeNotifier {
   }
 
   Future<void> handleCommand(MusicCommand command) async {
+    _logAction(VoiceEngine.describe(CommandIntent(command)));
     if (command == MusicCommand.next) _rememberForUndo();
     profile.noteCommand(command);
     final r = command == MusicCommand.next || command == MusicCommand.previous
@@ -284,7 +285,16 @@ class Assistant extends ChangeNotifier {
 
   DateTime? _lastSearchAt;
 
+  /// Registro de acciones del asistente (solo en memoria; se borra al cerrar la app).
+  final List<({DateTime at, String what})> actionLog = [];
+
+  void _logAction(String what) {
+    actionLog.insert(0, (at: _clock(), what: what));
+    if (actionLog.length > 100) actionLog.removeLast();
+  }
+
   Future<void> handleIntent(VoiceIntent intent) async {
+    _logAction(VoiceEngine.describe(intent));
     switch (intent) {
       case LikeIntent():
         final t = profile.like();

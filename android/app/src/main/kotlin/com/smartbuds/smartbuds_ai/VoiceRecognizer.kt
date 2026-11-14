@@ -396,17 +396,26 @@ class VoiceRecognizer(
             }
             t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    main.post { speechService?.setPause(true) }
+                    main.post {
+                        speechService?.setPause(true)
+                        emit("speaking", mapOf("on" to true))
+                    }
                 }
 
                 override fun onDone(utteranceId: String?) {
                     // Pequeña espera para que el eco de la voz no se tome como orden.
-                    main.postDelayed({ speechService?.setPause(false) }, 300)
+                    main.postDelayed({
+                        speechService?.setPause(false)
+                        emit("speaking", mapOf("on" to false))
+                    }, 300)
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    main.post { speechService?.setPause(false) }
+                    main.post {
+                        speechService?.setPause(false)
+                        emit("speaking", mapOf("on" to false))
+                    }
                 }
             })
             ttsReady = true
