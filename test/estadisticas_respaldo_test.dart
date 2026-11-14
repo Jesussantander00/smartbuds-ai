@@ -12,7 +12,7 @@ void main() {
   late MusicProfile profile;
 
   setUp(() {
-    now = DateTime(2026, 11, 10, 20); // lunes 8 p. m.
+    now = DateTime(2026, 11, 9, 20); // lunes 8 p. m.
     profile = MusicProfile(clock: () => now);
   });
 
