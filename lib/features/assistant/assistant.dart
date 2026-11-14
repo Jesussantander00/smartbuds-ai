@@ -26,6 +26,7 @@ import 'smart_queue.dart';
 import '../activity/activity.dart';
 import '../discovery/connections.dart';
 import '../discovery/repetition.dart';
+import '../discovery/journey.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -403,6 +404,9 @@ class Assistant extends ChangeNotifier {
         await _say(arrangeQueue());
       case ConnectionsIntent(:final artist, :final current):
         await sayConnections(current ? active?.artist : artist, aroundRequested: current || artist != null);
+      case JourneyIntent(:final shape, :final minutes):
+        await startJourney(JourneyShape.values.firstWhere((s) => s.name == shape, orElse: () => JourneyShape.arco),
+            minutes: minutes ?? 45);
       case RepetitionIntent(:final vary):
         if (vary) {
           await varyMusic();
@@ -668,6 +672,38 @@ class Assistant extends ChangeNotifier {
     return add.length;
   }
 
+  // ------------------------------------------------ Viajes musicales
+
+  /// Viaje en curso (o null) y en qué paso va.
+  Journey? journey;
+  int journeyIndex = 0;
+
+  /// Arma y empieza un viaje musical: la primera suena ya, las demás van a la cola.
+  Future<Journey> startJourney(JourneyShape shape, {int minutes = 45}) async {
+    final j = JourneyPlanner.plan(profile, shape,
+        minutes: minutes, startEnergy: _currentEnergy, random: _random, blocked: settings?.blockedArtists ?? const {});
+    journey = j;
+    journeyIndex = 0;
+    queueBeforeArrange = null;
+    queue
+      ..clear()
+      ..addAll(j.steps.skip(1).map((s) => s.query));
+    notifyListeners();
+    final yours = j.fromYours;
+    await _say('Viaje musical de $minutes minutos. ${j.description}'
+        '${yours == j.steps.length ? '' : yours == 0 ? ' Aún no conozco bien tu música por energía: uso música de cada tipo.' : ' $yours de ${j.steps.length} canciones son tuyas.'}');
+    await handleSearch(SearchRequest(j.steps.first.query));
+    return j;
+  }
+
+  /// Termina el viaje y vacía su cola.
+  void cancelJourney() {
+    if (journey == null) return;
+    journey = null;
+    queue.clear();
+    notifyListeners();
+  }
+
   // ------------------------------------------------ Repeticiones
 
   late RepetitionDetector repetition = RepetitionDetector(clock: _clock);
@@ -899,6 +935,14 @@ class Assistant extends ChangeNotifier {
   Future<bool> _playNextQueued() async {
     if (queue.isEmpty) return false;
     final q = queue.removeAt(0);
+    final j = journey;
+    if (j != null) {
+      if (journeyIndex < j.steps.length - 1 && j.steps[journeyIndex + 1].query == q) {
+        journeyIndex++;
+      } else {
+        journey = null; // la cola cambió: el viaje terminó
+      }
+    }
     notifyListeners();
     await _smooth(() => handleSearch(SearchRequest(q)));
     return true;

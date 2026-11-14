@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 36;
+const latestChangelog = 37;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 37,
+    title: 'Viajes musicales',
+    items: [
+      'Arco (tranquilo → pico → relajado), subida o bajada, de 20 a 90 minutos.',
+      'Usa tu música para cada tramo y muestra en qué parte del viaje vas.',
+      'Inicio → Accesos rápidos → «Viaje musical», o di «viaje musical de una hora» / «bájame la energía».',
+    ],
+  ),
   (
     version: 36,
     title: 'Detector de repeticiones',

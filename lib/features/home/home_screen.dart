@@ -19,6 +19,7 @@ import '../devices/detected_player_controller.dart';
 import '../activity/activity.dart';
 import '../discovery/connections_screen.dart';
 import '../discovery/repetition.dart';
+import '../discovery/journey.dart';
 
 /// Inicio: qué suena, el micrófono y la búsqueda rápida.
 class HomeScreen extends StatefulWidget {
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         'extras' => [_ExtrasRow(assistant: widget.assistant)],
         'queue' => [
+            if (widget.assistant.journey != null) _JourneyCard(assistant: widget.assistant),
             if (widget.assistant.queue.isNotEmpty) _QueueCard(assistant: widget.assistant),
           ],
         'suggestion' => [
@@ -793,6 +795,144 @@ class _ConnectionPill extends StatelessWidget {
 
 /// «Para ti ahora»: lo que el cerebro musical cree que quieres escuchar,
 /// con el porqué. Solo suena si lo tocas.
+/// Elegir forma y duración del viaje musical.
+Future<void> _pickJourney(BuildContext context, Assistant assistant) async {
+  var shape = JourneyShape.arco;
+  var minutes = 45;
+  final go = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final theme = Theme.of(context);
+        final curve = JourneyPlanner.curve(shape, (minutes / JourneyPlanner.songMinutes).round().clamp(4, 40),
+            start: shape == JourneyShape.bajada ? 3 : 1);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Viaje musical', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 8),
+                SegmentedButton<JourneyShape>(
+                  segments: [
+                    for (final s in JourneyShape.values)
+                      ButtonSegment(value: s, label: Text(Journey.nameOf(s))),
+                  ],
+                  selected: {shape},
+                  onSelectionChanged: (v) => setState(() => shape = v.first),
+                ),
+                const SizedBox(height: 8),
+                Text(Journey(shape, minutes, const []).description, style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 10),
+                _EnergyStrip(energies: curve),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final m in const [20, 30, 45, 60, 90])
+                      ChoiceChip(
+                        label: Text('$m min'),
+                        selected: minutes == m,
+                        onSelected: (_) => setState(() => minutes = m),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Empezar'),
+                    onPressed: () => Navigator.pop(context, true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+  if (go == true) await assistant.startJourney(shape, minutes: minutes);
+}
+
+/// Barras de energía del viaje (la actual resaltada).
+class _EnergyStrip extends StatelessWidget {
+  const _EnergyStrip({required this.energies, this.current});
+  final List<int> energies;
+  final int? current;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var i = 0; i < energies.length; i++)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                child: Container(
+                  height: 8 + energies[i] * 7.0,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(3),
+                    color: current == null
+                        ? Neon.cyan.withValues(alpha: .7)
+                        : i == current
+                            ? Neon.cyan
+                            : i < current!
+                                ? Neon.cyan.withValues(alpha: .35)
+                                : Colors.white24,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progreso del viaje musical en curso.
+class _JourneyCard extends StatelessWidget {
+  const _JourneyCard({required this.assistant});
+  final Assistant assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final j = assistant.journey!;
+    final i = assistant.journeyIndex.clamp(0, j.steps.length - 1);
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timeline_rounded, size: 18, color: Neon.cyan),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text('Viaje ${Journey.nameOf(j.shape).toLowerCase()} · ${i + 1} de ${j.steps.length} · '
+                      '${j.steps[i].stage}', style: theme.textTheme.titleSmall),
+                ),
+                TextButton(onPressed: assistant.cancelJourney, child: const Text('Terminar')),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _EnergyStrip(energies: [for (final s in j.steps) s.energy], current: i),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Aviso amable cuando algo se repite demasiado.
 class _RepeatCard extends StatelessWidget {
   const _RepeatCard({required this.assistant});
@@ -1171,6 +1311,11 @@ class _ExtrasRow extends StatelessWidget {
         avatar: const Icon(Icons.trending_up_rounded, size: 18),
         label: const Text('Subir la energía'),
         onPressed: assistant.energyRamp,
+      ),
+      ActionChip(
+        avatar: const Icon(Icons.timeline_rounded, size: 18),
+        label: const Text('Viaje musical'),
+        onPressed: () => _pickJourney(context, assistant),
       ),
       ActionChip(
         avatar: const Icon(Icons.hub_rounded, size: 18),
