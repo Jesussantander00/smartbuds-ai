@@ -27,6 +27,7 @@ import '../activity/activity.dart';
 import '../discovery/connections.dart';
 import '../discovery/repetition.dart';
 import '../discovery/journey.dart';
+import '../player/catalog.dart';
 import '../player/smartbuds_player.dart';
 import '../music_profile/music_profile.dart';
 
@@ -304,11 +305,15 @@ class Assistant extends ChangeNotifier {
       _lastSearchAt = _clock();
       if (t != null) {
         await _say(t.isPreview
-            ? '${t.display}: solo tengo la vista previa de 30 segundos. Para la canción completa, di «búscala en YouTube Music».'
+            ? '${t.display}: dentro de SmartBuds solo hay la vista previa de 30 segundos.'
             : 'Reproduciendo ${t.display}.');
         return;
       }
-      await _say('No la encontré para reproducir dentro de SmartBuds; la busco en tu app de música.');
+      // Nunca salir de SmartBuds por cuenta propia: se informa y se ofrece el botón.
+      p.panelOpen = true;
+      await _say('No puedo reproducir «${request.query}» dentro de SmartBuds: ninguna fuente integrada la tiene. '
+          'Si quieres, en resultados puedes abrirla en tu app de música.');
+      return;
     }
     final r = await controller.searchVoice(request);
     if (r == null) return;
@@ -348,7 +353,38 @@ class Assistant extends ChangeNotifier {
       case DiscoverIntent():
         await discover();
       case ArtistIntent(:final artist):
-        await handleSearch(SearchRequest(artist));
+        final p = inApp;
+        if (p != null && playInApp && inAppInControl) {
+          // «Otra del mismo artista»: una distinta a la que suena.
+          final t = await p.playQuery(artist, different: true);
+          await _say(t == null ? 'No encontré otra de $artist para reproducir aquí.' : 'Reproduciendo ${t.display}.');
+        } else {
+          await handleSearch(SearchRequest(artist));
+        }
+      case ResultPickIntent(:final index):
+        final ok = await inApp?.pick(index - 1) ?? false;
+        if (!ok) await _say('No hay resultado número $index. Primero di «busca …».');
+      case OtherVersionIntent():
+        final ok = await inApp?.otherVersion() ?? false;
+        if (!ok) {
+          final r = inApp?.currentResult;
+          if (r == null) {
+            await _say('No hay ninguna canción sonando en SmartBuds.');
+          } else {
+            final t = await inApp!.playQuery('${r.title} ${r.artist ?? ''} version', different: true);
+            await _say(t == null ? 'No encontré otra versión.' : 'Otra versión: ${t.display}.');
+          }
+        }
+      case QueueCurrentIntent():
+        final r = inApp?.currentResult ?? (inApp?.results.isNotEmpty ?? false ? inApp!.results.first : null);
+        if (r == null) {
+          await _say('No hay ninguna canción para agregar.');
+        } else {
+          final n = addToQueue(['${r.title} ${r.artist ?? ''}'.trim()]);
+          await _say(n == 0 ? 'Esa ya está en la cola.' : 'Agregué ${r.title} a la cola.');
+        }
+      case AlbumIntent(:final query):
+        await playAlbumQuery(query);
       case MoodIntent(:final mood, :final query):
         await playMood(mood, query);
       case CommandIntent(:final command):
@@ -942,6 +978,46 @@ class Assistant extends ChangeNotifier {
     }
     final ok = await inApp?.nextResult() ?? false;
     if (!ok) await _say('No hay más resultados. Di «busca …» o «pon algo nuevo».');
+  }
+
+  /// «Pon el álbum X»: busca el álbum y lo pone (la primera ya, el resto en la cola).
+  Future<void> playAlbumQuery(String query) async {
+    final p = inApp;
+    if (p == null) {
+      await handleSearch(SearchRequest(query));
+      return;
+    }
+    final albums = await p.catalog.albums(query);
+    if (albums.isEmpty) {
+      await _say('No encontré el álbum $query.');
+      return;
+    }
+    await playAlbum(albums.first);
+  }
+
+  Future<void> playAlbum(AlbumHit album) async {
+    final p = inApp;
+    if (p == null) return;
+    final tracks = await p.catalog.albumTracks(album);
+    if (tracks.isEmpty) {
+      // Sin lista de canciones (p. ej. de Apple): se busca el álbum como texto.
+      await handleSearch(SearchRequest('${album.title} ${album.artist ?? ''}'.trim()));
+      return;
+    }
+    journey = null;
+    queue
+      ..clear()
+      ..addAll(tracks.skip(1).map((t) => '${t.title} ${t.artist ?? album.artist ?? ''}'.trim()));
+    notifyListeners();
+    await _say('Álbum ${album.title}${album.artist == null ? '' : ' de ${album.artist}'}: ${tracks.length} canciones.');
+    // Cada canción se resuelve al sonar: completa si alguna fuente la tiene.
+    await handleSearch(SearchRequest('${tracks.first.title} ${tracks.first.artist ?? album.artist ?? ''}'.trim()));
+  }
+
+  /// Abrir en la app de música SOLO por pedido explícito del usuario (botón).
+  Future<void> openExternally(String query) async {
+    final r = await controller.searchVoice(SearchRequest(query));
+    if (r?.outcome == CommandOutcome.failed) await _say('No pude abrirla en tu app de música.');
   }
 
   /// Buscar desde la pantalla: muestra los resultados dentro de SmartBuds.

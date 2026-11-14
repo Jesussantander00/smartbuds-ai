@@ -109,9 +109,13 @@ class SmartBudsPlayer extends ChangeNotifier {
   int volume = 100;
   DateTime? _lastActiveAt;
 
-  /// Últimos resultados de búsqueda (para elegir otra canción).
-  List<InAppTrack> results = const [];
+  /// Últimos resultados del buscador unificado (una fila por canción).
+  List<MusicResult> results = const [];
+  List<AlbumHit> albums = const [];
   String? lastQuery;
+
+  /// Fila de resultados que está sonando (para «otra versión»).
+  MusicResult? currentResult;
 
   /// Canciones que ya sonaron (para «anterior»).
   final List<InAppTrack> history = [];
@@ -122,6 +126,12 @@ class SmartBudsPlayer extends ChangeNotifier {
   /// «Siguiente» desde la pantalla: el asistente decide (cola de SmartBuds
   /// primero, luego el siguiente resultado).
   Future<void> Function()? onNextRequested;
+
+  /// Tocar un álbum: el asistente lo pone (primera canción + resto en la cola).
+  Future<void> Function(AlbumHit album)? onAlbum;
+
+  /// Abrir en otra app SOLO cuando el usuario lo pide con un botón.
+  Future<void> Function(String query)? onOpenExternal;
 
   /// Panel de resultados abierto y video minimizado (UI del reproductor).
   bool panelOpen = false;
@@ -169,10 +179,11 @@ class SmartBudsPlayer extends ChangeNotifier {
     if (s.durationMs != null && s.durationMs! > 0) durationMs = s.durationMs;
     if (s.error != null) {
       error = s.error;
-      // Video que no se puede ver fuera de YouTube: prueba el siguiente resultado.
+      // Video que no se puede ver fuera de YouTube: otra fuente de la misma
+      // canción y, si no hay, el siguiente resultado.
       if (from == InAppSource.youtube && _youtubeRetries < 3) {
         _youtubeRetries++;
-        unawaited(nextResult());
+        unawaited(otherVersion().then((ok) => ok ? null : nextResult()));
         return;
       }
     }
@@ -186,12 +197,14 @@ class SmartBudsPlayer extends ChangeNotifier {
   }
 
   /// Busca y deja los resultados (sin reproducir).
-  Future<List<InAppTrack>> search(String query) async {
+  Future<List<MusicResult>> search(String query) async {
     lastQuery = query;
     searching = true;
     notifyListeners();
     try {
-      results = await catalog.search(query);
+      final r = await Future.wait([catalog.search(query), catalog.albums(query)]);
+      results = r[0] as List<MusicResult>;
+      albums = (r[1] as List<AlbumHit>).take(6).toList();
     } finally {
       searching = false;
       notifyListeners();
@@ -201,13 +214,47 @@ class SmartBudsPlayer extends ChangeNotifier {
 
   /// Busca y pone la mejor opción. Devuelve la canción, o null si ninguna
   /// fuente integrada la tiene.
-  Future<InAppTrack?> playQuery(String query) async {
+  /// Busca y pone el mejor resultado (completa antes que vista previa).
+  /// [different]: evita la canción que ya suena («otra del mismo artista»).
+  /// Devuelve la canción, o null si ninguna fuente integrada la tiene.
+  Future<InAppTrack?> playQuery(String query, {bool different = false}) async {
     _youtubeRetries = 0;
     final list = await search(query);
-    final pick = MusicCatalog.best(list, query);
+    final now = currentResult?.key;
+    final pick = list.where((r) => !different || r.key != now).firstOrNull;
     if (pick == null) return null;
-    await play(pick);
-    return pick;
+    await playResult(pick);
+    return current;
+  }
+
+  /// Pone una fila de resultados con su mejor fuente (o la [option] elegida).
+  Future<void> playResult(MusicResult r, {int option = 0}) async {
+    currentResult = r;
+    await play(r.options[option.clamp(0, r.options.length - 1)]);
+  }
+
+  /// «Reproduce la primera / segunda…» (índice desde 0).
+  Future<bool> pick(int index) async {
+    if (index < 0 || index >= results.length) return false;
+    await playResult(results[index]);
+    return true;
+  }
+
+  /// «Busca otra versión»: otra fuente de la misma canción; si no hay, otra
+  /// versión con el mismo título en los resultados.
+  Future<bool> otherVersion() async {
+    final r = currentResult, c = current;
+    if (r == null || c == null) return false;
+    final i = r.options.indexWhere((o) => o.id == c.id);
+    if (i >= 0 && i + 1 < r.options.length) {
+      await play(r.options[i + 1]);
+      return true;
+    }
+    final title = r.key.split('|').first;
+    final alt = results.where((x) => x.key != r.key && x.key.startsWith(title)).firstOrNull;
+    if (alt == null) return false;
+    await playResult(alt);
+    return true;
   }
 
   Future<void> play(InAppTrack track) async {
@@ -262,12 +309,11 @@ class SmartBudsPlayer extends ChangeNotifier {
   /// Siguiente resultado de la última búsqueda (la cola de SmartBuds va primero:
   /// la maneja el asistente).
   Future<bool> nextResult() async {
-    final c = current;
     if (results.isEmpty) return false;
-    final i = c == null ? -1 : results.indexWhere((r) => r.id == c.id);
-    final rest = results.skip(i + 1).where((r) => r.source == (c?.source ?? r.source)).toList();
-    if (rest.isEmpty) return false;
-    await play(rest.first);
+    final r = currentResult;
+    final i = r == null ? -1 : results.indexOf(r);
+    if (i + 1 >= results.length) return false;
+    await playResult(results[i + 1]);
     return true;
   }
 
