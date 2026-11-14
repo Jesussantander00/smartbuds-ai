@@ -23,6 +23,7 @@ import 'core/telemetry/error_reporter.dart';
 import 'core/ui/futuristic.dart';
 import 'features/account/supabase_auth.dart';
 import 'features/assistant/assistant.dart';
+import 'connectors/knowledge/music_knowledge.dart';
 import 'features/automations/automation_engine.dart';
 import 'features/devices/detected_player_controller.dart';
 import 'features/music_profile/music_profile.dart';
@@ -154,6 +155,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       errors: widget.errors,
       weather: WeatherService(),
     );
+    assistant.knowledge = MusicKnowledge();
     // Automatizaciones y comandos personalizados: los ejecuta el mismo asistente.
     automations = AutomationEngine(assistant: assistant, settings: widget.settings);
     assistant.automations = automations;

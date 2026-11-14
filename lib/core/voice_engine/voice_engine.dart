@@ -178,6 +178,7 @@ class VoiceEngine extends ChangeNotifier {
         PrivateModeIntent(:final on) => on ? 'Modo privado' : 'Salir del modo privado',
         CarModeIntent(:final on) => on ? 'Modo carro' : 'Salir del modo carro',
         MacroIntent(:final name) => name,
+        ArtistInfoIntent(:final artist) => artist == null ? 'Sobre este artista' : 'Sobre $artist',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -418,6 +419,7 @@ class VoiceEngine extends ChangeNotifier {
             PrivateModeIntent() ||
             CarModeIntent() ||
             MacroIntent() ||
+            ArtistInfoIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||
             SeekIntent() ||

@@ -13,6 +13,7 @@ import '../audio/playback_analysis_screen.dart';
 import '../backup/backup_screen.dart';
 import '../backup/backup_service.dart';
 import '../stats/advanced_stats_screen.dart';
+import '../knowledge/artist_info_sheet.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 
@@ -119,6 +120,7 @@ class MyMusicScreen extends StatelessWidget {
                     label: const Text('Compartir mi semana'),
                     onPressed: () => assistant.shareSummary(days: 7),
                   ),
+                  if (assistant.settings?.moduleOn('stats') ?? true)
                   ActionChip(
                     avatar: const Icon(Icons.insights_rounded, size: 18),
                     label: const Text('Estadísticas avanzadas'),
@@ -471,7 +473,9 @@ class _ArtistCarousel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Card(
               clipBehavior: Clip.antiAlias,
-              child: Stack(
+              child: InkWell(
+                onTap: () => showArtistInfo(context, assistant, name),
+                child: Stack(
                 fit: StackFit.expand,
                 children: [
                   FutureBuilder<String?>(
@@ -530,6 +534,7 @@ class _ArtistCarousel extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           );

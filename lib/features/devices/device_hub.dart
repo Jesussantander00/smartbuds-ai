@@ -93,7 +93,9 @@ class DeviceHub extends ChangeNotifier {
   /// (para seguir apareciendo «en línea»). Nunca en modo privado.
   @visibleForTesting
   bool shouldPublish(PlayerStatus? s) {
-    if (!settings.signedIn || !settings.shareDevices || settings.privateMode) return false;
+    if (!settings.signedIn || !settings.shareDevices || settings.privateMode || !settings.moduleOn('multidevice')) {
+      return false;
+    }
     final key = '${s?.title}|${s?.artist}|${s?.isPlaying}';
     final now = _clock();
     if (key == _lastKey && _lastAt != null && now.difference(_lastAt!) < const Duration(minutes: 1)) {

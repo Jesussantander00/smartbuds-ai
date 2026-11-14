@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 22;
+const latestChangelog = 23;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 23,
+    title: 'Conocimiento musical y extensiones',
+    items: [
+      'Di «cuéntame de Feid» o toca un artista en Mi música: resumen con fuente, parecidos y sus colaboraciones en tu música.',
+      'Privacidad y ayuda → Extensiones: enciende o apaga Amigos, Automatizaciones, Modo carro y más.',
+      'SmartBuds Premium: próximamente. Lo básico siempre será gratis.',
+    ],
+  ),
   (
     version: 22,
     title: 'Estadísticas y copia de seguridad',

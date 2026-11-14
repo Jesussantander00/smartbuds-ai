@@ -173,6 +173,14 @@ class WhyIntent extends VoiceIntent {
   const WhyIntent();
 }
 
+/// «Cuéntame de Feid» / «¿Quién es este artista?»: lo que se sabe de él,
+/// con fuente (Wikipedia, Deezer) y sus colaboraciones en tu música.
+/// [artist] null = el que está sonando.
+class ArtistInfoIntent extends VoiceIntent {
+  const ArtistInfoIntent([this.artist]);
+  final String? artist;
+}
+
 /// «Pon media hora de música»: una lista de tus canciones para ese tiempo.
 class DurationIntent extends VoiceIntent {
   const DurationIntent(this.minutes);
@@ -414,6 +422,24 @@ class CommandParser {
     'modo estudio': 'estudio', 'modo concentracion': 'estudio', 'modo viaje': 'viaje',
     'modo diario': 'diario', 'modo normal': 'diario',
   };
+  static const _aboutCurrent = {
+    'cuentame de este artista',
+    'cuentame del artista',
+    'hablame de este artista',
+    'hablame del artista',
+    'quien es este artista',
+    'quien es el artista',
+    'que sabes de este artista',
+  };
+  static const _aboutPrefixes = [
+    'cuentame de ',
+    'cuentame sobre ',
+    'hablame de ',
+    'hablame sobre ',
+    'que sabes de ',
+    'quien es ',
+  ];
+
   static const _carOn = {
     'modo carro',
     'modo auto',
@@ -542,6 +568,13 @@ class CommandParser {
     }
     if (_carOn.contains(text)) return const CarModeIntent(true);
     if (_carOff.contains(text)) return const CarModeIntent(false);
+    if (_aboutCurrent.contains(text)) return const ArtistInfoIntent();
+    for (final p in _aboutPrefixes) {
+      if (text.startsWith(p)) {
+        final who = text.substring(p.length).trim();
+        if (who.isNotEmpty) return ArtistInfoIntent(who);
+      }
+    }
     final prof = _profiles[text];
     if (prof != null) return UsageProfileIntent(prof);
     if (_energy.contains(text)) return const EnergyRampIntent();

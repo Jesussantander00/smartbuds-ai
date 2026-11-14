@@ -270,6 +270,17 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Extensiones (módulos) que apagaste. Todas vienen encendidas.
+  Set<String> disabledModules = {};
+
+  bool moduleOn(String id) => !disabledModules.contains(id);
+
+  void setModule(String id, bool on) {
+    disabledModules = on ? ({...disabledModules}..remove(id)) : {...disabledModules, id};
+    _persist();
+    notifyListeners();
+  }
+
   /// Copia de seguridad automática en la nube (una vez al día, con cuenta).
   bool autoBackup = true;
   DateTime? lastBackupAt;
@@ -464,6 +475,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
       for (final e in ((d['headphoneVolumes'] as Map?) ?? const {}).entries)
         e.key as String: (e.value as num).toInt(),
     };
+    disabledModules = {...((d['disabledModules'] as List?) ?? const []).cast<String>()};
     autoBackup = d['autoBackup'] != false;
     lastBackupAt = DateTime.tryParse('${d['lastBackupAt'] ?? ''}');
     automations = [
@@ -645,6 +657,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'weatherSuggestions': weatherSuggestions,
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
+        'disabledModules': disabledModules.toList(),
         'autoBackup': autoBackup,
         'lastBackupAt': lastBackupAt?.toIso8601String(),
         'carDevices': carDevices.toList(),
