@@ -217,6 +217,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 settings.update(voiceFeedback: v);
                 voice?.feedbackEnabled = v;
               }),
+              _switch('Bajar la música cuando Jarvis responde',
+                  'Solo mientras habla (1–3 s) y vuelve sola. Escucharte nunca cambia el volumen.',
+                  settings.duckOnReply, (v) {
+                settings.update(duckOnReply: v);
+                voice?.duckOnReply = v;
+              }),
               if (_match('Voz personalizada', 'estilo velocidad tono breve conversacional técnico'))
                 _VoiceStyle(settings: settings, voice: voice),
               _switch('Respuestas cortas', 'Solo lo esencial: una frase por respuesta.',

@@ -236,6 +236,7 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         v.shortReplies = widget.settings.shortReplies || assistant.lowBattery;
         v.speechRate = widget.settings.speechRate;
         v.speechPitch = widget.settings.speechPitch;
+        v.duckOnReply = widget.settings.duckOnReply;
         v.replyStyle = ReplyStyle.values.firstWhere((s) => s.name == widget.settings.replyStyle,
             orElse: () => ReplyStyle.normal);
       }

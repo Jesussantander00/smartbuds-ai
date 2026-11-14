@@ -42,6 +42,7 @@ class SelfCheckInput {
     this.requireWakeWord = false,
     this.onlyMyVoice = false,
     this.lastRejectedVoice = false,
+    this.ignoredVolumeFlips = 0,
     this.notificationAccess,
     this.playerApp,
     this.controlsLimited = false,
@@ -64,6 +65,9 @@ class SelfCheckInput {
   final bool requireWakeWord;
   final bool onlyMyVoice;
   final bool lastRejectedVoice;
+
+  /// Órdenes de volumen ignoradas porque parecían conversación o canto.
+  final int ignoredVolumeFlips;
 
   /// Acceso a notificaciones (Android). Null: no aplica (iPhone).
   final bool? notificationAccess;
@@ -123,6 +127,12 @@ class SelfCheck {
       voz.add(const Finding(CheckArea.voz, Severity.warning, '«Solo mi voz» ignoró la última frase',
           detail: 'Jarvis no reconoció la voz como tuya (ruido, distancia o música fuerte).',
           fix: 'Vuelve a entrenar tu voz o baja la exigencia en Asistente → Voz y escucha.'));
+    }
+    if (i.ignoredVolumeFlips > 0) {
+      voz.add(Finding(CheckArea.voz, Severity.warning,
+          'Ignoré ${i.ignoredVolumeFlips} orden${i.ignoredVolumeFlips == 1 ? '' : 'es'} de volumen que parecía${i.ignoredVolumeFlips == 1 ? '' : 'n'} conversación',
+          detail: 'Llegaron «sube» y «baja» seguidos mientras hablabas o cantabas; así la música no sube y baja sola.',
+          fix: 'Para cambiar el volumen di la frase completa: «sube el volumen». «Solo mi voz» también ayuda.'));
     }
     final voiceErrs = errs.where((e) => e.kind == 'voz').toList();
     if (voiceErrs.length >= 3 && !i.voiceFailed) {

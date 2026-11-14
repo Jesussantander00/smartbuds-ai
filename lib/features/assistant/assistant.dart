@@ -230,17 +230,27 @@ class Assistant extends ChangeNotifier {
   /// cuando funciona, la música misma es la respuesta.
   /// Transición suave: baja el volumen, hace [action] y lo vuelve a subir.
   /// Solo Android (iOS no deja cambiar el volumen de otras apps).
+  /// Nunca dos transiciones a la vez: si una orden llega durante otra, se
+  /// hace sin bajar el volumen (antes dos fundidos se pisaban y el volumen
+  /// quedaba subiendo y bajando, o en el nivel bajo).
+  bool _smoothing = false;
+
   Future<T> _smooth<T>(Future<T> Function() action) async {
     final m = media;
-    if (!(settings?.smoothTransitions ?? false) || m == null) return action();
+    if (!(settings?.smoothTransitions ?? false) || m == null || _smoothing) return action();
     final before = await m.volumePercent();
     if (before == null || before < 10) return action();
-    await m.fadeVolume((before * .3).round(), ms: 1200);
-    await Future<void>.delayed(const Duration(milliseconds: 1300));
-    final r = await action();
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    await m.fadeVolume(before, ms: 1500);
-    return r;
+    _smoothing = true;
+    try {
+      await m.fadeVolume((before * .3).round(), ms: 1200);
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+      final r = await action();
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      return r;
+    } finally {
+      await m.fadeVolume(before, ms: 1500); // siempre vuelve al volumen que tenías
+      _smoothing = false;
+    }
   }
 
   Future<void> handleCommand(MusicCommand command) async {
@@ -432,6 +442,7 @@ class Assistant extends ChangeNotifier {
       requireWakeWord: v?.requireWakeWord ?? false,
       onlyMyVoice: v?.guard.enabled ?? false,
       lastRejectedVoice: v?.lastRejectedVoice ?? false,
+      ignoredVolumeFlips: v?.ignoredVolumeFlips ?? 0,
       notificationAccess: notif,
       playerApp: player?.status.appName,
       controlsLimited: view != null && view.voiceCaps.level != ControlLevel.direct,

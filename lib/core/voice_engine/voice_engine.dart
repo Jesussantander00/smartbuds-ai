@@ -260,6 +260,55 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Voz personalizada: velocidad y tono (0,5–2,0) y estilo de respuesta.
   double speechRate = 1.0;
+
+  /// Bajar la música de otras apps solo mientras Jarvis responde (ajuste,
+  /// apagado por defecto). Escuchar nunca cambia el volumen.
+  bool duckOnReply = false;
+
+  /// Una orden de volumen de una sola palabra («sube», «baja») contraria a la
+  /// anterior dentro de este tiempo se ignora: casi siempre es conversación o
+  /// canto mal oído, y obedecerla hacía subir y bajar la música en ciclo.
+  static const volumeFlipWindow = Duration(seconds: 10);
+  MusicCommand? _lastVolume;
+  DateTime? _lastVolumeAt;
+
+  /// Órdenes de volumen ignoradas por parecer conversación (para el autodiagnóstico).
+  int ignoredVolumeFlips = 0;
+
+  bool _isVolumeFlip(VoiceIntent intent, String heard) {
+    if (intent is! CommandIntent) return false;
+    final c = intent.command;
+    if (c != MusicCommand.volumeUp && c != MusicCommand.volumeDown) return false;
+    final now = _clock();
+    final prev = _lastVolume, at = _lastVolumeAt;
+    _lastVolume = c;
+    _lastVolumeAt = now;
+    final oneWord = !CommandParser.normalize(heard).contains(' ');
+    if (!oneWord || prev == null || prev == c || at == null) return false;
+    if (now.difference(at) > volumeFlipWindow) return false;
+    ignoredVolumeFlips++;
+    _diag('Ignoré «${describe(intent)}»: llegó justo después de la orden contraria '
+        '(parece conversación o canto). Di «${c == MusicCommand.volumeUp ? 'sube' : 'baja'} el volumen» si de verdad la quieres.');
+    return true;
+  }
+
+  /// Traduce los avisos de audio del teléfono al registro de diagnóstico.
+  void _audioEvent(Map<dynamic, dynamic> e) {
+    final what = switch (e['event']) {
+      'duck_on' => 'Bajé la música mientras Jarvis responde',
+      'duck_off' => 'La música vuelve a su volumen',
+      'duck_failed' => 'No se pudo bajar la música para responder',
+      'focus' => 'El sistema cambió el foco de audio (${e['change']})',
+      'category' => 'Sesión de audio configurada (sin atenuar la música)',
+      'active' => 'Sesión de audio activa',
+      'route' => 'Cambio de salida de audio',
+      'engine_change' => 'El motor de audio del teléfono cambió',
+      'interruption' => e['began'] == true ? 'Interrupción del sistema (llamada, Siri, alarma)' : 'Terminó la interrupción',
+      'restart_blocked' => 'Evité un ciclo de reinicios del micrófono (${e['why']})',
+      _ => 'Audio: ${e['event']}',
+    };
+    _diag(what);
+  }
   double speechPitch = 1.0;
   ReplyStyle replyStyle = ReplyStyle.normal;
   int _replies = 0;
@@ -701,7 +750,7 @@ class VoiceEngine extends ChangeNotifier {
       }
     }
     try {
-      await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch});
+      await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch, 'duck': duckOnReply});
     } catch (_) {}
   }
 
@@ -744,6 +793,8 @@ class VoiceEngine extends ChangeNotifier {
         if (error != null) _diag('Error: $error');
         // Error que el teléfono no puede resolver solo (modelo, permisos, reintentos agotados).
         if (event['fatal'] == true) failed = true;
+      case 'audio':
+        _audioEvent(event);
       case 'headphones':
         _onHeadphones(event['connected'] == true);
       case 'noise':
@@ -772,6 +823,7 @@ class VoiceEngine extends ChangeNotifier {
           if (requireWakeWord && intent is! WakeIntent) continue;
           if (intent != null) {
             _handledSession = session;
+            if (_isVolumeFlip(intent, t)) break;
             _dispatch(intent);
             break;
           }
