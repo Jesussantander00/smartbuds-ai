@@ -1,0 +1,7 @@
+# Las pruebas «en vivo» llaman a los servicios reales (Deezer, Apple, Audius):
+# no corren con `flutter test` normal. En GitHub Actions corren aparte con
+#   flutter test --run-skipped --tags en-vivo
+tags:
+  en-vivo:
+    skip: "Necesita internet: flutter test --run-skipped --tags en-vivo"
+    timeout: 2x

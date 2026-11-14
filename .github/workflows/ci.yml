@@ -45,6 +45,28 @@ jobs:
         run: |
           echo '{"YOUTUBE_API_KEY":"","SUPABASE_URL":"","SUPABASE_ANON_KEY":""}' > secrets.json
           flutter build apk --debug --dart-define-from-file=secrets.json
+      - name: APK para probar en el teléfono (descargable en Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartbuds-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+  en-vivo:
+    name: Proveedores en vivo (Deezer, Apple, Audius)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Depende de servicios externos: avisa, pero no bloquea la fusión.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Pruebas contra los servicios reales
+        run: flutter test --run-skipped --tags en-vivo --reporter expanded
 
   ios:
     name: iPhone (sin firmar)
