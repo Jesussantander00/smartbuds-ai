@@ -64,6 +64,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Cola inteligente automática: ordena lo que sigue al agregar canciones.
   bool smartQueue = false;
 
+  /// Bajar la música solo mientras Jarvis responde (escuchar nunca la baja).
+  bool duckOnReply = false;
+
   /// Pausar la música al desconectar los audífonos.
   bool pauseOnUnplug = true;
 
@@ -517,6 +520,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     shortReplies = d['shortReplies'] == true;
     gradualDiscovery = d['gradualDiscovery'] != false;
     smartQueue = d['smartQueue'] == true;
+    duckOnReply = d['duckOnReply'] == true;
     lastHeadphone = d['lastHeadphone'] as String?;
     smoothTransitions = d['smoothTransitions'] == true;
     volumeCaps = {
@@ -641,6 +645,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? shortReplies,
     bool? gradualDiscovery,
     bool? smartQueue,
+    bool? duckOnReply,
     bool? compact,
     bool? smoothTransitions,
     bool? carAutoOpen,
@@ -664,6 +669,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
     if (smartQueue != null) this.smartQueue = smartQueue;
+    if (duckOnReply != null) this.duckOnReply = duckOnReply;
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
@@ -767,6 +773,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'shortReplies': shortReplies,
         'gradualDiscovery': gradualDiscovery,
         'smartQueue': smartQueue,
+        'duckOnReply': duckOnReply,
         'lastHeadphone': lastHeadphone,
         'smoothTransitions': smoothTransitions,
         'volumeCaps': volumeCaps,

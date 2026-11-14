@@ -4,7 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
+import android.media.AudioFocusRequest
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
@@ -58,6 +60,10 @@ class VoiceRecognizer(
         private const val ASSET_SPK = "model-spk"
         private const val SAMPLE_RATE = 16000f
         private const val MIN_CONFIDENCE = 0.6
+
+        /** Una sola palabra («sube», «baja»…) es lo que más se confunde al hablar o
+         *  cantar con música: se exige más seguridad. */
+        private const val MIN_CONFIDENCE_SINGLE = 0.85
         private const val MAX_RETRIES = 5
 
         private val HEADPHONE_TYPES = buildSet {
@@ -104,6 +110,40 @@ class VoiceRecognizer(
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+
+    /**
+     * Volumen estable: escuchar NUNCA pide foco de audio (Vosk solo graba), así
+     * que la música no baja por hablar o cantar. Solo si el usuario lo activa,
+     * se pide foco «transitorio con atenuación» mientras Jarvis habla, y se
+     * suelta al terminar (una sola bajada y subida, controlada por el sistema).
+     */
+    private var duckOnReply = false
+    private var replyFocus: AudioFocusRequest? = null
+
+    private fun requestReplyDuck() {
+        if (!duckOnReply || replyFocus != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener({ change ->
+                emit("audio", mapOf("event" to "focus", "change" to change))
+            }, main)
+            .build()
+        val r = audioManager.requestAudioFocus(req)
+        if (r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) replyFocus = req
+        emit("audio", mapOf("event" to "duck_on", "granted" to (r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)))
+    }
+
+    private fun releaseReplyDuck() {
+        val req = replyFocus ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) audioManager.abandonAudioFocusRequest(req)
+        replyFocus = null
+        emit("audio", mapOf("event" to "duck_off"))
+    }
     private var oneShotService: SpeechService? = null
 
     private val deviceCallback = object : AudioDeviceCallback() {
@@ -125,6 +165,7 @@ class VoiceRecognizer(
         VoiceForegroundService.stop(context)
         audioManager.unregisterAudioDeviceCallback(deviceCallback)
         oneShotService?.shutdown()
+        releaseReplyDuck()
         tts?.shutdown()
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
@@ -184,6 +225,7 @@ class VoiceRecognizer(
                 result.success(true)
             }
             "speak" -> {
+                duckOnReply = call.argument<Boolean>("duck") == true
                 speak(
                     call.argument<String>("text") ?: "",
                     (call.argument<Number>("rate") ?: 1.0).toFloat(),
@@ -387,7 +429,8 @@ class VoiceRecognizer(
         val words = json.optJSONArray("result") ?: return true
         for (i in 0 until words.length()) {
             val conf = words.optJSONObject(i)?.optDouble("conf", 1.0) ?: 1.0
-            if (conf < MIN_CONFIDENCE) return false
+            val min = if (words.length() == 1) MIN_CONFIDENCE_SINGLE else MIN_CONFIDENCE
+            if (conf < min) return false
         }
         return true
     }
@@ -450,6 +493,7 @@ class VoiceRecognizer(
                 override fun onDone(utteranceId: String?) {
                     // Pequeña espera para que el eco de la voz no se tome como orden.
                     main.postDelayed({
+                        releaseReplyDuck()
                         speechService?.setPause(false)
                         emit("speaking", mapOf("on" to false))
                     }, 300)
@@ -458,6 +502,7 @@ class VoiceRecognizer(
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
                     main.post {
+                        releaseReplyDuck()
                         speechService?.setPause(false)
                         emit("speaking", mapOf("on" to false))
                     }
@@ -472,6 +517,7 @@ class VoiceRecognizer(
         // Voz personalizada: velocidad y tono elegidos en Asistente.
         tts?.setSpeechRate(rate.coerceIn(0.5f, 2f))
         tts?.setPitch(pitch.coerceIn(0.5f, 2f))
+        requestReplyDuck()
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "smartbuds-${System.nanoTime()}")
     }
 

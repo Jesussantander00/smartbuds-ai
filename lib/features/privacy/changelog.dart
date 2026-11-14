@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 32;
+const latestChangelog = 33;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 33,
+    title: 'Volumen estable mientras Jarvis escucha',
+    items: [
+      'Arreglado: la música subía y bajaba al hablar o cantar mientras Jarvis escuchaba.',
+      '«Sube» y «baja» seguidos que parecen conversación se ignoran; «sube el volumen» siempre funciona.',
+      'Nuevo ajuste: bajar la música solo mientras Jarvis responde (apagado por defecto).',
+    ],
+  ),
   (
     version: 32,
     title: 'Cola inteligente',
