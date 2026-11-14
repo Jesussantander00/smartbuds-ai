@@ -252,6 +252,11 @@ class FollowUpArtistIntent extends VoiceIntent {
   const FollowUpArtistIntent();
 }
 
+/// «Haz un diagnóstico», «¿qué te pasa?»: SmartBuds se revisa y lo dice.
+class DiagnoseIntent extends VoiceIntent {
+  const DiagnoseIntent();
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -532,7 +537,12 @@ class CommandParser {
     'algo de el', 'algo de ella', 'pon algo de el', 'pon algo de ella', 'otra de ese artista',
     'pon otra de ese artista', 'una de el', 'una de ella',
   };
+  static const _diagnose = {
+    'diagnostico', 'haz un diagnostico', 'autodiagnostico', 'revisa si todo funciona',
+    'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
+  };
   static const _corrections = {
+    'haz un diagnóstico', 'autodiagnóstico', 'revisa si todo funciona', 'qué te pasa',
     'no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
     'no esa no', 'no eso no', 'te equivocaste', 'no es esa', 'no es eso', 'no esa',
     'no no la otra', 'esa no es',
@@ -681,6 +691,7 @@ class CommandParser {
     if (_restart.contains(text)) return const RestartIntent();
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
+    if (_diagnose.contains(text)) return const DiagnoseIntent();
     if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();
     if (_corrections.contains(text)) return const CorrectionIntent();
     if (_incomplete.contains(text)) return const ClarifyIntent();
