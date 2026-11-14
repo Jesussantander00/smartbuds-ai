@@ -471,6 +471,7 @@ class VoiceEngine extends ChangeNotifier {
         CorrectionIntent() => 'Corrección',
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
         DiagnoseIntent() => 'Autodiagnóstico',
+        ArrangeQueueIntent() => 'Ordenar la cola',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -845,6 +846,7 @@ class VoiceEngine extends ChangeNotifier {
             ArtistInfoIntent() ||
             TasteEvolutionIntent() ||
             DiagnoseIntent() ||
+            ArrangeQueueIntent() ||
             HomeSceneIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||

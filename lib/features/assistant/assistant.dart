@@ -22,6 +22,7 @@ import '../stats/evolution.dart';
 import '../devices/detected_player_controller.dart';
 import '../diagnostics/online_probe.dart';
 import '../diagnostics/self_check.dart';
+import 'smart_queue.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -385,6 +386,8 @@ class Assistant extends ChangeNotifier {
         }
       case DiagnoseIntent():
         await sayDiagnosis();
+      case ArrangeQueueIntent():
+        await _say(arrangeQueue());
       case SearchPromptIntent() ||
             ArtistPromptIntent() ||
             WakeIntent() ||
@@ -617,6 +620,7 @@ class Assistant extends ChangeNotifier {
       return;
     }
     queue.add(query);
+    if (settings?.smartQueue ?? false) arrangeQueue();
     notifyListeners();
     await _say(queue.length == 1
         ? 'Listo, la pongo después de esta.'
@@ -628,8 +632,76 @@ class Assistant extends ChangeNotifier {
     final add = items.where((q) => q.trim().isNotEmpty && !queue.contains(q)).take(20).toList();
     if (add.isEmpty) return 0;
     queue.addAll(add);
+    if (settings?.smartQueue ?? false) arrangeQueue();
     notifyListeners();
     return add.length;
+  }
+
+  // ---------------------------------------------------- Cola inteligente
+
+  /// Orden de la cola antes de ordenarla (para «Deshacer»).
+  List<String>? queueBeforeArrange;
+
+  /// Energía de lo que suena ahora (por su ambiente), o null.
+  int? get _currentEnergy {
+    final a = active;
+    final title = a?.title;
+    if (title == null) return null;
+    final key = MusicProfile.keyFor(title, a!.artist);
+    for (final e in profile.moodTracks.entries) {
+      if (e.value.contains(key)) return SmartQueue.moodEnergy[e.key];
+    }
+    return SmartQueue.moodEnergy[profile.currentMood];
+  }
+
+  /// Reordena lo que sigue para evitar cambios bruscos. Devuelve la explicación.
+  String arrangeQueue() {
+    if (queue.length < 2) return 'La cola tiene menos de dos canciones: no hay nada que ordenar.';
+    final items = SmartQueue.describe(queue, profile);
+    final start = _currentEnergy;
+    final known = SmartQueue.known(items);
+    if (known == 0) {
+      return 'Aún no sé el ambiente de estas canciones, así que dejé el orden como está '
+          '(solo evito el mismo artista seguido cuando lo sé).';
+    }
+    final arranged = SmartQueue.arrange(items, startEnergy: start);
+    final order = arranged.map((i) => i.query).toList();
+    final before = SmartQueue.abruptJumps(items, startEnergy: start);
+    final after = SmartQueue.abruptJumps(arranged, startEnergy: start);
+    if (_sameList(order, queue)) {
+      return 'La cola ya fluye bien; no la cambié.';
+    }
+    queueBeforeArrange = [...queue];
+    queue
+      ..clear()
+      ..addAll(order);
+    notifyListeners();
+    final jumps = before > after
+        ? 'Quité ${before - after} cambio${before - after == 1 ? '' : 's'} brusco${before - after == 1 ? '' : 's'}.'
+        : 'Ahora el ambiente cambia poco a poco.';
+    final unknown = queue.length - known;
+    return 'Ordené ${queue.length} canciones. $jumps'
+        '${unknown > 0 ? ' De $unknown no sé el ambiente y las dejé cerca de donde estaban.' : ''}';
+  }
+
+  /// Vuelve al orden que tenía la cola antes de ordenarla.
+  bool undoArrange() {
+    final b = queueBeforeArrange;
+    if (b == null) return false;
+    queue
+      ..clear()
+      ..addAll(b.where((q) => q.trim().isNotEmpty));
+    queueBeforeArrange = null;
+    notifyListeners();
+    return true;
+  }
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void removeFromQueue(int index) {

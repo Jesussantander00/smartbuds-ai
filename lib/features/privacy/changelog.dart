@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 31;
+const latestChangelog = 32;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 32,
+    title: 'Cola inteligente',
+    items: [
+      '«Ordenar por ambiente» en «Sigue después»: el ambiente cambia poco a poco, sin saltos bruscos.',
+      'Evita el mismo artista dos veces seguidas. Puedes deshacerlo.',
+      'Modo automático y por voz: «ordena la cola».',
+    ],
+  ),
   (
     version: 31,
     title: 'Autodiagnóstico',

@@ -257,6 +257,11 @@ class DiagnoseIntent extends VoiceIntent {
   const DiagnoseIntent();
 }
 
+/// «Ordena la cola»: cola inteligente (cambios de ambiente suaves).
+class ArrangeQueueIntent extends VoiceIntent {
+  const ArrangeQueueIntent();
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -541,7 +546,12 @@ class CommandParser {
     'diagnostico', 'haz un diagnostico', 'autodiagnostico', 'revisa si todo funciona',
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
+  static const _arrangeQueue = {
+    'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
+    'organiza lo que sigue', 'acomoda la cola',
+  };
   static const _corrections = {
+    'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
     'haz un diagnóstico', 'autodiagnóstico', 'revisa si todo funciona', 'qué te pasa',
     'no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
     'no esa no', 'no eso no', 'te equivocaste', 'no es esa', 'no es eso', 'no esa',
@@ -692,6 +702,7 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_diagnose.contains(text)) return const DiagnoseIntent();
+    if (_arrangeQueue.contains(text)) return const ArrangeQueueIntent();
     if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();
     if (_corrections.contains(text)) return const CorrectionIntent();
     if (_incomplete.contains(text)) return const ClarifyIntent();

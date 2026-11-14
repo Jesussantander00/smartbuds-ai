@@ -61,6 +61,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// más canciones nuevas a medida que sigue sonando.
   bool gradualDiscovery = true;
 
+  /// Cola inteligente automática: ordena lo que sigue al agregar canciones.
+  bool smartQueue = false;
+
   /// Pausar la música al desconectar los audífonos.
   bool pauseOnUnplug = true;
 
@@ -513,6 +516,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     headphoneTaps = d['headphoneTaps'] != false;
     shortReplies = d['shortReplies'] == true;
     gradualDiscovery = d['gradualDiscovery'] != false;
+    smartQueue = d['smartQueue'] == true;
     lastHeadphone = d['lastHeadphone'] as String?;
     smoothTransitions = d['smoothTransitions'] == true;
     volumeCaps = {
@@ -636,6 +640,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     int? seedColor,
     bool? shortReplies,
     bool? gradualDiscovery,
+    bool? smartQueue,
     bool? compact,
     bool? smoothTransitions,
     bool? carAutoOpen,
@@ -658,6 +663,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   }) {
     if (shortReplies != null) this.shortReplies = shortReplies;
     if (gradualDiscovery != null) this.gradualDiscovery = gradualDiscovery;
+    if (smartQueue != null) this.smartQueue = smartQueue;
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
@@ -760,6 +766,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'designVersion': 4,
         'shortReplies': shortReplies,
         'gradualDiscovery': gradualDiscovery,
+        'smartQueue': smartQueue,
         'lastHeadphone': lastHeadphone,
         'smoothTransitions': smoothTransitions,
         'volumeCaps': volumeCaps,
