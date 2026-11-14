@@ -16,6 +16,7 @@ import '../../core/telemetry/error_reporter.dart';
 import '../../connectors/knowledge/music_knowledge.dart';
 import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
+import '../stats/evolution.dart';
 import '../devices/detected_player_controller.dart';
 import '../music_profile/music_profile.dart';
 
@@ -57,7 +58,8 @@ class Assistant extends ChangeNotifier {
   /// El momento según el cerebro: hora, ambiente reciente, perfil de uso y saltos.
   BrainContext get brainContext => BrainContext(
         now: _clock(),
-        mood: profile.currentMood,
+        // Lo que pediste o, si no, el ambiente que se nota en lo último que sonó.
+        mood: profile.currentMood ?? brain.ambience()?.mood,
         usageProfile: settings?.usageProfile,
         sessionSkips: profile.recentSkipStreak(),
       );
@@ -331,6 +333,8 @@ class Assistant extends ChangeNotifier {
         await explainCurrent();
       case ArtistInfoIntent(:final artist):
         await tellAboutArtist(artist);
+      case TasteEvolutionIntent():
+        await _say(TasteEvolution.from(profile, now: _clock()).summary());
       case DurationIntent(:final minutes):
         await playFor(minutes);
       case UsageProfileIntent(:final profile):

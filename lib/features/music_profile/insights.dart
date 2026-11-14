@@ -231,11 +231,16 @@ class _BrainSectionState extends State<BrainSection> {
       widget.assistant.brain.radar();
 
   Assistant get assistant => widget.assistant;
+  bool _onlyEmerging = false;
+
+  /// Menos de esta cantidad de seguidores en Deezer = artista emergente.
+  static const emergingFans = 300000;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final insight = assistant.brain.sessionInsight();
+    final ambience = assistant.brain.ambience();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -247,17 +252,42 @@ class _BrainSectionState extends State<BrainSection> {
               subtitle: Text('${insight.summary} (de ${insight.sessions} sesiones)'),
             ),
           ),
+        if (ambience != null)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.waves_rounded, color: Neon.cyan),
+              title: Text('Ambiente de ahora: ${ambience.mood}'),
+              subtitle: Text('Porque ${ambience.reason}. Las próximas sugerencias van en esa línea.'),
+            ),
+          ),
         FutureBuilder(
           future: _radar,
           builder: (context, snap) {
-            final list = snap.data ?? const [];
-            if (list.isEmpty) return const SizedBox.shrink();
+            final all = snap.data ?? const [];
+            if (all.isEmpty) return const SizedBox.shrink();
+            final list = _onlyEmerging ? all.where((a) => a.fans != null && a.fans! < emergingFans).toList() : all;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),
-                Text('Radar de descubrimiento', style: theme.textTheme.titleMedium),
+                Row(
+                  children: [
+                    Expanded(child: Text('Radar de descubrimiento', style: theme.textTheme.titleMedium)),
+                    FilterChip(
+                      label: const Text('Emergentes'),
+                      selected: _onlyEmerging,
+                      onSelected: (v) => setState(() => _onlyEmerging = v),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Dato real: seguidores en Deezer. Predicción de SmartBuds: que te guste, por parecerse a tus artistas. '
+                  'Emergente = menos de ${_fans(emergingFans)} seguidores.',
+                  style: theme.textTheme.bodySmall,
+                ),
                 const SizedBox(height: 6),
+                if (list.isEmpty)
+                  const Card(child: ListTile(title: Text('Ningún emergente esta vez. Vuelve más tarde.'))),
                 Card(
                   child: Column(
                     children: [
@@ -268,9 +298,17 @@ class _BrainSectionState extends State<BrainSection> {
                             backgroundImage: a.picture == null ? null : NetworkImage(a.picture!),
                             child: a.picture == null ? const Icon(Icons.person) : null,
                           ),
-                          title: Text(a.artist),
-                          subtitle: Text('En común contigo: se parece a ${a.because}'
-                              '${a.fans == null ? '' : ' · ${_fans(a.fans!)} seguidores'}'),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(a.artist)),
+                              if (a.fans != null && a.fans! < emergingFans) ...[
+                                const SizedBox(width: 6),
+                                const Icon(Icons.trending_up_rounded, size: 16, color: Neon.cyan),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text('Predicción: te puede gustar, se parece a ${a.because}'
+                              '${a.fans == null ? '' : ' · Dato real: ${_fans(a.fans!)} seguidores'}'),
                           trailing: const Icon(Icons.play_circle_fill_rounded, color: Neon.cyan),
                           onTap: () => assistant.handleSearch(
                               SearchRequest(a.topTrack == null ? a.artist : '${a.topTrack} ${a.artist}')),

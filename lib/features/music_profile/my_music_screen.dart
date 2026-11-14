@@ -13,6 +13,7 @@ import '../audio/playback_analysis_screen.dart';
 import '../backup/backup_screen.dart';
 import '../backup/backup_service.dart';
 import '../stats/advanced_stats_screen.dart';
+import '../stats/evolution_screen.dart';
 import '../knowledge/artist_info_sheet.dart';
 import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
@@ -119,6 +120,13 @@ class MyMusicScreen extends StatelessWidget {
                     avatar: const Icon(Icons.ios_share, size: 18),
                     label: const Text('Compartir mi semana'),
                     onPressed: () => assistant.shareSummary(days: 7),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.timeline_rounded, size: 18),
+                    label: const Text('Tu evolución'),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => EvolutionScreen(profile: profile),
+                    )),
                   ),
                   if (assistant.settings?.moduleOn('stats') ?? true)
                   ActionChip(

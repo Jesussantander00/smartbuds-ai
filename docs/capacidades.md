@@ -49,3 +49,6 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Conocimiento musical («cuéntame de…») | Sí | Sí | No | Internet | Wikipedia en español (resumen, solo si el artículo es de música) y Deezer (seguidores, álbumes, parecidos). Colaboraciones: solo tus canciones. Nada inventado |
 | Extensiones (encender o apagar módulos) | Sí | Sí | — | — | Módulos incluidos en la app. Las tiendas no permiten descargar código nuevo después de instalar |
 | SmartBuds Premium | **Aún no** | **Aún no** | — | — | Requiere cuentas de desarrollador y facturación de Google Play / App Store. Lo básico seguirá gratis |
+| Memoria y evolución musical («¿cómo han cambiado mis gustos?», línea de tiempo) | Sí | Sí | No | Ninguno | Tu historial en el teléfono (hasta ~un año) |
+| Detector de ambiente | Sí | Sí | No | Ninguno | Lo que pediste hace poco y tus listas por ambiente. **No** analiza el audio: las apps no comparten ritmo ni energía |
+| Radar de emergentes | Sí | Sí | No | Internet | Dato real: seguidores en Deezer. «Crecimiento» global no está disponible gratis; lo demás es predicción de SmartBuds y se dice así |
