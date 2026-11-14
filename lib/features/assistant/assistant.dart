@@ -20,6 +20,8 @@ import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../stats/evolution.dart';
 import '../devices/detected_player_controller.dart';
+import '../diagnostics/online_probe.dart';
+import '../diagnostics/self_check.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -381,6 +383,8 @@ class Assistant extends ChangeNotifier {
         for (final p in parts) {
           await handleIntent(p);
         }
+      case DiagnoseIntent():
+        await sayDiagnosis();
       case SearchPromptIntent() ||
             ArtistPromptIntent() ||
             WakeIntent() ||
@@ -390,6 +394,56 @@ class Assistant extends ChangeNotifier {
             ClarifyIntent():
         break; // lo resuelve el VoiceEngine (pregunta y escucha)
     }
+  }
+
+  // ---------------------------------------------------- Autodiagnóstico
+
+  /// Cómo saber si hay internet (reemplazable en pruebas).
+  Future<bool?> Function() onlineProbe = checkOnline;
+
+  /// Revisa voz, permisos, reproducción, conexión y audífonos.
+  Future<List<Finding>> selfCheck() async {
+    final v = voice;
+    bool? notif;
+    try {
+      final m = media;
+      notif = m == null ? null : (await m.missingPermission()) == null;
+    } catch (_) {
+      notif = null;
+    }
+    final mic = await v?.micPermission();
+    final online = await onlineProbe();
+    final d = controller.detection;
+    final player = d is PlayerDetected ? d.candidate : null;
+    final view = player == null
+        ? null
+        : controller.players.where((p) => p.status.playerId == player.status.playerId).firstOrNull;
+    return SelfCheck.run(SelfCheckInput(
+      now: _clock(),
+      voiceSupported: v != null,
+      micPermission: mic,
+      voiceEnabled: v?.enabled ?? false,
+      voiceFailed: v?.failed ?? false,
+      voiceRecovering: v?.recovering ?? false,
+      voiceError: v?.error,
+      requireWakeWord: v?.requireWakeWord ?? false,
+      onlyMyVoice: v?.guard.enabled ?? false,
+      lastRejectedVoice: v?.lastRejectedVoice ?? false,
+      notificationAccess: notif,
+      playerApp: player?.status.appName,
+      controlsLimited: view != null && view.voiceCaps.level != ControlLevel.direct,
+      online: online,
+      errors: errors?.recent ?? const [],
+      headphones: headphoneName,
+      unstableHeadphones: settings?.unstableConnection(_clock()) ?? false,
+      lowBattery: lowBattery,
+    ));
+  }
+
+  /// «Haz un diagnóstico»: revisa y lo dice en voz alta.
+  Future<void> sayDiagnosis() async {
+    await _say('Reviso…');
+    await _say(SelfCheck.spokenSummary(await selfCheck()));
   }
 
   // ---------------------------------------- Parecidas y «¿por qué esta?»

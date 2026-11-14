@@ -470,6 +470,7 @@ class VoiceEngine extends ChangeNotifier {
         FollowUpArtistIntent() => 'Otra del mismo artista',
         CorrectionIntent() => 'Corrección',
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
+        DiagnoseIntent() => 'Autodiagnóstico',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -555,6 +556,24 @@ class VoiceEngine extends ChangeNotifier {
 
   Future<bool> hasPermission() async =>
       await _method.invokeMethod<bool>('hasPermission') ?? false;
+
+  /// Permiso de micrófono sin lanzar errores (null si no se pudo consultar).
+  Future<bool?> micPermission() async {
+    try {
+      return await _method.invokeMethod<bool>('hasPermission');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Abre los ajustes de SmartBuds en el sistema (para dar el permiso de micrófono).
+  Future<bool> openAppSettings() async {
+    try {
+      return await _method.invokeMethod<bool>('openAppSettings') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Pide micrófono (y notificaciones en Android 13+).
   Future<bool> requestPermission() async =>
@@ -825,6 +844,7 @@ class VoiceEngine extends ChangeNotifier {
             MacroIntent() ||
             ArtistInfoIntent() ||
             TasteEvolutionIntent() ||
+            DiagnoseIntent() ||
             HomeSceneIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||

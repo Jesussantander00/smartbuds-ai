@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 30;
+const latestChangelog = 31;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 31,
+    title: 'Autodiagnóstico',
+    items: [
+      'Privacidad → Autodiagnóstico: revisa voz, permisos, reproducción, conexión y audífonos.',
+      'Explica qué pasó en palabras simples y cómo resolverlo, con el botón para arreglarlo.',
+      'Di «haz un diagnóstico» o «¿qué te pasa?» y Jarvis te lo dice en voz alta.',
+    ],
+  ),
   (
     version: 30,
     title: 'Jarvis recuerda la conversación',

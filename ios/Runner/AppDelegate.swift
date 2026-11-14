@@ -445,6 +445,14 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       result(recognizer?.isAvailable ?? false)
     case "hasPermission":
       result(hasPermission())
+    case "openAppSettings":
+      // Ajustes de SmartBuds en el sistema (permiso de micrófono y voz).
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        DispatchQueue.main.async { UIApplication.shared.open(url) }
+        result(true)
+      } else {
+        result(false)
+      }
     case "requestPermission":
       SFSpeechRecognizer.requestAuthorization { status in
         AVAudioSession.sharedInstance().requestRecordPermission { granted in

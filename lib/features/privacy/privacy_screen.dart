@@ -9,6 +9,7 @@ import 'changelog.dart';
 import '../control/control_center_screen.dart';
 import '../modules/extensions_screen.dart';
 import '../modules/modules.dart';
+import '../diagnostics/self_check_screen.dart';
 
 /// Privacidad y ayuda: tus datos, permisos, diagnóstico, funciones de prueba,
 /// compatibilidad y novedades, en una sola pantalla.
@@ -201,6 +202,15 @@ class PrivacyScreen extends StatelessWidget {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.monitor_heart_rounded),
+                    title: const Text('Autodiagnóstico'),
+                    subtitle: const Text('Voz, permisos, reproducción, conexión y audífonos: qué pasó y cómo arreglarlo. '
+                        'También puedes decir «haz un diagnóstico».'),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => SelfCheckScreen(assistant: assistant, onOpenPermissions: onOpenPermissions),
+                    )),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.healing_rounded),
                     title: const Text('Revisar todo'),

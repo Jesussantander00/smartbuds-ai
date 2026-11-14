@@ -141,6 +141,19 @@ class VoiceRecognizer(
         when (call.method) {
             "isAvailable" -> result.success(modelBundled())
             "hasPermission" -> result.success(hasPermission())
+            "openAppSettings" -> {
+                // Ajustes de SmartBuds en el sistema (para dar el permiso de micrófono).
+                try {
+                    val i = android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", context.packageName, null),
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(i)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.success(false)
+                }
+            }
             "requestPermission" -> requestPermissions(result)
             "start" -> {
                 if (!hasPermission()) {
