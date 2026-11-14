@@ -33,6 +33,7 @@ import 'features/music_profile/music_profile.dart';
 import 'features/music_profile/supabase_sync.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/shell/home_shell.dart';
+import 'features/activity/activity.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -228,6 +229,9 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..currentArtist = (() => assistant.active?.artist)
         ..isPrivate = (() => widget.settings.privateMode)
         ..historyStore = FileJsonStore('conversation.json');
+      assistant.activity = ActivityTracker(store: FileJsonStore('activity.json'))
+        ..isPrivate = (() => widget.settings.privateMode);
+      unawaited(assistant.activity.load());
       unawaited(v.loadHistory());
       voice = v;
       assistant.voice = v;

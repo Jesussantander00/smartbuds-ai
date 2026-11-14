@@ -525,6 +525,7 @@ class VoiceEngine extends ChangeNotifier {
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
         DiagnoseIntent() => 'Autodiagnóstico',
         ArrangeQueueIntent() => 'Ordenar la cola',
+        ActivityIntent(:final activity) => activity == null ? 'Terminar actividad' : 'Actividad: $activity',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -903,6 +904,7 @@ class VoiceEngine extends ChangeNotifier {
             TasteEvolutionIntent() ||
             DiagnoseIntent() ||
             ArrangeQueueIntent() ||
+            ActivityIntent() ||
             HomeSceneIntent() ||
             NowPlayingIntent() ||
             RestartIntent() ||

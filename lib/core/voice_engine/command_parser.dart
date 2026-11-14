@@ -262,6 +262,13 @@ class ArrangeQueueIntent extends VoiceIntent {
   const ArrangeQueueIntent();
 }
 
+/// «Estoy estudiando», «voy a entrenar»: música según lo que haces.
+/// [activity]: estudiar, trabajar, descansar o ejercicio; null = «terminé».
+class ActivityIntent extends VoiceIntent {
+  const ActivityIntent(this.activity);
+  final String? activity;
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -547,8 +554,24 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'estoy estudiando', 'voy a estudiar', 'estoy trabajando', 'voy a trabajar',
+    'voy a descansar', 'quiero descansar', 'voy a entrenar', 'estoy entrenando', 'voy al gimnasio',
+    'terminé', 'ya terminé',
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
     'organiza lo que sigue', 'acomoda la cola',
+  };
+  static const _activities = <String, String?>{
+    'estoy estudiando': 'estudiar', 'voy a estudiar': 'estudiar', 'a estudiar': 'estudiar',
+    'hora de estudiar': 'estudiar', 'me voy a poner a estudiar': 'estudiar',
+    'estoy trabajando': 'trabajar', 'voy a trabajar': 'trabajar', 'a trabajar': 'trabajar',
+    'hora de trabajar': 'trabajar',
+    'voy a descansar': 'descansar', 'quiero descansar': 'descansar', 'estoy descansando': 'descansar',
+    'a descansar': 'descansar', 'hora de descansar': 'descansar',
+    'voy a entrenar': 'ejercicio', 'estoy entrenando': 'ejercicio', 'a entrenar': 'ejercicio',
+    'voy al gimnasio': 'ejercicio', 'voy a hacer ejercicio': 'ejercicio', 'estoy haciendo ejercicio': 'ejercicio',
+    'hora de entrenar': 'ejercicio',
+    'termine': null, 'ya termine': null, 'termine de estudiar': null, 'termine de trabajar': null,
+    'termine de entrenar': null, 'termine de descansar': null,
   };
   static const _corrections = {
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
@@ -701,6 +724,7 @@ class CommandParser {
     if (_restart.contains(text)) return const RestartIntent();
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
+    if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
     if (_diagnose.contains(text)) return const DiagnoseIntent();
     if (_arrangeQueue.contains(text)) return const ArrangeQueueIntent();
     if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();
