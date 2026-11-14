@@ -7,6 +7,9 @@ import '../models.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
+/// Estados del núcleo animado de Jarvis.
+enum JarvisState { off, waiting, listening, working, responding }
+
 /// Cómo responde SmartBuds en voz alta.
 enum ReplyStyle { brief, normal, conversational, technical }
 
@@ -133,6 +136,22 @@ class VoiceEngine extends ChangeNotifier {
   double speechPitch = 1.0;
   ReplyStyle replyStyle = ReplyStyle.normal;
   int _replies = 0;
+
+  /// SmartBuds está hablando (lo avisa el lado nativo).
+  bool speaking = false;
+
+  /// Procesando/ejecutando una orden hasta este momento (para el núcleo de Jarvis).
+  DateTime? _busyUntil;
+
+  /// Estado de Jarvis para el núcleo animado.
+  JarvisState get jarvisState {
+    if (!enabled) return JarvisState.off;
+    if (speaking) return JarvisState.responding;
+    final busy = _busyUntil;
+    if (busy != null && _clock().isBefore(busy)) return JarvisState.working;
+    if (listening && !paused) return JarvisState.listening;
+    return JarvisState.waiting;
+  }
 
   /// Pasos de la última orden encadenada (para el panel de acciones).
   List<String> lastPlan = const [];
@@ -403,6 +422,9 @@ class VoiceEngine extends ChangeNotifier {
           enabled = false;
           paused = false;
         }
+      case 'speaking':
+        speaking = event['on'] == true;
+        if (speaking) _busyUntil = null;
       case 'error':
         error = event['message'] as String?;
       case 'headphones':
@@ -442,6 +464,9 @@ class VoiceEngine extends ChangeNotifier {
 
   void _dispatch(VoiceIntent intent, {bool log = true}) {
     if (log) _log(intent);
+    // Núcleo de Jarvis: «ejecutando» unos segundos (hasta que responda).
+    _busyUntil = _clock().add(const Duration(milliseconds: 2500));
+    notifyListeners(); // el núcleo se redibuja solo y vuelve a «escuchando» al pasar el tiempo
     switch (intent) {
       case CommandIntent(:final command):
         final now = _clock();

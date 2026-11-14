@@ -6,6 +6,7 @@ import '../assistant/assistant.dart';
 import '../devices/connectivity.dart';
 import '../devices/detected_player_controller.dart';
 import 'changelog.dart';
+import '../control/control_center_screen.dart';
 import '../modules/extensions_screen.dart';
 import '../modules/modules.dart';
 
@@ -37,6 +38,18 @@ class PrivacyScreen extends StatelessWidget {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 40),
           children: [
+            // -------------------------------------------- Centro de control
+            Card(
+              child: ListTile(
+                leading: const AppIcon(Icons.shield_rounded, colors: AppColors.assistant, size: 38),
+                title: const Text('Centro de control'),
+                subtitle: const Text('Qué escucha, qué hizo, permisos, datos y conexiones'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => ControlCenterScreen(assistant: assistant, onOpenPermissions: onOpenPermissions),
+                )),
+              ),
+            ),
             // ------------------------------------------------- Extensiones
             if (assistant.settings != null)
               Card(

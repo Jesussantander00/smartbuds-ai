@@ -1,8 +1,18 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 27;
+const latestChangelog = 28;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 28,
+    title: 'Experiencia completa',
+    items: [
+      'Mi música → Curador: arma listas con tus hábitos y propone cambios que tú apruebas.',
+      'El núcleo de Jarvis cambia de color y movimiento: esperando, escuchando, ejecutando o respondiendo.',
+      'Efectos visuales por canción con control de intensidad (Personalizar Inicio).',
+      'Privacidad y ayuda → Centro de control: qué escucha, qué hizo, permisos, datos y conexiones.',
+    ],
+  ),
   (
     version: 27,
     title: 'Tu ecosistema',

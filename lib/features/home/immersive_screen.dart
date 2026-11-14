@@ -136,6 +136,8 @@ class _ImmersiveScreenState extends State<ImmersiveScreen> {
                                   playing: playing,
                                   enabled: (settings?.liveArt ?? true) && !widget.assistant.lowBattery,
                                   glow: accent,
+                                  intensity: settings?.visualFactor ?? 1,
+                                  tempo: songTempo(widget.assistant.brain.ambience()?.mood),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(24),
                                     child: s?.art != null

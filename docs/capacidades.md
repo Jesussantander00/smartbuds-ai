@@ -63,3 +63,7 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Modo carro adaptado | Sí (con volumen) | Sí (sin volumen; Apple Music) | — | Micrófono, Bluetooth | Un solo modo carro. Para la pantalla del carro: Android Auto o CarPlay con tu app de música |
 | Hogar inteligente (avisos a tu Home Assistant, IFTTT…) | Sí | Sí | No | Internet | Webhook https que tú configuras. Envía solo canción, artista y ambiente. No controla bombillos directamente |
 | Escritorios de Inicio (Casa, Trabajo, Estudio, Carro) | Sí | Sí | No | — | Ordenar y ocultar secciones por escritorio; cambio automático por perfil de uso. Tamaño: solo «modo compacto» |
+| Curador musical (listas que se actualizan con tu aprobación) | Sí | Sí | No | Internet (solo descubrimientos) | Tu historial + radar de Deezer. Las listas viven en SmartBuds y se reproducen en tu app (no se crean listas dentro de Spotify ni Apple Music) |
+| Núcleo animado de Jarvis por estado | Sí | Sí | — | — | Estados: esperando, escuchando, ejecutando y respondiendo (avisado por el texto a voz del sistema) |
+| Efectos visuales por canción (intensidad y batería) | Sí | Sí | — | — | Color de la carátula y ritmo según el ambiente (no se analiza el audio). Se apagan con batería baja o «reducir movimiento» |
+| Centro de control y transparencia | Sí | Sí | — | — | Registro de acciones en memoria (se borra al cerrar), lo que escuchó, permisos, datos guardados y conexiones externas |
