@@ -616,7 +616,8 @@
       awaitingSong = true;
       say('¿Qué canción?');
       $('micStatus').textContent = '¿Qué canción? Dímela…';
-      setTimeout(() => startListening(true), 1300); // tras la pregunta
+      // Escucha la respuesta en cuanto termine la pregunta (o ya, si la voz está apagada).
+      if (!speakBack || !('speechSynthesis' in window)) setTimeout(() => startListening(true), 300);
       return true;
     }
     if (COMMANDS[n]) { COMMANDS[n](); return true; }
@@ -636,8 +637,15 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
   let listening = false;
-  let continuous = loadJSON('smartbuds.continuous') === true;
+  // Escucha continua: activada por defecto (se puede apagar en Asistente).
+  // Ciclo: preparado → escuchando → (orden) → respondiendo → escuchando otra vez.
+  let continuous = loadJSON('smartbuds.continuous') !== false;
   let manual = false; // la escucha actual la inició un toque al micrófono
+  let wantOn = false; // el usuario quiere a Jarvis escuchando
+  let speakingNow = false; // SmartBuds está hablando: no escuchar su propia voz
+  let errorStreak = 0; // errores seguidos (pausas crecientes, sin bucles)
+  let restartTimer = null;
+  const MAX_ERRORS = 5;
 
   function setupVoice() {
     if (!SR) {
@@ -656,45 +664,90 @@
     rec.onend = () => {
       listening = false;
       if (!awaitingSong) renderMic();
-      if (continuous) setTimeout(startListening, 400); // sigue escuchando
+      scheduleRestart();
     };
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        continuous = false;
-        $('continuous').checked = false;
+        wantOn = false;
         $('micStatus').textContent = STANDALONE && IOS
           ? 'En iPhone la voz no funciona desde el ícono de inicio. Ábrela en Safari para hablarle.'
-          : 'Permite el micrófono para SmartBuds (Ajustes → Safari → Micrófono).';
-      } else if (e.error === 'no-speech') {
-        $('micStatus').textContent = 'No te escuché. Toca y habla otra vez.';
-      } else if (e.error === 'audio-capture') {
-        $('micStatus').textContent = 'Otra app está usando el micrófono.';
+          : 'Permite el micrófono para SmartBuds (en el candado de la barra de direcciones).';
+      } else if (e.error === 'no-speech' || e.error === 'aborted') {
+        // Silencio o la cortamos nosotros: no es un fallo.
       } else {
-        $('micStatus').textContent = `La voz falló (${e.error}). Toca y vuelve a intentar.`;
+        errorStreak++;
+        $('micStatus').textContent = e.error === 'audio-capture'
+          ? 'Otra app está usando el micrófono.'
+          : `La voz falló (${e.error}). Reintentando…`;
       }
       awaitingSong = false;
     };
     rec.onresult = (e) => {
+      errorStreak = 0;
       const res = e.results[e.results.length - 1];
       const said = res[0].transcript.trim();
-      handleSpeech(said, manual);
+      handleSpeech(said, manual || !continuous);
       manual = false;
     };
+    document.addEventListener('visibilitychange', () => {
+      // En otra pestaña el navegador corta el micrófono; al volver, se reabre.
+      if (document.hidden) { if (listening) rec.abort(); } else scheduleRestart(200);
+    });
+    autoStartVoice();
+  }
+
+  /** Al entrar: si ya diste permiso de micrófono, Jarvis escucha sin tocar nada. */
+  async function autoStartVoice() {
+    if (!continuous) return;
+    try {
+      const p = await navigator.permissions?.query({ name: 'microphone' });
+      if (p?.state === 'granted') { wantOn = true; startListening(); return; }
+    } catch { /* el navegador no permite consultarlo */ }
+    $('micStatus').textContent = 'Toca el micrófono una vez para que Jarvis te escuche sin parar.';
+  }
+
+  /** Reabre la escucha si corresponde, con pausas crecientes tras errores. */
+  function scheduleRestart(base = 400) {
+    clearTimeout(restartTimer);
+    if (!wantOn || !continuous || speakingNow || document.hidden || awaitingSong) return;
+    if (errorStreak > MAX_ERRORS) {
+      wantOn = false;
+      $('micStatus').textContent = 'Jarvis dejó de escuchar por errores seguidos. Toca el micrófono para reintentar.';
+      renderMic();
+      return;
+    }
+    const delay = errorStreak ? Math.min(base * 2 ** errorStreak, 15000) : base;
+    restartTimer = setTimeout(() => startListening(), delay);
   }
 
   function startListening(byTap = false) {
-    if (!rec || listening) return;
+    if (!rec || listening || speakingNow) return;
     manual = byTap;
     rec.continuous = continuous && !IOS; // iPhone corta la escucha larga; se reinicia sola
     try { rec.start(); } catch { /* ya estaba escuchando */ }
   }
 
+  /** Micrófono: con escucha continua, enciende o apaga a Jarvis; sin ella, una frase. */
+  function toggleMic() {
+    errorStreak = 0;
+    if (continuous) {
+      wantOn = !(wantOn && listening);
+      if (wantOn) startListening(true); else { clearTimeout(restartTimer); rec.abort(); }
+      renderMic();
+      return;
+    }
+    if (listening) rec.stop(); else startListening(true);
+  }
+
   function renderMic() {
     $('mic').classList.toggle('listening', listening);
     document.body.classList.toggle('is-listening', listening);
-    $('hudState').textContent = listening ? 'ESCUCHANDO' : 'EN ESPERA';
+    $('hudState').textContent = speakingNow ? 'RESPONDIENDO'
+      : listening ? 'ESCUCHANDO'
+      : wantOn ? 'PREPARADO' : 'APAGADO';
     $('micStatus').textContent = listening
       ? (continuous ? 'Escuchando… di «Cambia», «Pausa», «Busca …»' : 'Te escucho…')
+      : wantOn ? 'Preparado: reabriendo el micrófono…'
       : 'Toca y di: «Cambia», «Pausa», «Sube», «Busca …»';
   }
 
@@ -705,9 +758,20 @@
     try {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'es-CO';
+      // Mientras habla, no escucha (para no tomar su propia voz como orden).
+      speakingNow = true;
+      if (listening) rec?.abort();
+      const done = () => {
+        speakingNow = false;
+        renderMic();
+        if (awaitingSong) setTimeout(() => startListening(true), 250); else scheduleRestart(300);
+      };
+      u.onend = done;
+      u.onerror = done;
       speechSynthesis.cancel();
       speechSynthesis.speak(u);
-    } catch { /* sin voz disponible */ }
+      renderMic();
+    } catch { speakingNow = false; /* sin voz disponible */ }
   }
 
   // ================================================================ Pantalla
@@ -783,7 +847,7 @@
   };
   for (const b of document.querySelectorAll('[data-cmd]')) b.onclick = () => actions[b.dataset.cmd]();
   for (const b of document.querySelectorAll('.tabbar button')) b.onclick = () => showTab(b.dataset.tab);
-  $('mic').onclick = () => (listening ? rec.stop() : startListening(true));
+  $('mic').onclick = toggleMic;
   $('fav').onclick = favorites;
   $('new').onclick = () => discover();
   $('search').onsubmit = (e) => {
@@ -807,7 +871,9 @@
   $('continuous').onchange = (e) => {
     continuous = e.target.checked;
     saveJSON('smartbuds.continuous', continuous);
-    if (continuous) startListening(); else if (listening) rec.stop();
+    wantOn = continuous;
+    if (continuous) startListening(true); else { clearTimeout(restartTimer); if (listening) rec.abort(); }
+    renderMic();
   };
   $('speakBack').checked = speakBack;
   $('speakBack').onchange = (e) => { speakBack = e.target.checked; saveJSON('smartbuds.speakBack', speakBack); };

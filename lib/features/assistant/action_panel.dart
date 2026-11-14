@@ -57,6 +57,23 @@ class VoiceActionsCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              if (voice.jarvisState == JarvisState.error) ...[
+                Text(voice.error ?? 'Jarvis dejó de escuchar.', style: TextStyle(color: theme.colorScheme.error)),
+                const SizedBox(height: 6),
+                FilledButton.icon(
+                  onPressed: voice.retry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar'),
+                ),
+                const SizedBox(height: 8),
+              ] else if (!voice.enabled) ...[
+                Text('Jarvis está desactivado. Toca el micrófono grande para que escuche sin parar.',
+                    style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 8),
+              ] else if (voice.jarvisState == JarvisState.recovering) ...[
+                Text('Reabriendo el micrófono…', style: theme.textTheme.bodySmall),
+                const SizedBox(height: 8),
+              ],
               if (last == null)
                 Text('Di una orden, encadena varias con «y», o toca una acción.', style: theme.textTheme.bodyMedium)
               else ...[

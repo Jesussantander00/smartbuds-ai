@@ -295,7 +295,18 @@ class _ListeningPill extends StatelessWidget {
         listenable: voice,
         builder: (context, _) {
           if (!voice.enabled) return const SizedBox.shrink();
-          final on = voice.listening && !voice.paused;
+          final state = voice.jarvisState;
+          final on = state == JarvisState.listening || state == JarvisState.processing || state == JarvisState.working;
+          final label = switch (state) {
+            JarvisState.listening => 'Escuchando',
+            JarvisState.processing => 'Procesando',
+            JarvisState.working => 'Ejecutando',
+            JarvisState.responding => 'Respondiendo',
+            JarvisState.recovering => 'Recuperando…',
+            JarvisState.error => 'Sin escuchar',
+            JarvisState.ready => voice.paused ? 'En pausa' : 'Preparado',
+            JarvisState.off => 'Apagado',
+          };
           return Material(
             color: Colors.transparent,
             child: Container(
@@ -309,9 +320,18 @@ class _ListeningPill extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.circle, size: 10, color: on ? Neon.cyan : Colors.grey),
+                  Icon(Icons.circle,
+                      size: 10,
+                      color: state == JarvisState.error ? Colors.redAccent : (on ? Neon.cyan : Colors.grey)),
                   const SizedBox(width: 6),
-                  Text(on ? 'Escuchando' : 'En pausa', style: Theme.of(context).textTheme.labelMedium),
+                  Text(label, style: Theme.of(context).textTheme.labelMedium),
+                  if (state == JarvisState.error)
+                    IconButton(
+                      tooltip: 'Reintentar',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      onPressed: voice.retry,
+                    ),
                   IconButton(
                     tooltip: 'Dejar de escuchar',
                     visualDensity: VisualDensity.compact,

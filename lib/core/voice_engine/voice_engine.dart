@@ -7,8 +7,10 @@ import '../models.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
-/// Estados del núcleo animado de Jarvis.
-enum JarvisState { off, waiting, listening, working, responding }
+/// Estados de Jarvis (máquina de estados de la escucha):
+/// desactivado, preparado, escuchando, procesando, ejecutando, respondiendo,
+/// recuperando (reabriendo el micrófono) y error (necesita que toques «Reintentar»).
+enum JarvisState { off, ready, listening, processing, working, responding, recovering, error }
 
 /// Cómo responde SmartBuds en voz alta.
 enum ReplyStyle { brief, normal, conversational, technical }
@@ -142,15 +144,113 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Procesando/ejecutando una orden hasta este momento (para el núcleo de Jarvis).
   DateTime? _busyUntil;
+  DateTime? _processingUntil;
 
-  /// Estado de Jarvis para el núcleo animado.
+  /// El lado nativo está reabriendo el micrófono.
+  bool recovering = false;
+
+  /// La escucha se cayó y no se pudo recuperar sola: hace falta «Reintentar».
+  bool failed = false;
+
+  /// Desde cuándo debería estar escuchando y no lo está (vigilante).
+  DateTime? _deafSince;
+  int _recoverAttempts = 0;
+  DateTime? _lastRecoverAt;
+  Timer? _watchdog;
+
+  /// Vigilante: cada cuánto revisa y cuánto tolera sin escuchar antes de reabrir.
+  static const watchdogEvery = Duration(seconds: 4);
+  static const deafTolerance = Duration(seconds: 8);
+  static const maxRecoverAttempts = 3;
+
+  /// Registro de diagnóstico de la escucha (cambios de estado, errores, recuperaciones).
+  final List<({DateTime at, String what})> diagnostics = [];
+
+  void _diag(String what) {
+    diagnostics.insert(0, (at: _clock(), what: what));
+    if (diagnostics.length > 40) diagnostics.removeLast();
+  }
+
+  /// Estado de Jarvis (para el núcleo animado y los avisos).
   JarvisState get jarvisState {
     if (!enabled) return JarvisState.off;
+    if (failed) return JarvisState.error;
     if (speaking) return JarvisState.responding;
+    final now = _clock();
     final busy = _busyUntil;
-    if (busy != null && _clock().isBefore(busy)) return JarvisState.working;
-    if (listening && !paused) return JarvisState.listening;
-    return JarvisState.waiting;
+    if (busy != null && now.isBefore(busy)) return JarvisState.working;
+    final proc = _processingUntil;
+    if (proc != null && now.isBefore(proc)) return JarvisState.processing;
+    if (paused) return JarvisState.ready;
+    if (listening) return JarvisState.listening;
+    if (recovering || _recoverAttempts > 0) return JarvisState.recovering;
+    return JarvisState.ready;
+  }
+
+  /// Revisa que la escucha siga viva y la reabre si se cayó en silencio.
+  /// Sin reintentos infinitos: tras [maxRecoverAttempts] pasa a error.
+  @visibleForTesting
+  Future<void> checkHealth() async {
+    if (!enabled || paused || speaking || askingForSong || failed) {
+      _deafSince = null;
+      return;
+    }
+    if (listening) {
+      _deafSince = null;
+      _recoverAttempts = 0;
+      return;
+    }
+    final now = _clock();
+    _deafSince ??= now;
+    if (now.difference(_deafSince!) < deafTolerance) return;
+    // Pausas crecientes entre intentos: 8 s, 16 s, 32 s.
+    final wait = deafTolerance * (1 << _recoverAttempts);
+    if (_lastRecoverAt != null && now.difference(_lastRecoverAt!) < wait) return;
+    if (_recoverAttempts >= maxRecoverAttempts) {
+      failed = true;
+      error ??= 'Jarvis dejó de escuchar y no pudo recuperarse. Toca «Reintentar».';
+      _diag('Error: no se pudo recuperar la escucha');
+      notifyListeners();
+      return;
+    }
+    _recoverAttempts++;
+    _lastRecoverAt = now;
+    _diag('Recuperando la escucha (intento $_recoverAttempts)');
+    notifyListeners();
+    try {
+      await _method.invokeMethod<bool>('ensure');
+    } catch (_) {}
+  }
+
+  /// Al volver a la app o tras un error: comprueba y reabre la escucha.
+  Future<void> ensureListening() async {
+    if (!enabled) return;
+    _recoverAttempts = 0;
+    _deafSince = null;
+    try {
+      await _method.invokeMethod<bool>('ensure');
+    } catch (_) {}
+  }
+
+  /// «Reintentar»: borra el error y vuelve a empezar.
+  Future<void> retry() async {
+    failed = false;
+    error = null;
+    _recoverAttempts = 0;
+    _lastRecoverAt = null;
+    _deafSince = null;
+    _diag('Reintentar');
+    notifyListeners();
+    if (enabled) {
+      await ensureListening();
+    } else {
+      await start();
+    }
+  }
+
+  void _startWatchdog() {
+    _watchdog?.cancel();
+    _watchdog = Timer.periodic(watchdogEvery, (_) => unawaited(checkHealth()));
   }
 
   /// Pasos de la última orden encadenada (para el panel de acciones).
@@ -311,8 +411,16 @@ class VoiceEngine extends ChangeNotifier {
   Future<void> autoStart() async {
     if (enabled) return;
     try {
-      if (await hasPermission()) await start();
-    } catch (_) {}
+      if (await hasPermission()) {
+        await start();
+      } else {
+        _diag('Sin permiso de micrófono: hay que tocar el micrófono una vez');
+        notifyListeners();
+      }
+    } catch (e) {
+      _diag('No se pudo iniciar solo: $e');
+      notifyListeners();
+    }
   }
 
   Future<void> start() async {
@@ -333,9 +441,23 @@ class VoiceEngine extends ChangeNotifier {
       return;
     }
     attach();
-    await _method.invokeMethod('start', {'grammar': grammar, 'grammarEnabled': !freeMode});
+    try {
+      await _method.invokeMethod('start', {'grammar': grammar, 'grammarEnabled': !freeMode});
+    } on PlatformException catch (e) {
+      error = e.code == 'PERMISSION'
+          ? 'Sin permiso de micrófono, SmartBuds no puede escucharte.'
+          : 'No se pudo abrir el micrófono: ${e.message ?? e.code}';
+      _diag('Error al iniciar: $error');
+      notifyListeners();
+      return;
+    }
     enabled = true;
     paused = false;
+    failed = false;
+    _recoverAttempts = 0;
+    _deafSince = null;
+    _diag('Escucha continua activada');
+    _startWatchdog();
     notifyListeners();
   }
 
@@ -368,6 +490,11 @@ class VoiceEngine extends ChangeNotifier {
     enabled = false;
     listening = false;
     paused = false;
+    recovering = false;
+    failed = false;
+    _watchdog?.cancel();
+    _watchdog = null;
+    _diag('Escucha detenida');
     await _method.invokeMethod('stop');
     notifyListeners();
   }
@@ -416,17 +543,30 @@ class VoiceEngine extends ChangeNotifier {
     final session = (event['session'] as int?) ?? 0;
     switch (event['type']) {
       case 'state':
+        final was = listening;
         listening = event['listening'] == true;
+        recovering = event['recovering'] == true;
+        if (listening) {
+          _deafSince = null;
+          _recoverAttempts = 0;
+          failed = false;
+        }
+        if (was != listening) _diag(listening ? 'Escuchando' : (recovering ? 'Reabriendo el micrófono' : 'Micrófono cerrado'));
         if (event['stopped'] == true) {
           // Detenido desde el botón de la notificación.
           enabled = false;
           paused = false;
+          _watchdog?.cancel();
+          _watchdog = null;
         }
       case 'speaking':
         speaking = event['on'] == true;
         if (speaking) _busyUntil = null;
       case 'error':
         error = event['message'] as String?;
+        if (error != null) _diag('Error: $error');
+        // Error que el teléfono no puede resolver solo (modelo, permisos, reintentos agotados).
+        if (event['fatal'] == true) failed = true;
       case 'headphones':
         _onHeadphones(event['connected'] == true);
       case 'noise':
@@ -438,6 +578,7 @@ class VoiceEngine extends ChangeNotifier {
         if (texts.isEmpty) break;
         lastHeard = texts.first;
         error = null;
+        _processingUntil = _clock().add(const Duration(milliseconds: 700));
         final spk = (event['spk'] as List?)?.map((e) => (e as num).toDouble()).toList();
         if (_enrollSamples != null) {
           _collectEnrollment(spk);
@@ -638,6 +779,7 @@ class VoiceEngine extends ChangeNotifier {
 
   @override
   void dispose() {
+    _watchdog?.cancel();
     _sub?.cancel();
     if (enabled) _method.invokeMethod('stop');
     super.dispose();
