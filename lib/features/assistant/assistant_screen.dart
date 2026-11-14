@@ -554,6 +554,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
           ],
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+        child: Text('Se guarda solo en este teléfono (no el audio). En modo privado no se guarda nada.',
+            style: theme.textTheme.bodySmall),
+      ),
       Card(
         child: v.history.isEmpty
             ? const ListTile(
@@ -575,15 +580,41 @@ class _AssistantScreenState extends State<AssistantScreen> {
                         if (e.reply != null) 'Dijo: «${e.reply}»',
                       ].join('\n')),
                     ),
-                  if (v.history.length > 5)
-                    TextButton(
-                      onPressed: () => setState(() => _allHistory = !_allHistory),
-                      child: Text(_allHistory ? 'Ver menos' : 'Ver todo (${v.history.length})'),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Borrar historial'),
+                        onPressed: () => _confirmClear(context, v),
+                      ),
+                      if (v.history.length > 5)
+                        TextButton(
+                          onPressed: () => setState(() => _allHistory = !_allHistory),
+                          child: Text(_allHistory ? 'Ver menos' : 'Ver todo (${v.history.length})'),
+                        ),
+                    ],
+                  ),
                 ],
               ),
       ),
     ];
+  }
+
+  Future<void> _confirmClear(BuildContext context, VoiceEngine v) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('¿Borrar el historial de conversación?'),
+        content: const Text('Se borran las órdenes, las respuestas y lo que Jarvis recuerda de esta '
+            'conversación. No se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Borrar')),
+        ],
+      ),
+    );
+    if (ok == true) await v.clearHistory();
   }
 
   static IconData _iconFor(String action) {

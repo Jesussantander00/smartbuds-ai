@@ -1,8 +1,18 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 29;
+const latestChangelog = 30;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 30,
+    title: 'Jarvis recuerda la conversación',
+    items: [
+      '«Busca Feid» y luego «pon una de él»: Jarvis sabe de quién hablas.',
+      'Si dices solo «pon» o «quiero escuchar», te pregunta qué artista o género quieres.',
+      '«No, la otra» o «eso no era» corrige lo último que hizo.',
+      'El historial de voz se guarda en el teléfono (sin audio) y puedes borrarlo cuando quieras.',
+    ],
+  ),
   (
     version: 29,
     title: 'Jarvis te escucha sin parar',

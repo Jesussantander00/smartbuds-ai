@@ -246,6 +246,23 @@ const musicApps = <String, (String, String)>{
 
 /// Convierte lo que el usuario dijo en un comando universal.
 /// Reglas locales, sin IA: así «Cambia» funciona sin internet y al instante.
+/// «Pon una de él», «otra del mismo artista»: se resuelve con la memoria de
+/// la conversación (el artista que suena o del que hablaron hace poco).
+class FollowUpArtistIntent extends VoiceIntent {
+  const FollowUpArtistIntent();
+}
+
+/// «No, la otra», «eso no era»: corrige la última acción.
+class CorrectionIntent extends VoiceIntent {
+  const CorrectionIntent();
+}
+
+/// Orden incompleta («pon», «pon algo», «quiero escuchar»): Jarvis pregunta
+/// qué artista o género quieres en lugar de quedarse sin hacer nada.
+class ClarifyIntent extends VoiceIntent {
+  const ClarifyIntent();
+}
+
 class CommandParser {
   const CommandParser();
 
@@ -362,6 +379,10 @@ class CommandParser {
     'energetica': ('con energía', 'musica con energia motivacion'),
     'motivado': ('con energía', 'musica con energia motivacion'),
     'motivada': ('con energía', 'musica con energia motivacion'),
+    'movido': ('con energía', 'musica con energia motivacion'),
+    'movida': ('con energía', 'musica con energia motivacion'),
+    'rapido': ('con energía', 'musica con energia motivacion'),
+    'suave': ('tranquila', 'musica tranquila relajante'),
     'animado': ('alegre', 'musica alegre'),
     'animada': ('alegre', 'musica alegre'),
     'contento': ('alegre', 'musica alegre'),
@@ -504,6 +525,23 @@ class CommandParser {
     'maximo': 100, 'minimo': 10, 'tope': 100,
   };
 
+  static const _followUpArtist = {
+    'pon una de el', 'pon una de ella', 'pon una de ellos', 'otra de el', 'otra de ella',
+    'pon otra de el', 'pon otra de ella', 'mas de el', 'mas de ella', 'pon mas de el',
+    'pon mas de ella', 'otra del mismo', 'otra del mismo artista', 'pon otra del mismo artista',
+    'algo de el', 'algo de ella', 'pon algo de el', 'pon algo de ella', 'otra de ese artista',
+    'pon otra de ese artista', 'una de el', 'una de ella',
+  };
+  static const _corrections = {
+    'no la otra', 'eso no era', 'esa no', 'esa no era', 'no era esa', 'no era eso',
+    'no esa no', 'no eso no', 'te equivocaste', 'no es esa', 'no es eso', 'no esa',
+    'no no la otra', 'esa no es',
+  };
+  static const _incomplete = {
+    'pon', 'ponme', 'pon algo', 'ponme algo', 'pon una', 'pon una de', 'pon musica',
+    'quiero escuchar', 'quiero escuchar algo', 'pon algo del', 'pon algo de la',
+    'reproduce algo', 'quiero oir algo', 'pon otra cosa',
+  };
   static const _artistPrompts = {
     'pon algo de', 'pon musica de', 'pon canciones de', 'quiero escuchar a',
   };
@@ -565,6 +603,13 @@ class CommandParser {
     'estoy relajado', 'estoy cansado', 'estoy triste', 'estoy feliz', 'estoy nostálgico',
     'me siento nostálgico', 'me siento con energía', 'estoy enamorado', 'pon algo nostálgico',
     'pon algo con energía', 'pon algo relajado',
+    'pon una de él', 'pon una de ella', 'otra de él', 'otra de ella', 'más de él', 'más de ella',
+    'pon otra de él', 'pon otra de ella', 'otra del mismo artista',
+    'no la otra', 'eso no era', 'esa no', 'no era esa', 'no era eso', 'te equivocaste',
+    // «pon» suelto no va aquí: con música de fondo dispararía preguntas por error.
+    'pon algo', 'ponme algo', 'pon una', 'pon música', 'quiero escuchar',
+    'algo más movido', 'algo más tranquilo', 'algo más alegre', 'algo más suave',
+    'pon algo más movido', 'pon algo más tranquilo',
     'apaga en cinco minutos', 'apaga en diez minutos', 'apaga en quince minutos',
     'apaga en veinte minutos', 'apaga en treinta minutos',
     'apaga en cuarenta y cinco minutos', 'apaga en sesenta minutos', 'apaga en una hora',
@@ -636,6 +681,9 @@ class CommandParser {
     if (_restart.contains(text)) return const RestartIntent();
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
+    if (_followUpArtist.contains(text)) return const FollowUpArtistIntent();
+    if (_corrections.contains(text)) return const CorrectionIntent();
+    if (_incomplete.contains(text)) return const ClarifyIntent();
     if (_undo.contains(text)) return const UndoIntent();
     if (_share.contains(text)) return const ShareIntent();
     if (_radioOn.contains(text)) return const RadioIntent();

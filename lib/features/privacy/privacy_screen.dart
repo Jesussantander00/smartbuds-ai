@@ -131,7 +131,7 @@ class PrivacyScreen extends StatelessWidget {
                         context: context,
                         builder: (c) => AlertDialog(
                           title: const Text('¿Borrar todo?'),
-                          content: const Text('Se borran tus gustos, historial y mezclas de este teléfono. '
+                          content: const Text('Se borran tus gustos, historial, conversaciones con Jarvis y mezclas de este teléfono. '
                               'No se puede deshacer.'),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
@@ -139,7 +139,10 @@ class PrivacyScreen extends StatelessWidget {
                           ],
                         ),
                       );
-                      if (ok == true) await profile.clear();
+                      if (ok == true) {
+                        await profile.clear();
+                        await voice?.clearHistory();
+                      }
                     },
                   ),
                 ],
