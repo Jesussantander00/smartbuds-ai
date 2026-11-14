@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -64,6 +66,10 @@ class _CarModeScreenState extends State<CarModeScreen> {
               final s = a.active;
               final playing = s?.isPlaying ?? false;
               final hearing = v?.listening ?? false;
+              // Se adapta a lo que el teléfono permite: en iPhone no se controla el
+              // volumen de otras apps; sin reproductor detectado, se dice cómo seguir.
+              final canVolume = !Platform.isIOS;
+              final noPlayer = s == null;
               return Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: Column(
@@ -119,6 +125,20 @@ class _CarModeScreenState extends State<CarModeScreen> {
                         Expanded(child: _big(Icons.skip_next_rounded, 'Siguiente', () => _cmd(MusicCommand.next))),
                       ],
                     ),
+                    if (canVolume) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _big(Icons.volume_down_rounded, 'Baja', () => _cmd(MusicCommand.volumeDown), height: 84),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: _big(Icons.volume_up_rounded, 'Sube', () => _cmd(MusicCommand.volumeUp), height: 84),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -153,8 +173,20 @@ class _CarModeScreenState extends State<CarModeScreen> {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    if (noPlayer)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          Platform.isIOS
+                              ? 'Abre Apple Music una vez: en iPhone SmartBuds controla Apple Music.'
+                              : 'Abre tu app de música una vez para que SmartBuds pueda controlarla.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                      ),
                     Text(
-                      'Di «Cambia», «Pausa» o «Pon algo de…». Mira la pantalla solo con el carro detenido.',
+                      'Di «Cambia», «Pausa» o «Pon algo de…». Mira la pantalla solo con el carro detenido. '
+                      'Para la pantalla del carro usa Android Auto o CarPlay con tu app de música.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white60),
                     ),

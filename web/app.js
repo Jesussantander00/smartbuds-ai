@@ -97,6 +97,71 @@
     return method === 'GET' ? res.json() : null;
   }
 
+  // ============================================================ Continuidad
+  // Esta página también es un dispositivo de tu cuenta: publica lo que suena y
+  // muestra lo de tus teléfonos para seguir aquí (canción y cola).
+  function webDeviceId() {
+    let id = localStorage.getItem('smartbuds.webDevice');
+    if (!id || !/^[0-9a-f]{16,64}$/.test(id)) {
+      const b = new Uint8Array(12);
+      crypto.getRandomValues(b);
+      id = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem('smartbuds.webDevice', id); } catch {}
+    }
+    return id;
+  }
+
+  let lastPublish = '';
+  async function publishDevice() {
+    if (!session || !current) return;
+    const q = queue.map((x) => x.query || [x.title, x.artist].filter(Boolean).join(' ')).filter(Boolean).slice(0, 20);
+    const key = [current.title, current.artist, q.join('/')].join('|');
+    if (key === lastPublish) return;
+    lastPublish = key;
+    try {
+      await rest('POST', 'rpc/upsert_my_device2', {
+        p_device_id: webDeviceId(), p_name: 'Página web', p_platform: 'web',
+        p_title: current.title || null, p_artist: current.artist || null, p_app: 'SmartBuds web',
+        p_playing: true, p_queue: q, p_mood: null, p_usage: null,
+      });
+    } catch { lastPublish = ''; }
+  }
+
+  async function loadDevices() {
+    const card = $('continueCard');
+    if (!session) { card.classList.add('hidden'); return; }
+    let rows = [];
+    try {
+      rows = (await rest('GET', 'user_devices?select=device_id,name,platform,title,artist,queue,playing,updated_at&order=updated_at.desc')) || [];
+    } catch { rows = []; }
+    const mine = webDeviceId();
+    const others = rows.filter((d) => d.device_id !== mine && (d.title || (d.queue || []).length));
+    const list = $('continueList');
+    list.textContent = '';
+    for (const d of others.slice(0, 3)) {
+      const mins = Math.round((Date.now() - new Date(d.updated_at).getTime()) / 60000);
+      const row = document.createElement('div');
+      row.className = 'continue-row';
+      const text = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = `${d.playing ? '▶' : '⏸'} ${[d.title, d.artist].filter(Boolean).join(' — ') || 'Su cola'}`;
+      const small = document.createElement('small');
+      const nq = (d.queue || []).length;
+      small.textContent = `${d.name} · ${mins < 1 ? 'ahora' : mins < 60 ? `hace ${mins} min` : `hace ${Math.round(mins / 60)} h`}${nq ? ` · ${nq} en cola` : ''}`;
+      text.append(b, small);
+      const btn = document.createElement('button');
+      btn.className = 'primary';
+      btn.textContent = 'Seguir aquí';
+      btn.addEventListener('click', () => {
+        queue = (d.queue || []).map((q) => ({ query: q }));
+        if (d.title) play({ title: d.title, artist: d.artist || '' }); else next(false);
+      });
+      row.append(text, btn);
+      list.append(row);
+    }
+    card.classList.toggle('hidden', others.length === 0);
+  }
+
   async function fetchTracks() {
     if (!session) return;
     try {
@@ -362,6 +427,7 @@
         if (playerReady) player.pauseVideo();
       }
       $('nowTitle').textContent = [info.title, info.artist].filter(Boolean).join(' — ');
+      publishDevice();
       if (videoId) {
         // Aún no suena: se cuenta y se anuncia cuando YouTube confirme (onStateChange).
         $('nowSource').textContent = 'Cargando…';
@@ -648,6 +714,7 @@
   function status(msg) { $('status').textContent = msg || ''; }
 
   function showTab(name) {
+    if (name === 'home') loadDevices();
     for (const s of document.querySelectorAll('.tab')) s.classList.toggle('hidden', s.id !== `tab-${name}`);
     for (const b of document.querySelectorAll('.tabbar button')) b.classList.toggle('active', b.dataset.tab === name);
     $('title').textContent = { home: 'SmartBuds AI', assistant: 'Asistente', music: 'Mi música' }[name];
@@ -759,5 +826,7 @@
   setupVoice();
   renderMic();
   renderMusic();
+  loadDevices();
+  setInterval(loadDevices, 60000);
   fetchTracks();
 })();

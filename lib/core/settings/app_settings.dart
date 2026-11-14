@@ -139,13 +139,41 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
 
   /// Secciones de Inicio en orden; las que no están, ocultas.
   static const allHomeSections = ['now', 'foryou', 'extras', 'queue', 'suggestion', 'search', 'favorite'];
-  List<String> homeSections = [...allHomeSections];
+  /// Escritorios de Inicio: cada uno con sus secciones en orden (las que no
+  /// están, ocultas). Casa, Trabajo, Estudio y Carro.
+  static const desktopNames = {'casa': 'Casa', 'trabajo': 'Trabajo', 'estudio': 'Estudio', 'carro': 'Carro'};
+  Map<String, List<String>> desktops = {
+    'casa': [...allHomeSections],
+    'trabajo': ['now', 'queue', 'search', 'foryou'],
+    'estudio': ['now', 'foryou', 'queue'],
+    'carro': ['now', 'favorite', 'extras'],
+  };
+  String activeDesktop = 'casa';
+
+  /// Cambia de escritorio solo según el perfil de uso (estudio → Estudio…).
+  bool autoDesktop = true;
+
+  List<String> get homeSections => desktops[activeDesktop] ?? [...allHomeSections];
 
   void setHomeSections(List<String> sections) {
-    homeSections = [...sections];
+    desktops = {...desktops, activeDesktop: [...sections]};
     _persist();
     notifyListeners();
   }
+
+  void setDesktop(String id) {
+    if (!desktopNames.containsKey(id) || id == activeDesktop) return;
+    activeDesktop = id;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Escritorio que corresponde a un perfil de uso.
+  static String desktopForProfile(String? profile) => switch (profile) {
+        'estudio' => 'estudio',
+        'viaje' => 'carro',
+        _ => 'casa',
+      };
 
   /// Comandos rápidos del Asistente (frases), en orden.
   static const defaultQuickCommands = [
@@ -199,6 +227,8 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         voiceFeedback = true;
     }
     usageProfile = name;
+    // Escritorio de Inicio acorde al perfil (si lo dejaste automático).
+    if (autoDesktop) activeDesktop = desktopForProfile(name);
     _persist();
     notifyListeners();
   }
@@ -266,6 +296,17 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   void setVolumeCap(String device, int? cap) {
     volumeCaps = {...volumeCaps}..remove(device);
     if (cap != null) volumeCaps[device] = cap.clamp(20, 100);
+    _persist();
+    notifyListeners();
+  }
+
+  /// Hogar inteligente: avisos (webhooks) que TÚ configuras en tu propio
+  /// servicio (Home Assistant, IFTTT…). Cada uno: nombre, URL y cuándo se envía
+  /// («track» = cada canción, «mood» = cambio de ambiente, «manual» = escena).
+  List<Map<String, String>> homeHooks = [];
+
+  void setHomeHooks(List<Map<String, String>> hooks) {
+    homeHooks = [for (final h in hooks.take(10)) Map.of(h)];
     _persist();
     notifyListeners();
   }
@@ -465,13 +506,25 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     preferredHeadphone = d['preferredHeadphone'] as String?;
     final hs = (d['homeSections'] as List?)?.cast<String>();
     if (hs != null) {
-      homeSections = hs.where(allHomeSections.contains).toList();
+      final home = hs.where(allHomeSections.contains).toList();
       // Sección nueva «Para ti ahora»: se agrega una vez después de «Sonando ahora».
-      if (d['hasForYou'] != true && !homeSections.contains('foryou')) {
-        final i = homeSections.indexOf('now');
-        homeSections.insert(i < 0 ? 0 : i + 1, 'foryou');
+      if (d['hasForYou'] != true && !home.contains('foryou')) {
+        final i = home.indexOf('now');
+        home.insert(i < 0 ? 0 : i + 1, 'foryou');
+      }
+      desktops = {...desktops, 'casa': home};
+    }
+    final ds = d['desktops'];
+    if (ds is Map) {
+      for (final e in ds.entries) {
+        if (desktopNames.containsKey(e.key) && e.value is List) {
+          desktops = {...desktops, e.key as String: (e.value as List).cast<String>().where(allHomeSections.contains).toList()};
+        }
       }
     }
+    final ad = d['activeDesktop'] as String?;
+    activeDesktop = desktopNames.containsKey(ad) ? ad! : 'casa';
+    autoDesktop = d['autoDesktop'] != false;
     brainWeights = {
       for (final e in ((d['brainWeights'] as Map?) ?? const {}).entries)
         e.key as String: (e.value as num).toDouble(),
@@ -509,6 +562,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         e.key as String: (e.value as num).toInt(),
     };
     disabledModules = {...((d['disabledModules'] as List?) ?? const []).cast<String>()};
+    homeHooks = [
+      for (final h in (d['homeHooks'] as List?) ?? const [])
+        if (h is Map) h.map((k, v) => MapEntry('$k', '$v')),
+    ];
     eqEnabled = d['eqEnabled'] == true;
     eqByDevice = ((d['eqByDevice'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
     eqByMood = ((d['eqByMood'] as Map?) ?? const {}).map((k, v) => MapEntry('$k', '$v'));
@@ -564,6 +621,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? carAutoOpen,
     bool? autoBackup,
     bool? eqEnabled,
+    bool? autoDesktop,
     double? speechRate,
     double? speechPitch,
     String? replyStyle,
@@ -584,6 +642,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
     if (autoBackup != null) this.autoBackup = autoBackup;
     if (eqEnabled != null) this.eqEnabled = eqEnabled;
+    if (autoDesktop != null) this.autoDesktop = autoDesktop;
     if (speechRate != null) this.speechRate = speechRate.clamp(0.5, 2.0);
     if (speechPitch != null) this.speechPitch = speechPitch.clamp(0.5, 2.0);
     if (replyStyle != null) this.replyStyle = replyStyle;
@@ -640,7 +699,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   static const _notInBackup = {
     'authEmail', 'authUserId', 'authAccessToken', 'authRefreshToken', 'authExpiresAt',
     'deviceId', 'deviceName', 'voiceprint', 'onlyMyVoice', 'lastUsedPlayerId', 'onboardingDone',
-    'lastBackupAt',
+    'lastBackupAt', 'homeHooks',
   };
 
   /// Tus preferencias para la copia de seguridad (sin datos de sesión ni de voz).
@@ -683,7 +742,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'smoothTransitions': smoothTransitions,
         'volumeCaps': volumeCaps,
         'preferredHeadphone': preferredHeadphone,
-        'homeSections': homeSections,
+        'homeSections': desktops['casa'],
+        'desktops': desktops,
+        'activeDesktop': activeDesktop,
+        'autoDesktop': autoDesktop,
         'hasForYou': true,
         'brainWeights': brainWeights,
         'quickCommands': quickCommands,
@@ -707,6 +769,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
         'disabledModules': disabledModules.toList(),
+        'homeHooks': homeHooks,
         'eqEnabled': eqEnabled,
         'eqByDevice': eqByDevice,
         'eqByMood': eqByMood,

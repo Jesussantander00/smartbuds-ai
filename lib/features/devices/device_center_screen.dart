@@ -6,6 +6,7 @@ import '../../core/ui/futuristic.dart';
 import '../../core/voice_engine/command_parser.dart';
 import '../assistant/assistant.dart';
 import 'device_hub.dart';
+import '../smarthome/home_link_screen.dart';
 
 /// Centro multidispositivo: este teléfono, tus otros dispositivos con la misma
 /// cuenta, el modo carro y el reloj, en un solo panel.
@@ -26,7 +27,7 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
     super.initState();
     final hub = widget.hub;
     if (hub != null) {
-      hub.publish(a.active);
+      hub.publish(a.active, queue: a.queue, mood: a.profile.currentMood, usage: a.settings?.usageProfile);
       hub.refresh();
     }
   }
@@ -195,14 +196,32 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                                 : '${d.playing ? '▶' : '⏸'} ${d.title}${d.artist == null ? '' : ' · ${d.artist}'}'
                                     '${d.app == null ? '' : ' (${d.app})'}',
                           ),
-                          if (d.title != null)
+                          if (d.queue.isNotEmpty || d.mood != null || d.usage != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                [
+                                  if (d.queue.isNotEmpty) '${d.queue.length} en cola',
+                                  if (d.mood != null) 'ambiente: ${d.mood}',
+                                  if (d.usage != null) 'perfil: ${d.usage}',
+                                ].join(' · '),
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          if (d.title != null || d.queue.isNotEmpty)
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
                                 icon: const Icon(Icons.download_rounded),
                                 label: const Text('Continuar aquí'),
-                                onPressed: () => a.handleSearch(
-                                    SearchRequest([d.title, if (d.artist != null) d.artist].join(' '))),
+                                onPressed: () async {
+                                  final n = await continueSession(a, d);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(n == 0 ? 'Sesión retomada.' : 'Sesión retomada con $n en la cola.'),
+                                    ));
+                                  }
+                                },
                               ),
                             ),
                         ],
@@ -261,6 +280,26 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
                   ],
                 ),
               ),
+              // ----------------------------------------------- Hogar inteligente
+              if (a.home != null && settings.moduleOn('smarthome')) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
+                  child: Text('Hogar inteligente', style: theme.textTheme.titleMedium),
+                ),
+                Card(
+                  child: ListTile(
+                    leading: const AppIcon(Icons.lightbulb_rounded, colors: AppColors.radio, size: 36),
+                    title: const Text('Luces y ambiente'),
+                    subtitle: Text(settings.homeHooks.isEmpty
+                        ? 'Conecta tu Home Assistant, IFTTT u otro servicio'
+                        : '${settings.homeHooks.length} avisos configurados'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => HomeLinkScreen(link: a.home!),
+                    )),
+                  ),
+                ),
+              ],
               // ------------------------------------------------------- Reloj
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
@@ -302,4 +341,16 @@ class _DeviceCenterScreenState extends State<DeviceCenterScreen> {
           ],
         ),
       );
+}
+
+/// Continuar aquí: la misma canción, su cola, el ambiente y el perfil de uso.
+/// Devuelve cuántas canciones quedaron en la cola. No sigue en el segundo
+/// exacto: las apps no comparten su posición entre teléfonos.
+Future<int> continueSession(Assistant a, RemoteDevice d) async {
+  if (d.usage != null && d.usage != a.settings?.usageProfile) await a.useProfile(d.usage!);
+  if (d.mood != null) a.profile.setMood(d.mood!);
+  if (d.title != null) {
+    await a.handleSearch(SearchRequest([d.title, if (d.artist != null) d.artist].join(' ')));
+  }
+  return a.addToQueue(d.queue);
 }

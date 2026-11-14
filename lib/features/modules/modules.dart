@@ -107,6 +107,17 @@ const smartBudsModules = <SmartBudsModule>[
     dependsOn: 'Supabase (tu cuenta)',
   ),
   SmartBudsModule(
+    id: 'smarthome',
+    name: 'Hogar inteligente',
+    description: 'Avisa a tu Home Assistant, IFTTT u otro servicio tuyo para cambiar luces y ambiente con la música.',
+    icon: Icons.lightbulb_rounded,
+    colors: AppColors.radio,
+    android: Support.full,
+    iphone: Support.full,
+    permissions: ['Internet'],
+    dependsOn: 'Un servicio tuyo con webhook (Home Assistant, IFTTT, Node-RED…)',
+  ),
+  SmartBudsModule(
     id: 'stats',
     name: 'Estadísticas avanzadas',
     description: 'Artistas por tiempo, rachas, horario y descubrimientos.',

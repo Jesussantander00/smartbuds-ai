@@ -59,3 +59,7 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Analizador: real vs. estimado + calidad por plataforma | Sí | Parcial | — | — | Datos del sistema marcados «Real»; latencia «Estimado»; códec «No disponible». Calidad de plataformas: dato publicado por cada una |
 | Transición al final de la canción | Sí (si la app informa duración y posición) | No | No | — | Fundido de volumen con AudioManager. No es crossfade real |
 | Diagnóstico de audífonos (historial, cortes, consejos) | Sí | Parcial | No | Bluetooth | Historial propio de conexiones (200 eventos). Batería y señal: no disponibles para otras apps |
+| Continuidad (canción, cola, ambiente y perfil) entre teléfonos y la página web | Sí | Sí | Sí (ver y seguir; publica lo que suena) | Cuenta | Supabase (`supabase/continuidad.sql`). No sigue en el segundo exacto: las apps no comparten la posición entre equipos |
+| Modo carro adaptado | Sí (con volumen) | Sí (sin volumen; Apple Music) | — | Micrófono, Bluetooth | Un solo modo carro. Para la pantalla del carro: Android Auto o CarPlay con tu app de música |
+| Hogar inteligente (avisos a tu Home Assistant, IFTTT…) | Sí | Sí | No | Internet | Webhook https que tú configuras. Envía solo canción, artista y ambiente. No controla bombillos directamente |
+| Escritorios de Inicio (Casa, Trabajo, Estudio, Carro) | Sí | Sí | No | — | Ordenar y ocultar secciones por escritorio; cambio automático por perfil de uso. Tamaño: solo «modo compacto» |

@@ -15,6 +15,7 @@ import '../../core/settings/app_settings.dart';
 import '../../core/telemetry/error_reporter.dart';
 import '../../connectors/knowledge/music_knowledge.dart';
 import '../audio/eq_controller.dart';
+import '../smarthome/home_link.dart';
 import '../automations/automation_runner.dart';
 import '../brain/music_brain.dart';
 import '../stats/evolution.dart';
@@ -183,6 +184,9 @@ class Assistant extends ChangeNotifier {
     }
   }
 
+  /// Hogar inteligente (avisos a tus servicios). Null en pruebas.
+  HomeLink? home;
+
   /// Ecualizador inteligente (lo crea main; null en pruebas).
   EqController? eq;
 
@@ -337,6 +341,10 @@ class Assistant extends ChangeNotifier {
         await explainCurrent();
       case ArtistInfoIntent(:final artist):
         await tellAboutArtist(artist);
+      case HomeSceneIntent(:final name):
+        final a = active;
+        final ok = await home?.scene(name, title: a?.title, artist: a?.artist, mood: profile.currentMood) ?? false;
+        await _say(ok ? 'Escena $name enviada a tu casa.' : 'No tengo una escena llamada $name. Créala en Hogar inteligente.');
       case TasteEvolutionIntent():
         await _say(TasteEvolution.from(profile, now: _clock()).summary());
       case DurationIntent(:final minutes):
@@ -543,6 +551,15 @@ class Assistant extends ChangeNotifier {
     await _say(queue.length == 1
         ? 'Listo, la pongo después de esta.'
         : 'Listo, va de ${queue.length} en la cola.');
+  }
+
+  /// Agrega varias a la cola sin hablar (p. ej. al continuar una sesión). Devuelve cuántas.
+  int addToQueue(Iterable<String> items) {
+    final add = items.where((q) => q.trim().isNotEmpty && !queue.contains(q)).take(20).toList();
+    if (add.isEmpty) return 0;
+    queue.addAll(add);
+    notifyListeners();
+    return add.length;
   }
 
   void removeFromQueue(int index) {

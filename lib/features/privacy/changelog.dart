@@ -1,8 +1,18 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 26;
+const latestChangelog = 27;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 27,
+    title: 'Tu ecosistema',
+    items: [
+      'Continúa la sesión en otro teléfono o en la página web: canción, cola, ambiente y perfil.',
+      'Escritorios de Inicio: Casa, Trabajo, Estudio y Carro, cada uno con su orden.',
+      'Hogar inteligente: avisa a tu Home Assistant o IFTTT; di «escena Fiesta».',
+      'El modo carro se adapta a lo que tu teléfono permite.',
+    ],
+  ),
   (
     version: 26,
     title: 'Audio y audífonos',
