@@ -130,7 +130,7 @@ class SelfCheck {
     }
     if (i.ignoredVolumeFlips > 0) {
       voz.add(Finding(CheckArea.voz, Severity.warning,
-          'Ignoré ${i.ignoredVolumeFlips} orden${i.ignoredVolumeFlips == 1 ? '' : 'es'} de volumen que parecía${i.ignoredVolumeFlips == 1 ? '' : 'n'} conversación',
+          'Ignoré ${i.ignoredVolumeFlips} ${i.ignoredVolumeFlips == 1 ? 'orden' : 'órdenes'} de volumen que parecía${i.ignoredVolumeFlips == 1 ? '' : 'n'} conversación',
           detail: 'Llegaron «sube» y «baja» seguidos mientras hablabas o cantabas; así la música no sube y baja sola.',
           fix: 'Para cambiar el volumen di la frase completa: «sube el volumen». «Solo mi voz» también ayuda.'));
     }

@@ -59,10 +59,11 @@ void main() {
     expect(commands, [MusicCommand.volumeUp, MusicCommand.volumeUp]);
   });
 
-  test('las demás órdenes no se afectan', () async {
+  test('las demás órdenes no se afectan, y una orden en medio indica que hablas con Jarvis', () async {
     await hear('sube', 1);
     await hear('cambia', 2);
-    expect(commands, [MusicCommand.volumeUp, MusicCommand.next]);
+    await hear('baja', 3);
+    expect(commands, [MusicCommand.volumeUp, MusicCommand.next, MusicCommand.volumeDown]);
   });
 
   test('bajar la música al responder: solo si está activado, y se avisa al teléfono', () async {

@@ -276,9 +276,13 @@ class VoiceEngine extends ChangeNotifier {
   int ignoredVolumeFlips = 0;
 
   bool _isVolumeFlip(VoiceIntent intent, String heard) {
-    if (intent is! CommandIntent) return false;
-    final c = intent.command;
-    if (c != MusicCommand.volumeUp && c != MusicCommand.volumeDown) return false;
+    // Otra orden en medio («sube», «cambia», «baja») indica que hablas con
+    // Jarvis a propósito: se olvida la anterior.
+    final c = intent is CommandIntent ? intent.command : null;
+    if (c != MusicCommand.volumeUp && c != MusicCommand.volumeDown) {
+      _lastVolume = null;
+      return false;
+    }
     final now = _clock();
     final prev = _lastVolume, at = _lastVolumeAt;
     _lastVolume = c;
