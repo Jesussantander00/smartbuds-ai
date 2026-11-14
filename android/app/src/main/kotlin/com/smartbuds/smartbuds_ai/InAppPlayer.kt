@@ -35,6 +35,17 @@ class InAppPlayer(
     private var artist: String? = null
     private var lastActiveAt = 0L
     private var focusRequest: AudioFocusRequest? = null
+    private var volume = 1f
+
+    /** Mientras suena, avisa la posición cada segundo (barra de progreso). */
+    private val ticker = object : Runnable {
+        override fun run() {
+            if (state == "playing") {
+                emit("state", statusMap())
+                main.postDelayed(this, 1000)
+            }
+        }
+    }
 
     private val attributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -73,6 +84,18 @@ class InAppPlayer(
             "pause" -> { pause(); result.success(true) }
             "resume" -> { resume(); result.success(true) }
             "stop" -> { release(); setState("stopped"); result.success(true) }
+            "seek" -> {
+                val ms = call.argument<Number>("positionMs")?.toInt() ?: 0
+                try { player?.seekTo(ms) } catch (_: Exception) {}
+                emit("state", statusMap())
+                result.success(true)
+            }
+            "setVolume" -> {
+                // Volumen del reproductor de SmartBuds (no el del teléfono).
+                volume = ((call.argument<Number>("percent")?.toFloat() ?: 100f) / 100f).coerceIn(0f, 1f)
+                try { player?.setVolume(volume, volume) } catch (_: Exception) {}
+                result.success(true)
+            }
             "status" -> result.success(statusMap())
             else -> result.notImplemented()
         }
@@ -93,6 +116,7 @@ class InAppPlayer(
             mp.setAudioAttributes(attributes)
             mp.setDataSource(url)
             mp.setOnPreparedListener {
+                it.setVolume(volume, volume)
                 it.start()
                 setState("playing")
             }
@@ -161,6 +185,8 @@ class InAppPlayer(
         state = newState
         lastActiveAt = System.currentTimeMillis()
         emit("state", statusMap())
+        main.removeCallbacks(ticker)
+        if (newState == "playing") main.postDelayed(ticker, 1000)
     }
 
     private fun statusMap(): Map<String, Any?> = mapOf(
@@ -168,6 +194,9 @@ class InAppPlayer(
         "title" to title,
         "artist" to artist,
         "positionMs" to (try { player?.currentPosition?.toLong() } catch (_: Exception) { null }),
+        "durationMs" to (try {
+            if (state == "playing" || state == "paused") player?.duration?.toLong()?.takeIf { it > 0 } else null
+        } catch (_: Exception) { null }),
         "lastActiveAtMs" to lastActiveAt,
     )
 

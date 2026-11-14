@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 38;
+const latestChangelog = 39;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 39,
+    title: 'La música suena dentro de SmartBuds',
+    items: [
+      'Reproductor integrado: busca y reproduce aquí (YouTube oficial, Audius completo o vista previa de Deezer).',
+      'Barra del reproductor en todas las secciones; Jarvis la controla por voz.',
+      'Jarvis escucha al abrir la app y recuerda si lo apagaste. Nuevo estado «Micrófono sin permiso».',
+    ],
+  ),
   (
     version: 38,
     title: 'Inteligencia musical, todo junto',

@@ -27,6 +27,7 @@ import '../activity/activity.dart';
 import '../discovery/connections.dart';
 import '../discovery/repetition.dart';
 import '../discovery/journey.dart';
+import '../player/smartbuds_player.dart';
 import '../music_profile/music_profile.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
@@ -213,6 +214,8 @@ class Assistant extends ChangeNotifier {
 
   /// Reproductor activo en este momento (o null).
   PlayerStatus? get active {
+    final p = inApp;
+    if (p != null && inAppInControl) return p.status;
     final d = controller.detection;
     return d is PlayerDetected ? d.candidate.status : null;
   }
@@ -259,6 +262,12 @@ class Assistant extends ChangeNotifier {
 
   Future<void> handleCommand(MusicCommand command) async {
     _logAction(VoiceEngine.describe(CommandIntent(command)));
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      profile.noteCommand(command);
+      await _inAppCommand(p, command);
+      return;
+    }
     if (command == MusicCommand.next) _rememberForUndo();
     profile.noteCommand(command);
     final r = command == MusicCommand.next || command == MusicCommand.previous
@@ -287,6 +296,20 @@ class Assistant extends ChangeNotifier {
   /// «Busca <canción>».
   Future<void> handleSearch(SearchRequest request) async {
     _lastSearchAt = _clock(); // la canción que llega ya se anuncia con «Reproduciendo…»
+    // Reproductor integrado: busca y suena DENTRO de SmartBuds (si una fuente lo permite).
+    // «… en Spotify» pide otra app a propósito: entonces se abre esa app.
+    final p = inApp;
+    if (p != null && playInApp && request.appPackage == null) {
+      final t = await p.playQuery(request.query);
+      _lastSearchAt = _clock();
+      if (t != null) {
+        await _say(t.isPreview
+            ? '${t.display}: solo tengo la vista previa de 30 segundos. Para la canción completa, di «búscala en YouTube Music».'
+            : 'Reproduciendo ${t.display}.');
+        return;
+      }
+      await _say('No la encontré para reproducir dentro de SmartBuds; la busco en tu app de música.');
+    }
     final r = await controller.searchVoice(request);
     if (r == null) return;
     if (r.outcome == CommandOutcome.verified) {
@@ -640,6 +663,11 @@ class Assistant extends ChangeNotifier {
   // --------------------------------------------------- Volumen exacto
 
   Future<void> setVolume(int percent) async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.setVolume(percent);
+      return;
+    }
     // Perfil de sonido: respeta el límite de volumen de estos audífonos.
     final cap = headphoneName == null ? null : settings?.volumeCaps[headphoneName];
     if (cap != null && percent > cap) {
@@ -867,6 +895,63 @@ class Assistant extends ChangeNotifier {
     await _say(mins < 1 ? 'Listo, terminaste de $label.' : 'Listo: $mins minutos de $label. Lo tendré en cuenta.');
   }
 
+  // ------------------------------------------ Reproductor integrado
+
+  /// Reproductor propio de SmartBuds (lo crea main en Android/iPhone).
+  SmartBudsPlayer? inApp;
+
+  /// El reproductor integrado manda: suena, o está en pausa y ninguna otra app suena.
+  bool get inAppInControl {
+    final p = inApp;
+    if (p == null || !p.isActive) return false;
+    if (p.isPlaying) return true;
+    final d = controller.detection;
+    final ext = d is PlayerDetected ? d.candidate.status : null;
+    return !(ext?.isPlaying ?? false);
+  }
+
+  /// Reproducir dentro de SmartBuds (ajuste; activado por defecto).
+  bool get playInApp => inApp != null && (settings?.playInApp ?? true);
+
+  /// Órdenes de voz para el reproductor integrado: la cola de SmartBuds va
+  /// primero; el volumen es el del reproductor (no cambia el del teléfono).
+  Future<void> _inAppCommand(SmartBudsPlayer p, MusicCommand command) async {
+    switch (command) {
+      case MusicCommand.next:
+        await inAppNext();
+      case MusicCommand.previous:
+        await p.previous();
+      case MusicCommand.pause:
+        await p.pause();
+      case MusicCommand.play:
+        await p.resume();
+      case MusicCommand.togglePlayPause:
+        await p.toggle();
+      case MusicCommand.volumeUp:
+        await p.setVolume(p.volume + 15);
+      case MusicCommand.volumeDown:
+        await p.setVolume(p.volume - 15);
+    }
+  }
+
+  /// «Siguiente» en el reproductor integrado: la cola, si no el siguiente resultado.
+  Future<void> inAppNext() async {
+    if (queue.isNotEmpty) {
+      await _playNextQueued();
+      return;
+    }
+    final ok = await inApp?.nextResult() ?? false;
+    if (!ok) await _say('No hay más resultados. Di «busca …» o «pon algo nuevo».');
+  }
+
+  /// Buscar desde la pantalla: muestra los resultados dentro de SmartBuds.
+  Future<void> searchInApp(String query) async {
+    final p = inApp;
+    if (p == null) return;
+    p.panelOpen = true;
+    await p.search(query);
+  }
+
   // ---------------------------------------------------- Cola inteligente
 
   /// Orden de la cola antes de ordenarla (para «Deshacer»).
@@ -1076,6 +1161,11 @@ class Assistant extends ChangeNotifier {
   // ------------------------------------------------ Repetir y adelantar
 
   Future<void> restart() async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.seek(0);
+      return;
+    }
     final a = active;
     if (a == null) {
       await _say('No hay música sonando.');
@@ -1090,6 +1180,11 @@ class Assistant extends ChangeNotifier {
   }
 
   Future<void> seekBy(int seconds) async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.seek((p.positionMs + seconds * 1000).clamp(0, p.durationMs ?? 1 << 30));
+      return;
+    }
     final a = active;
     if (a == null) {
       await _say('No hay música sonando.');
@@ -1157,6 +1252,11 @@ class Assistant extends ChangeNotifier {
 
   /// «Deshacer»: vuelve a la canción de antes y al punto donde iba.
   Future<void> undo() async {
+    final p = inApp;
+    if (p != null && inAppInControl) {
+      await p.previous();
+      return;
+    }
     final u = _undo;
     if (u == null || !canUndo) {
       await _say('No hay nada que deshacer.');
@@ -1241,7 +1341,8 @@ class Assistant extends ChangeNotifier {
       final changed = _lastKey != null;
       _lastKey = key;
       if (settings?.isBlocked(status!.title, status.artist) ?? false) {
-        unawaited(controller.sendVoice(MusicCommand.next)); // bloqueada: se salta sola
+        // Bloqueada: se salta sola (en SmartBuds o en la app de música).
+        unawaited(inAppInControl ? inAppNext() : controller.sendVoice(MusicCommand.next));
         _wasPlaying = playing;
         return;
       }

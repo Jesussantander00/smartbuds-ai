@@ -47,6 +47,18 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Buscar: con el reproductor integrado, los resultados se ven aquí mismo;
+  /// si no, se busca en tu app de música.
+  void _search() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
+    if (widget.assistant.playInApp) {
+      unawaited(widget.assistant.searchInApp(q));
+    } else {
+      unawaited(widget.controller.search(q));
+    }
+  }
+
   /// Una sección de Inicio (el orden y cuáles se ven se eligen en «Personalizar»).
   List<Widget> _section(String id) => switch (id) {
         'now' => [
@@ -95,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _query,
                     textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => widget.controller.search(_query.text),
+                    onSubmitted: (_) => _search(),
                     decoration: const InputDecoration(
                       isDense: true,
                       labelText: 'Buscar una canción',
@@ -106,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
                   tooltip: 'Buscar',
-                  onPressed: widget.controller.busy ? null : () => widget.controller.search(_query.text),
+                  onPressed: widget.controller.busy ? null : _search,
                   icon: const Icon(Icons.search),
                 ),
               ],

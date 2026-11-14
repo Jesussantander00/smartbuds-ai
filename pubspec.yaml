@@ -9,6 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Reproductor oficial de YouTube incrustado (IFrame) dentro de SmartBuds.
+  webview_flutter: ^4.10.0
+  webview_flutter_android: any
+  webview_flutter_wkwebview: any
 
 dev_dependencies:
   flutter_test:
