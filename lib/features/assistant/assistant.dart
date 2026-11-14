@@ -359,7 +359,7 @@ class Assistant extends ChangeNotifier {
         for (final p in parts) {
           await handleIntent(p);
         }
-      case SearchPromptIntent() || ArtistPromptIntent() || WakeIntent():
+      case SearchPromptIntent() || ArtistPromptIntent() || WakeIntent() || StopListeningIntent():
         break; // lo resuelve el VoiceEngine (pregunta y escucha)
     }
   }

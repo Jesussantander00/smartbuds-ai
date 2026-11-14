@@ -217,6 +217,13 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
             ),
+          // Escucha continua: indicador visible en todas las secciones, con «Detener».
+          if (widget.voice != null && _tab != 0)
+            Positioned(
+              right: 12,
+              top: media.padding.top + 8,
+              child: _ListeningPill(voice: widget.voice!),
+            ),
           Positioned(
             left: 10,
             top: media.padding.top + 10,
@@ -276,4 +283,45 @@ class _ModuleOff extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pastilla «Escuchando · Detener» (escucha continua visible y fácil de parar).
+class _ListeningPill extends StatelessWidget {
+  const _ListeningPill({required this.voice});
+  final VoiceEngine voice;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: voice,
+        builder: (context, _) {
+          if (!voice.enabled) return const SizedBox.shrink();
+          final on = voice.listening && !voice.paused;
+          return Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: .82),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Neon.cyan.withValues(alpha: .5)),
+                boxShadow: const [BoxShadow(blurRadius: 12, color: Color(0x33000000))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 10, color: on ? Neon.cyan : Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(on ? 'Escuchando' : 'En pausa', style: Theme.of(context).textTheme.labelMedium),
+                  IconButton(
+                    tooltip: 'Dejar de escuchar',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: voice.stop,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
 }

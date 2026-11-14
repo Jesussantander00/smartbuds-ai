@@ -186,6 +186,11 @@ class TasteEvolutionIntent extends VoiceIntent {
   const TasteEvolutionIntent();
 }
 
+/// «Deja de escuchar»: apaga la escucha continua (vuelve con el micrófono).
+class StopListeningIntent extends VoiceIntent {
+  const StopListeningIntent();
+}
+
 /// «Pon media hora de música»: una lista de tus canciones para ese tiempo.
 class DurationIntent extends VoiceIntent {
   const DurationIntent(this.minutes);
@@ -427,6 +432,14 @@ class CommandParser {
     'modo estudio': 'estudio', 'modo concentracion': 'estudio', 'modo viaje': 'viaje',
     'modo diario': 'diario', 'modo normal': 'diario',
   };
+  static const _stopListening = {
+    'deja de escuchar',
+    'para de escuchar',
+    'no escuches mas',
+    'apaga el microfono',
+    'deja de oir',
+  };
+
   static const _evolution = {
     'como han cambiado mis gustos',
     'como han cambiado mis gustos este ano',
@@ -583,6 +596,7 @@ class CommandParser {
     }
     if (_carOn.contains(text)) return const CarModeIntent(true);
     if (_carOff.contains(text)) return const CarModeIntent(false);
+    if (_stopListening.contains(text)) return const StopListeningIntent();
     if (_evolution.contains(text)) return const TasteEvolutionIntent();
     if (_aboutCurrent.contains(text)) return const ArtistInfoIntent();
     for (final p in _aboutPrefixes) {
@@ -647,10 +661,13 @@ class CommandParser {
 
   /// «cambia y sube» → [CommandIntent(next), CommandIntent(volumeUp)].
   /// Solo si TODAS las partes son órdenes cortas (no rompe «busca X y Y»).
+  /// Separadores de órdenes encadenadas: «… y …», «… y luego …», «… después …».
+  static final _chain = RegExp(r'\s+(?:y luego|y despues|y|luego|despues|tambien)\s+');
+
   MultiIntent? _parseMulti(String text) {
-    if (!text.contains(' y ')) return null;
-    final parts = text.split(' y ');
-    if (parts.length < 2 || parts.length > 3) return null;
+    if (!_chain.hasMatch(text)) return null;
+    final parts = text.split(_chain).where((p) => p.trim().isNotEmpty).toList();
+    if (parts.length < 2 || parts.length > 4) return null;
     final out = <VoiceIntent>[];
     for (final part in parts) {
       final p = part.trim();
@@ -672,7 +689,11 @@ class CommandParser {
         out.add(VolumeIntent(v));
         continue;
       }
-      return null;
+      // Cualquier otra orden que SmartBuds entienda sola («pon música tranquila»,
+      // «modo estudio»…). Cada parte ya no tiene separadores: no hay recursión infinita.
+      final other = parseIntent(p);
+      if (other == null || other is MultiIntent || other is WakeIntent) return null;
+      out.add(other);
     }
     return MultiIntent(out);
   }

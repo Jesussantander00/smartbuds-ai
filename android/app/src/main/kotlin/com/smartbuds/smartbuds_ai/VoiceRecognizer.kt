@@ -163,7 +163,11 @@ class VoiceRecognizer(
                 result.success(true)
             }
             "speak" -> {
-                speak(call.argument<String>("text") ?: "")
+                speak(
+                    call.argument<String>("text") ?: "",
+                    (call.argument<Number>("rate") ?: 1.0).toFloat(),
+                    (call.argument<Number>("pitch") ?: 1.0).toFloat(),
+                )
                 result.success(true)
             }
             "listenOnce" -> listenOnce(result)
@@ -409,8 +413,11 @@ class VoiceRecognizer(
         }
     }
 
-    private fun speak(text: String) {
+    private fun speak(text: String, rate: Float = 1f, pitch: Float = 1f) {
         if (!ttsReady || text.isBlank()) return
+        // Voz personalizada: velocidad y tono elegidos en Asistente.
+        tts?.setSpeechRate(rate.coerceIn(0.5f, 2f))
+        tts?.setPitch(pitch.coerceIn(0.5f, 2f))
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "smartbuds-${System.nanoTime()}")
     }
 

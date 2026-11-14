@@ -270,6 +270,12 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     notifyListeners();
   }
 
+  /// Voz personalizada: velocidad, tono y estilo («brief», «normal»,
+  /// «conversational», «technical»).
+  double speechRate = 1.0;
+  double speechPitch = 1.0;
+  String replyStyle = 'normal';
+
   /// Extensiones (módulos) que apagaste. Todas vienen encendidas.
   Set<String> disabledModules = {};
 
@@ -476,6 +482,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         e.key as String: (e.value as num).toInt(),
     };
     disabledModules = {...((d['disabledModules'] as List?) ?? const []).cast<String>()};
+    speechRate = ((d['speechRate'] as num?) ?? 1.0).toDouble().clamp(0.5, 2.0);
+    speechPitch = ((d['speechPitch'] as num?) ?? 1.0).toDouble().clamp(0.5, 2.0);
+    replyStyle = (d['replyStyle'] as String?) ?? 'normal';
     autoBackup = d['autoBackup'] != false;
     lastBackupAt = DateTime.tryParse('${d['lastBackupAt'] ?? ''}');
     automations = [
@@ -522,6 +531,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? smoothTransitions,
     bool? carAutoOpen,
     bool? autoBackup,
+    double? speechRate,
+    double? speechPitch,
+    String? replyStyle,
     bool? shareDevices,
     bool? liveArt,
     bool? realVisualizer,
@@ -538,6 +550,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
     if (carAutoOpen != null) this.carAutoOpen = carAutoOpen;
     if (autoBackup != null) this.autoBackup = autoBackup;
+    if (speechRate != null) this.speechRate = speechRate.clamp(0.5, 2.0);
+    if (speechPitch != null) this.speechPitch = speechPitch.clamp(0.5, 2.0);
+    if (replyStyle != null) this.replyStyle = replyStyle;
     if (shareDevices != null) this.shareDevices = shareDevices;
     if (liveArt != null) this.liveArt = liveArt;
     if (realVisualizer != null) this.realVisualizer = realVisualizer;
@@ -658,6 +673,9 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'headphoneVolumes': headphoneVolumes,
         'automations': automations,
         'disabledModules': disabledModules.toList(),
+        'speechRate': speechRate,
+        'speechPitch': speechPitch,
+        'replyStyle': replyStyle,
         'autoBackup': autoBackup,
         'lastBackupAt': lastBackupAt?.toIso8601String(),
         'carDevices': carDevices.toList(),

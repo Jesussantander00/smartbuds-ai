@@ -1,8 +1,18 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 24;
+const latestChangelog = 25;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 25,
+    title: 'Jarvis más inteligente',
+    items: [
+      'Encadena órdenes: «pon algo para entrenar y luego volumen al 80»; al final te confirma todo junto.',
+      'En Inicio, Jarvis muestra lo que te escuchó, lo que entendió y acciones rápidas.',
+      'Asistente → Voz personalizada: estilo breve, normal, charla o técnico, velocidad y tono.',
+      'Indicador «Escuchando» en todas las secciones; di «deja de escuchar» para parar.',
+    ],
+  ),
   (
     version: 24,
     title: 'Tu memoria musical',

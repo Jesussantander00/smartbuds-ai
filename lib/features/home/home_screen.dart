@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/player_detector/active_player_detector.dart';
 import '../../core/voice_engine/command_parser.dart';
+import '../assistant/action_panel.dart';
 import '../music_profile/insights.dart';
 import '../brain/music_brain.dart';
 import '../../core/ui/live_visuals.dart';
@@ -337,6 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 120),
           children: [
             if (voice != null) _MicStatus(voice: voice),
+            if (voice != null) VoiceActionsCard(voice: voice),
             for (final id in widget.assistant.settings?.homeSections ?? AppSettings.allHomeSections)
               ..._section(id),
             if (widget.controller.lastResult != null) ...[
