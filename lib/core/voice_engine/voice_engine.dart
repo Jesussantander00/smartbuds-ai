@@ -7,6 +7,9 @@ import '../models.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
+/// Cómo responde SmartBuds en voz alta.
+enum ReplyStyle { brief, normal, conversational, technical }
+
 /// Una línea del historial de voz: lo que dijiste y lo que respondió SmartBuds.
 class VoiceLogEntry {
   VoiceLogEntry(this.at, this.heard, this.action);
@@ -125,6 +128,18 @@ class VoiceEngine extends ChangeNotifier {
   /// Respuestas cortas: solo la primera frase de cada respuesta hablada.
   bool shortReplies = false;
 
+  /// Voz personalizada: velocidad y tono (0,5–2,0) y estilo de respuesta.
+  double speechRate = 1.0;
+  double speechPitch = 1.0;
+  ReplyStyle replyStyle = ReplyStyle.normal;
+  int _replies = 0;
+
+  /// Pasos de la última orden encadenada (para el panel de acciones).
+  List<String> lastPlan = const [];
+
+  /// Mientras corre una orden encadenada, las respuestas se juntan en una sola.
+  List<String>? _batch;
+
   /// Últimas órdenes entendidas (la más reciente primero).
   final List<VoiceLogEntry> history = [];
   static const historyMax = 50;
@@ -168,6 +183,7 @@ class VoiceEngine extends ChangeNotifier {
         LyricsIntent(:final words) => words == null ? 'Por la letra…' : 'Letra: «$words»',
         BlockIntent(:final artist) => artist ? 'Bloquear artista' : 'Nunca más esta',
         MultiIntent(:final parts) => parts.map(describe).join(' + '),
+        StopListeningIntent() => 'Dejar de escuchar',
         ForgottenIntent() => 'Favoritas olvidadas',
         ShareWeekIntent() => 'Compartir mi semana',
         SimilarIntent() => 'Algo parecido',
@@ -183,6 +199,24 @@ class VoiceEngine extends ChangeNotifier {
       };
 
   /// Primera frase de [text] (para respuestas cortas).
+  /// Aplica el estilo de respuesta. [action] es lo que entendió (para el técnico).
+  static String styleReply(String text, ReplyStyle style, {String? action, int n = 0}) {
+    switch (style) {
+      case ReplyStyle.brief:
+        return shorten(text);
+      case ReplyStyle.conversational:
+        const openers = ['¡Listo! ', 'Claro. ', 'Perfecto, ', 'Va. '];
+        final t = text.trimLeft();
+        if (t.startsWith('¡') || RegExp(r'^(Listo|Claro|Perfecto|Va|Hecho)\b').hasMatch(t)) return text;
+        final o = openers[n % openers.length];
+        return o.endsWith(', ') && t.isNotEmpty ? '$o${t[0].toLowerCase()}${t.substring(1)}' : '$o$t';
+      case ReplyStyle.technical:
+        return action == null ? text : 'Orden: $action. $text';
+      case ReplyStyle.normal:
+        return text;
+    }
+  }
+
   static String shorten(String text) {
     final m = RegExp(r'^(.+?[.!?])(\s|$)').firstMatch(text.trim());
     return m == null ? text : m.group(1)!;
@@ -285,6 +319,31 @@ class VoiceEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ejecuta una orden encadenada paso por paso y confirma al final con una
+  /// sola respuesta: «Listo, hice 3 cosas: …».
+  @visibleForTesting
+  Future<void> runChain(List<VoiceIntent> parts, {Duration gap = const Duration(milliseconds: 900)}) async {
+    lastPlan = [for (final p in parts) describe(p)];
+    notifyListeners();
+    _batch = [];
+    try {
+      for (final p in parts) {
+        _dispatch(p, log: false);
+        await Future<void>.delayed(gap);
+      }
+    } finally {
+      _batch = null;
+    }
+    final steps = lastPlan;
+    final list = steps.length == 1
+        ? steps.first
+        : '${steps.sublist(0, steps.length - 1).join(', ')} y ${steps.last}';
+    await speak('Listo, hice ${steps.length} cosas: ${list.toLowerCase()}.');
+  }
+
+  /// Ejecuta una orden desde el panel de acciones (como si la hubieras dicho).
+  void runIntent(VoiceIntent intent) => _dispatch(intent);
+
   Future<void> stop() async {
     enabled = false;
     listening = false;
@@ -305,13 +364,20 @@ class VoiceEngine extends ChangeNotifier {
   /// Respuesta hablada por los audífonos (si está activada).
   Future<void> speak(String text, {bool force = false}) async {
     if (!feedbackEnabled && !force) return;
-    final said = shortReplies ? shorten(text) : text;
+    final batch = _batch;
+    if (batch != null && !force) {
+      batch.add(text);
+      return;
+    }
+    final recent = history.isNotEmpty && _clock().difference(history.first.at) < const Duration(seconds: 20);
+    var said = styleReply(text, replyStyle, action: recent ? history.first.action : null, n: _replies++);
+    if (shortReplies) said = shorten(said);
     if (history.isNotEmpty &&
         _clock().difference(history.first.at) < const Duration(seconds: 20)) {
       history.first.reply ??= said;
     }
     try {
-      await _method.invokeMethod('speak', {'text': said});
+      await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch});
     } catch (_) {}
   }
 
@@ -400,11 +466,11 @@ class VoiceEngine extends ChangeNotifier {
       case LyricsIntent(words: null):
         unawaited(_askThen('¿Qué dice la letra?', (h) => LyricsIntent(h)));
       case MultiIntent(:final parts):
+        unawaited(runChain(parts));
+      case StopListeningIntent():
         unawaited(() async {
-          for (final p in parts) {
-            _dispatch(p, log: false);
-            await Future<void>.delayed(const Duration(milliseconds: 900));
-          }
+          await speak('Dejo de escuchar. Toca el micrófono cuando quieras.', force: true);
+          await stop();
         }());
       case VolumeIntent() ||
             QueueIntent() ||

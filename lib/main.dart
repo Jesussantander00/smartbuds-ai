@@ -194,8 +194,13 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
       voice = v;
       assistant.voice = v;
       // Respuestas cortas: por ajuste o porque queda poca batería.
-      void syncShort() =>
-          v.shortReplies = widget.settings.shortReplies || assistant.lowBattery;
+      void syncShort() {
+        v.shortReplies = widget.settings.shortReplies || assistant.lowBattery;
+        v.speechRate = widget.settings.speechRate;
+        v.speechPitch = widget.settings.speechPitch;
+        v.replyStyle = ReplyStyle.values.firstWhere((s) => s.name == widget.settings.replyStyle,
+            orElse: () => ReplyStyle.normal);
+      }
       syncShort();
       widget.settings.addListener(syncShort);
       assistant.addListener(syncShort);

@@ -217,6 +217,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 settings.update(voiceFeedback: v);
                 voice?.feedbackEnabled = v;
               }),
+              if (_match('Voz personalizada', 'estilo velocidad tono breve conversacional técnico'))
+                _VoiceStyle(settings: settings, voice: voice),
               _switch('Respuestas cortas', 'Solo lo esencial: una frase por respuesta.',
                   settings.shortReplies, (v) {
                 settings.update(shortReplies: v);
@@ -718,6 +720,114 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   style: TextStyle(color: theme.colorScheme.error)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Voz personalizada: estilo de respuesta, velocidad y tono, con prueba.
+class _VoiceStyle extends StatelessWidget {
+  const _VoiceStyle({required this.settings, this.voice});
+  final AppSettings settings;
+  final VoiceEngine? voice;
+
+  void _apply() {
+    final v = voice;
+    if (v == null) return;
+    v.speechRate = settings.speechRate;
+    v.speechPitch = settings.speechPitch;
+    v.replyStyle = ReplyStyle.values.firstWhere((s) => s.name == settings.replyStyle, orElse: () => ReplyStyle.normal);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Voz personalizada', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 'brief', label: Text('Breve')),
+              ButtonSegment(value: 'normal', label: Text('Normal')),
+              ButtonSegment(value: 'conversational', label: Text('Charla')),
+              ButtonSegment(value: 'technical', label: Text('Técnico')),
+            ],
+            selected: {settings.replyStyle},
+            onSelectionChanged: (s) {
+              settings.update(replyStyle: s.first);
+              _apply();
+            },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            switch (settings.replyStyle) {
+              'brief' => 'Solo lo esencial: «Siguiente.»',
+              'conversational' => 'Más cercano: «¡Listo! Pongo algo tranquilo.»',
+              'technical' => 'Dice qué entendió: «Orden: Siguiente canción. Reproduciendo…»',
+              _ => 'Respuestas normales.',
+            },
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(width: 70, child: Text('Velocidad')),
+              Expanded(
+                child: Slider(
+                  value: settings.speechRate,
+                  min: .5,
+                  max: 2,
+                  divisions: 15,
+                  label: '${settings.speechRate.toStringAsFixed(1)}×',
+                  onChanged: (v) {
+                    settings.update(speechRate: v);
+                    _apply();
+                  },
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              const SizedBox(width: 70, child: Text('Tono')),
+              Expanded(
+                child: Slider(
+                  value: settings.speechPitch,
+                  min: .5,
+                  max: 2,
+                  divisions: 15,
+                  label: settings.speechPitch.toStringAsFixed(1),
+                  onChanged: (v) {
+                    settings.update(speechPitch: v);
+                    _apply();
+                  },
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: voice == null
+                  ? null
+                  : () {
+                      _apply();
+                      voice!.speak('Hola, así sueno ahora. Dime qué quieres escuchar.', force: true);
+                    },
+              icon: const Icon(Icons.record_voice_over_rounded),
+              label: const Text('Probar voz'),
+            ),
+          ),
+          Text(
+            'La voz es la del teléfono (Google o Apple). Para cambiar la voz en sí, ve a los ajustes de texto a voz del sistema.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

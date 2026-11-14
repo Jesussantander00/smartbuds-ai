@@ -52,3 +52,6 @@ No prometemos nada que Spotify, Apple Music, YouTube, Bluetooth o el sistema ope
 | Memoria y evolución musical («¿cómo han cambiado mis gustos?», línea de tiempo) | Sí | Sí | No | Ninguno | Tu historial en el teléfono (hasta ~un año) |
 | Detector de ambiente | Sí | Sí | No | Ninguno | Lo que pediste hace poco y tus listas por ambiente. **No** analiza el audio: las apps no comparten ritmo ni energía |
 | Radar de emergentes | Sí | Sí | No | Internet | Dato real: seguidores en Deezer. «Crecimiento» global no está disponible gratis; lo demás es predicción de SmartBuds y se dice así |
+| Conversación continua con indicador y «deja de escuchar» | Sí | Sí (con la app abierta) | Sí (página web, toque para hablar) | Micrófono | Reconocimiento del teléfono (Vosk en Android, Apple Speech en iPhone) |
+| Órdenes encadenadas (hasta 4, con «y», «luego», «después») | Sí | Sí | Parcial | Micrófono | Cada paso es una orden que SmartBuds ya entiende; confirma al final |
+| Voz personalizada (estilo, velocidad, tono) | Sí | Sí | No | — | Texto a voz del sistema (Google / Apple). La voz en sí se elige en los ajustes del teléfono |

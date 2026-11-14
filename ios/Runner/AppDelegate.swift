@@ -427,7 +427,11 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
       emit("state", ["listening": wanted && !paused, "paused": paused])
       result(true)
     case "speak":
-      speak(args["text"] as? String ?? "")
+      speak(
+        args["text"] as? String ?? "",
+        rate: (args["rate"] as? NSNumber)?.floatValue ?? 1,
+        pitch: (args["pitch"] as? NSNumber)?.floatValue ?? 1
+      )
       result(true)
     case "listenOnce":
       listenOnce(result)
@@ -561,9 +565,13 @@ final class VoiceBridge: NSObject, FlutterStreamHandler, AVSpeechSynthesizerDele
 
   // MARK: Respuesta hablada
 
-  private func speak(_ text: String) {
+  private func speak(_ text: String, rate: Float = 1, pitch: Float = 1) {
     guard !text.isEmpty else { return }
     let u = AVSpeechUtterance(string: text)
+    // Voz personalizada: velocidad (sobre la normal) y tono.
+    let r = AVSpeechUtteranceDefaultSpeechRate * min(max(rate, 0.5), 2)
+    u.rate = min(max(r, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+    u.pitchMultiplier = min(max(pitch, 0.5), 2)
     u.voice = AVSpeechSynthesisVoice(language: "es-CO") ?? AVSpeechSynthesisVoice(language: "es-ES")
     speaking = true
     stopListening() // que SmartBuds no se escuche a sí mismo
