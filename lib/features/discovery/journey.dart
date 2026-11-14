@@ -90,7 +90,7 @@ class JourneyPlanner {
 
   /// Arma el viaje. [startEnergy]: lo que suena (para «bajada»).
   static Journey plan(MusicProfile profile, JourneyShape shape,
-      {int minutes = 45, int? startEnergy, Random? random, Set<String> blocked = const {}}) {
+      {int minutes = 45, int? startEnergy, Random? random, Set<String> blocked = const {}, Set<String> avoid = const {}}) {
     final n = (minutes / songMinutes).round().clamp(4, 40);
     final targets = curve(shape, n, start: shape == JourneyShape.bajada ? (startEnergy ?? 3).clamp(1, 5) : 1);
     final rnd = random ?? Random();
@@ -105,6 +105,7 @@ class JourneyPlanner {
     for (final t in profile.tracks.values) {
       if (t.dislikes > t.likes || t.skips > t.completes + 2) continue;
       if (blocked.contains((t.artist ?? '').toLowerCase().trim())) continue;
+      if (avoid.contains(t.key)) continue; // se está repitiendo o suena ahora
       final e = SmartQueue.moodEnergy[moodOf[t.key]] ?? SmartQueue.energyFromWords('${t.title} ${t.artist ?? ''}');
       if (e == null) continue;
       (byEnergy[e] ??= []).add(t);

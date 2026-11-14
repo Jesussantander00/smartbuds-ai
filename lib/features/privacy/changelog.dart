@@ -1,8 +1,17 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 37;
+const latestChangelog = 38;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 38,
+    title: 'Inteligencia musical, todo junto',
+    items: [
+      'Viajes y actividades evitan lo que se está repitiendo y lo que ya suena.',
+      'La cola inteligente respeta el orden de un viaje musical; «termina el viaje» lo cierra.',
+      'Autodiagnóstico → Inteligencia musical: cuánto sabe SmartBuds de tu música y cómo enseñarle más.',
+    ],
+  ),
   (
     version: 37,
     title: 'Viajes musicales',
