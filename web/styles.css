@@ -204,6 +204,8 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
 .player-wrap { margin: 14px auto 0; border-radius: 18px; overflow: hidden; aspect-ratio: 16 / 9; max-width: 440px;
   box-shadow: 0 16px 34px -14px rgba(40, 25, 15, .55); background: #000; }
 .player-wrap.empty { display: none; }
+.player-wrap { position: relative; }
+.player-shield { position: absolute; inset: 0; background: transparent; border: 0; padding: 0; cursor: pointer; }
 .player-wrap iframe, #player { width: 100%; height: 100%; display: block; border: 0; }
 .open-card { margin-top: 14px; text-align: center; }
 .open-btn { display: inline-block; color: #fff; font-weight: 600; text-decoration: none; padding: 12px 22px; border-radius: 24px;

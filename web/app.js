@@ -262,6 +262,17 @@
       },
     });
   };
+  // Capa transparente sobre el video: en el teléfono, tocar el video de YouTube
+  // puede abrir la app de YouTube. El video se sigue viendo; tocarlo pausa o sigue.
+  (() => {
+    const wrap = $('playerWrap');
+    if (!wrap) return;
+    const shield = document.createElement('button');
+    shield.className = 'player-shield';
+    shield.setAttribute('aria-label', 'Pausa o continúa');
+    shield.onclick = () => toggle();
+    wrap.appendChild(shield);
+  })();
   const yt = document.createElement('script');
   yt.src = 'https://www.youtube.com/iframe_api';
   document.head.appendChild(yt);
@@ -335,8 +346,10 @@
     amazon: { name: 'Amazon Music' },
     deezer: { name: 'Deezer' },
   };
-  // Por defecto suena aquí mismo; abrir otra app es una opción.
-  let target = loadJSON('smartbuds.target2') || 'here';
+  // Siempre suena aquí mismo. Antes, si alguna vez elegiste otra app, la
+  // página lo recordaba y se salía sola a YouTube Music: ahora todos vuelven a
+  // «Aquí mismo» (clave nueva) y otra app solo muestra un botón que tú tocas.
+  let target = loadJSON('smartbuds.target3') || 'here';
   if (!APPS[target]) target = 'here';
 
   // Apple (iTunes) también exige JSONP para pedirle datos desde otra página.
@@ -410,10 +423,9 @@
         const link = await appLink(target, query);
         info = item.title ? { title: item.title, artist: item.artist }
           : (link.title ? { title: link.title, artist: link.artist } : { title: query, artist: '' });
+        // Nunca se sale de SmartBuds por su cuenta: queda el botón para que TÚ
+        // decidas abrir la otra app.
         showOpenCard(link.url, APPS[target].name);
-        // Se abre la app (con la cuenta de cada persona). Si el teléfono no la
-        // abre solo, queda el botón «Abrir en …» para tocarlo.
-        setTimeout(() => { window.location.href = link.url; }, 150);
       }
       finishCurrent(skipped);
       if (current && !fromHistory) history.push({ title: current.title, artist: current.artist });
@@ -436,7 +448,7 @@
         // En otra app no se puede confirmar que suene: no se cuenta como escuchada.
         $('nowSource').textContent = `Enviada a ${APPS[target].name} (SmartBuds no ve si suena)`;
       }
-      status(target === 'here' ? '' : `Abriendo en ${APPS[target].name}. Vuelve aquí y toca ⏭ para la siguiente.`);
+      status(target === 'here' ? '' : `Lista en ${APPS[target].name}: toca «Abrir» si quieres salir de SmartBuds para escucharla allí.`);
     } catch (e) {
       status(e.message);
       say('No pude ponerla.');
@@ -908,11 +920,15 @@
   for (const [id, a] of Object.entries(APPS)) {
     const o = document.createElement('option');
     o.value = id;
-    o.textContent = id === 'here' ? 'Aquí mismo (SmartBuds)' : a.name;
+    o.textContent = id === 'here' ? 'Aquí mismo (SmartBuds)' : `Botón para abrir en ${a.name}`;
     sel.appendChild(o);
   }
   sel.value = target;
-  sel.onchange = () => { target = sel.value; saveJSON('smartbuds.target2', target); status(`Ahora la música se abre en ${APPS[target].name}.`); };
+  sel.onchange = () => {
+    target = sel.value;
+    saveJSON('smartbuds.target3', target);
+    status(target === 'here' ? 'La música suena aquí mismo.' : `Se mostrará un botón para abrirla en ${APPS[target].name} (no se sale sola).`);
+  };
   $('continuous').checked = continuous;
   $('continuous').onchange = (e) => {
     continuous = e.target.checked;
