@@ -224,6 +224,11 @@ class _SmartBudsAppState extends State<SmartBudsApp> {
         ..enabled = widget.settings.onlyMyVoice
         ..threshold = widget.settings.voiceThreshold;
       v.customIntent = automations.match;
+      v
+        ..currentArtist = (() => assistant.active?.artist)
+        ..isPrivate = (() => widget.settings.privateMode)
+        ..historyStore = FileJsonStore('conversation.json');
+      unawaited(v.loadHistory());
       voice = v;
       assistant.voice = v;
       // Respuestas cortas: por ajuste o porque queda poca batería.

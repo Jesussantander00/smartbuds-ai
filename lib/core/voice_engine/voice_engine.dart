@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../storage/json_store.dart';
 import 'command_parser.dart';
 import 'speaker_guard.dart';
 
@@ -26,6 +27,118 @@ class VoiceLogEntry {
 
   /// Lo que SmartBuds dijo después (si dijo algo).
   String? reply;
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toIso8601String(),
+        'heard': heard,
+        'action': action,
+        if (reply != null) 'reply': reply,
+      };
+
+  static VoiceLogEntry? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final at = DateTime.tryParse('${j['at']}');
+    if (at == null) return null;
+    return VoiceLogEntry(at, '${j['heard'] ?? ''}', '${j['action'] ?? ''}')..reply = j['reply'] as String?;
+  }
+}
+
+/// Memoria corta de la conversación: de quién se habló y qué se hizo hace poco.
+/// Permite «busca Feid» → «pon una de él» → «no, la otra». Solo en memoria.
+class ConversationMemory {
+  ConversationMemory(this._clock);
+  final DateTime Function() _clock;
+
+  /// Cuánto dura el contexto («él» deja de ser Feid tras este tiempo).
+  static const window = Duration(minutes: 10);
+
+  /// Hasta cuándo se puede corregir la última acción con «no, la otra».
+  static const correctWindow = Duration(seconds: 90);
+
+  String? _artist;
+  DateTime? _artistAt;
+  VoiceIntent? _last;
+  DateTime? _lastAt;
+
+  /// Artista del que se habló hace poco (o null).
+  String? get artist =>
+      _artistAt != null && _clock().difference(_artistAt!) < window ? _artist : null;
+
+  /// Última acción que se puede corregir (o null si pasó mucho tiempo).
+  VoiceIntent? get lastAction =>
+      _lastAt != null && _clock().difference(_lastAt!) < correctWindow ? _last : null;
+
+  void noteArtist(String? name) {
+    final n = name?.trim();
+    if (n == null || n.isEmpty) return;
+    _artist = n;
+    _artistAt = _clock();
+  }
+
+  void remember(VoiceIntent intent) {
+    switch (intent) {
+      case ArtistIntent(:final artist):
+        noteArtist(artist);
+      case ArtistInfoIntent(:final artist):
+        noteArtist(artist);
+      default:
+        break;
+    }
+    if (_correctable(intent)) {
+      _last = intent;
+      _lastAt = _clock();
+    }
+  }
+
+  void forget() {
+    _artist = null;
+    _artistAt = null;
+    _last = null;
+    _lastAt = null;
+  }
+
+  static bool _correctable(VoiceIntent i) => switch (i) {
+        CommandIntent() ||
+        SearchIntent() ||
+        ArtistIntent() ||
+        MoodIntent() ||
+        LyricsIntent() ||
+        SimilarIntent() ||
+        DiscoverIntent() ||
+        FavoriteIntent() ||
+        ForgottenIntent() ||
+        DurationIntent() ||
+        VolumeIntent() ||
+        UsageProfileIntent() =>
+          true,
+        _ => false,
+      };
+
+  /// Qué hacer ante «no, la otra»: la orden contraria (si existe) y si hay
+  /// que preguntar qué querías.
+  static ({VoiceIntent? fix, String? ask, String? say}) correctionFor(VoiceIntent? last) {
+    switch (last) {
+      case null:
+        return (fix: null, ask: null, say: 'No tengo nada reciente que corregir.');
+      case CommandIntent(:final command):
+        final inverse = switch (command) {
+          MusicCommand.next => MusicCommand.previous,
+          MusicCommand.previous => MusicCommand.next,
+          MusicCommand.volumeUp => MusicCommand.volumeDown,
+          MusicCommand.volumeDown => MusicCommand.volumeUp,
+          MusicCommand.pause => MusicCommand.play,
+          MusicCommand.play => MusicCommand.pause,
+          MusicCommand.togglePlayPause => MusicCommand.togglePlayPause,
+        };
+        return (fix: CommandIntent(inverse), ask: null, say: 'Perdón, lo corrijo.');
+      case VolumeIntent():
+        return (fix: null, ask: '¿A qué volumen lo dejo?', say: null);
+      case UsageProfileIntent():
+        return (fix: const UsageProfileIntent('diario'), ask: null, say: 'Perdón, vuelvo al modo diario.');
+      default:
+        return (fix: null, ask: 'Perdón. ¿Qué querías escuchar?', say: null);
+    }
+  }
 }
 
 /// Motor de voz: escucha continua (también con la pantalla apagada) y convierte
@@ -56,6 +169,18 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Tus comandos personalizados: se revisan antes que los de SmartBuds.
   VoiceIntent? Function(String heard)? customIntent;
+
+  /// Artista que suena ahora (para «pon una de él»).
+  String? Function()? currentArtist;
+
+  /// Modo privado: no se guarda lo que dices en el historial.
+  bool Function()? isPrivate;
+
+  /// Dónde se guarda el historial de conversación (null = solo en memoria).
+  JsonStore? historyStore;
+
+  /// Memoria corta de la conversación (contexto y correcciones).
+  late final ConversationMemory conversation = ConversationMemory(_clock);
 
   final CommandParser parser;
 
@@ -261,11 +386,37 @@ class VoiceEngine extends ChangeNotifier {
 
   /// Últimas órdenes entendidas (la más reciente primero).
   final List<VoiceLogEntry> history = [];
-  static const historyMax = 50;
+  static const historyMax = 100;
 
   void _log(VoiceIntent intent) {
+    if (isPrivate?.call() ?? false) return; // modo privado: no se guarda
     history.insert(0, VoiceLogEntry(_clock(), lastHeard, describe(intent)));
     if (history.length > historyMax) history.removeLast();
+    _saveHistory();
+  }
+
+  /// Carga el historial de conversación guardado en el teléfono.
+  Future<void> loadHistory() async {
+    final data = await historyStore?.load();
+    final list = (data?['entries'] as List?) ?? const [];
+    history
+      ..clear()
+      ..addAll(list.map(VoiceLogEntry.fromJson).whereType<VoiceLogEntry>().take(historyMax));
+    notifyListeners();
+  }
+
+  void _saveHistory() {
+    final store = historyStore;
+    if (store == null) return;
+    unawaited(store.save({'entries': [for (final e in history) e.toJson()]}).catchError((_) {}));
+  }
+
+  /// Borra todo el historial de conversación (y el contexto).
+  Future<void> clearHistory() async {
+    history.clear();
+    conversation.forget();
+    await historyStore?.save({'entries': <Object>[]});
+    notifyListeners();
   }
 
   /// Texto legible de una orden (para el historial).
@@ -316,6 +467,9 @@ class VoiceEngine extends ChangeNotifier {
         MacroIntent(:final name) => name,
         ArtistInfoIntent(:final artist) => artist == null ? 'Sobre este artista' : 'Sobre $artist',
         TasteEvolutionIntent() => 'Tu evolución musical',
+        FollowUpArtistIntent() => 'Otra del mismo artista',
+        CorrectionIntent() => 'Corrección',
+        ClarifyIntent() => 'Pregunta: ¿qué quieres?',
       };
 
   /// Primera frase de [text] (para respuestas cortas).
@@ -521,7 +675,10 @@ class VoiceEngine extends ChangeNotifier {
     if (shortReplies) said = shorten(said);
     if (history.isNotEmpty &&
         _clock().difference(history.first.at) < const Duration(seconds: 20)) {
-      history.first.reply ??= said;
+      if (history.first.reply == null) {
+        history.first.reply = said;
+        _saveHistory();
+      }
     }
     try {
       await _method.invokeMethod('speak', {'text': said, 'rate': speechRate, 'pitch': speechPitch});
@@ -605,6 +762,7 @@ class VoiceEngine extends ChangeNotifier {
 
   void _dispatch(VoiceIntent intent, {bool log = true}) {
     if (log) _log(intent);
+    conversation.remember(intent);
     // Núcleo de Jarvis: «ejecutando» unos segundos (hasta que responda).
     _busyUntil = _clock().add(const Duration(milliseconds: 2500));
     notifyListeners(); // el núcleo se redibuja solo y vuelve a «escuchando» al pasar el tiempo
@@ -634,6 +792,18 @@ class VoiceEngine extends ChangeNotifier {
         unawaited(_askThen('¿Qué dice la letra?', (h) => LyricsIntent(h)));
       case MultiIntent(:final parts):
         unawaited(runChain(parts));
+      case FollowUpArtistIntent():
+        final who = currentArtist?.call() ?? conversation.artist;
+        if (who == null || who.trim().isEmpty) {
+          unawaited(_askForArtist());
+        } else {
+          _dispatch(ArtistIntent(who), log: false);
+        }
+      case CorrectionIntent():
+        unawaited(_correct());
+      case ClarifyIntent():
+        unawaited(_askThen('¿Qué artista o género quieres?',
+            (h) => parser.parseIntent('pon algo $h') ?? parser.parseFree(h) ?? SearchIntent(SearchRequest(h))));
       case StopListeningIntent():
         unawaited(() async {
           await speak('Dejo de escuchar. Toca el micrófono cuando quieras.', force: true);
@@ -690,6 +860,26 @@ class VoiceEngine extends ChangeNotifier {
     done?.call(voiceprint);
   }
 
+  /// «No, la otra» / «eso no era»: deshace o corrige la última acción.
+  Future<void> _correct() async {
+    final last = conversation.lastAction;
+    final plan = ConversationMemory.correctionFor(last);
+    final say = plan.say;
+    if (say != null) await speak(say);
+    final fix = plan.fix;
+    if (fix != null) {
+      _lastCommandAt = null; // la corrección no cuenta como repetición
+      _dispatch(fix, log: false);
+    }
+    final ask = plan.ask;
+    if (ask == null) return;
+    if (last is VolumeIntent) {
+      await _askThen(ask, (h) => VolumeIntent(parser.parseVolume('volumen al $h') ?? 50));
+    } else {
+      await _askThen(ask, (h) => parser.parseFree(h) ?? SearchIntent(SearchRequest(h)));
+    }
+  }
+
   /// «Busca» → «¿Qué canción?» → escucha el nombre con el reconocedor preciso.
   Future<void> _askForSong() async {
     if (onSearch == null) return;
@@ -706,6 +896,7 @@ class VoiceEngine extends ChangeNotifier {
     lastHeard = heard;
     final request = parser.parseSearch('busca $heard') ?? SearchRequest(heard.trim());
     lastSearch = request;
+    conversation.remember(SearchIntent(request));
     notifyListeners();
     await onSearch!(request);
   }
@@ -746,6 +937,7 @@ class VoiceEngine extends ChangeNotifier {
     lastHeard = heard;
     final intent = build(heard.trim());
     _log(intent);
+    conversation.remember(intent);
     notifyListeners();
     await handler(intent);
   }
@@ -765,8 +957,11 @@ class VoiceEngine extends ChangeNotifier {
       return;
     }
     lastHeard = heard;
+    final intent = ArtistIntent(heard.trim());
+    _log(intent);
+    conversation.remember(intent);
     notifyListeners();
-    await handler(ArtistIntent(heard.trim()));
+    await handler(intent);
   }
 
   void _onHeadphones(bool connected) {

@@ -105,7 +105,7 @@ class ControlCenterScreen extends StatelessWidget {
                   ),
                 ),
               ],
-              Text('El registro vive solo en la memoria del teléfono y se borra al cerrar la app.',
+              Text('Las acciones viven solo en la memoria y se borran al cerrar la app. Lo que te escuchó se guarda en el teléfono (sin audio) y se borra en Asistente → Historial de voz.',
                   style: theme.textTheme.bodySmall),
               // ------------------------------------------- Permisos
               _title(theme, 'Permisos y para qué'),
