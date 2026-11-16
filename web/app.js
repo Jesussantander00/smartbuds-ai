@@ -350,6 +350,7 @@
   const APPS = {
     here: { name: 'SmartBuds' },
     youtube: { name: 'YouTube Music' },
+    spotifyin: { name: 'Mi Spotify' },
     spotify: { name: 'Spotify' },
     apple: { name: 'Apple Music' },
     amazon: { name: 'Amazon Music' },
@@ -360,6 +361,7 @@
   // «Aquí mismo» (clave nueva) y otra app solo muestra un botón que tú tocas.
   let target = loadJSON('smartbuds.target3') || 'here';
   if (!APPS[target]) target = 'here';
+  if (target === 'spotifyin' && !(window.SMARTBUDS_CONFIG || {}).SPOTIFY_CLIENT_ID) target = 'here';
 
   // Apple (iTunes) también exige JSONP para pedirle datos desde otra página.
   function jsonp(url) {
@@ -413,6 +415,157 @@
     $('openCard').classList.remove('hidden');
   }
 
+  // ================================================================ Spotify dentro de SmartBuds
+  // Reproductor oficial de Spotify para páginas (Web Playback SDK): cada
+  // persona entra con SU cuenta (Premium) y la música suena aquí, controlada
+  // por SmartBuds. Entrada segura sin contraseña nuestra (OAuth con PKCE): la
+  // contraseña solo se escribe en la página de Spotify.
+  const SPOTIFY_ID = (window.SMARTBUDS_CONFIG || {}).SPOTIFY_CLIENT_ID || '';
+  const SP_REDIRECT = `${location.origin}/`;
+  const SP_SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state';
+  let spPlayer = null;
+  let spDevice = null;
+  let spPaused = true;
+  let spLastUri = null;
+
+  function spTokens() { return loadJSON('smartbuds.spotify') || null; }
+  function spConnected() { return !!(SPOTIFY_ID && spTokens()?.refresh); }
+
+  function b64url(bytes) {
+    return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function spLogin() {
+    const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+    sessionStorage.setItem('smartbuds.sp.verifier', verifier);
+    sessionStorage.setItem('smartbuds.sp.state', state);
+    const p = new URLSearchParams({
+      client_id: SPOTIFY_ID, response_type: 'code', redirect_uri: SP_REDIRECT, scope: SP_SCOPES,
+      code_challenge_method: 'S256', code_challenge: challenge, state,
+    });
+    window.location.href = `https://accounts.spotify.com/authorize?${p}`; // la persona tocó «Conectar»
+  }
+
+  async function spTokenRequest(params) {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: SPOTIFY_ID, ...params }),
+    });
+    if (!res.ok) throw new Error('Spotify no aceptó la conexión.');
+    const d = await res.json();
+    const old = spTokens() || {};
+    saveJSON('smartbuds.spotify', {
+      access: d.access_token, refresh: d.refresh_token || old.refresh, until: Date.now() + (d.expires_in - 60) * 1000,
+    });
+    return d.access_token;
+  }
+
+  /** Al volver de Spotify con ?code=…: termina la conexión y limpia la dirección. */
+  async function spFinishLogin() {
+    const q = new URLSearchParams(location.search);
+    const code = q.get('code');
+    const err = q.get('error');
+    if (!code && !err) return;
+    const okState = q.get('state') && q.get('state') === sessionStorage.getItem('smartbuds.sp.state');
+    const verifier = sessionStorage.getItem('smartbuds.sp.verifier');
+    window.history.replaceState({}, '', location.pathname);
+    sessionStorage.removeItem('smartbuds.sp.state');
+    sessionStorage.removeItem('smartbuds.sp.verifier');
+    if (err || !okState || !verifier) { status('No se conectó Spotify.'); return; }
+    try {
+      await spTokenRequest({ grant_type: 'authorization_code', code, redirect_uri: SP_REDIRECT, code_verifier: verifier });
+      target = 'spotifyin';
+      saveJSON('smartbuds.target3', target);
+      location.reload(); // recarga ya conectada (la dirección quedó limpia)
+    } catch (e) { status(e.message); }
+  }
+
+  async function spToken() {
+    const t = spTokens();
+    if (!t?.refresh) throw new Error('Conecta tu Spotify en Asistente → Ajustes.');
+    if (t.access && Date.now() < t.until) return t.access;
+    try {
+      return await spTokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh });
+    } catch {
+      localStorage.removeItem('smartbuds.spotify');
+      renderSpotify();
+      throw new Error('La conexión con Spotify caducó. Conéctala otra vez.');
+    }
+  }
+
+  async function spApi(path, opts = {}) {
+    const res = await fetch(`https://api.spotify.com/v1${path}`, {
+      ...opts,
+      headers: { Authorization: `Bearer ${await spToken()}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (res.status === 403) throw new Error('Spotify solo permite reproducir aquí con cuenta Premium.');
+    if (!res.ok && res.status !== 204) throw new Error('Spotify no respondió.');
+    return res.status === 204 || res.status === 202 ? null : res.json().catch(() => null);
+  }
+
+  function spStartPlayer() {
+    if (!spConnected() || spPlayer) return;
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      spPlayer = new Spotify.Player({
+        name: 'SmartBuds AI',
+        getOAuthToken: (cb) => { spToken().then(cb).catch(() => {}); },
+        volume: volume / 100,
+      });
+      spPlayer.addListener('ready', ({ device_id: id }) => { spDevice = id; renderSpotify(); });
+      spPlayer.addListener('not_ready', () => { spDevice = null; });
+      spPlayer.addListener('account_error', () => status('Spotify solo permite reproducir aquí con cuenta Premium.'));
+      spPlayer.addListener('authentication_error', () => status('La conexión con Spotify caducó. Conéctala otra vez.'));
+      spPlayer.addListener('autoplay_failed', () => status('Toca la pantalla una vez para que el navegador deje sonar la música.'));
+      spPlayer.addListener('player_state_changed', (st) => {
+        if (!st || target !== 'spotifyin' || !current?.spotifyUri) return;
+        const wasPaused = spPaused;
+        spPaused = st.paused;
+        $('nowSource').textContent = st.paused ? 'En pausa (Spotify en SmartBuds)' : 'Sonando en SmartBuds · Spotify';
+        if (!st.paused && pendingConfirm === current) {
+          current.startedAt = Date.now();
+          record(current, 'play');
+          say(`Reproduciendo ${current.title}`);
+          pendingConfirm = null;
+        }
+        // Terminó la canción: vuelve al inicio, en pausa, con la misma canción.
+        const ended = st.paused && st.position === 0 && !wasPaused
+          && st.track_window?.previous_tracks?.some((t) => t.uri === spLastUri);
+        if (ended) next(false);
+      });
+      spPlayer.connect();
+    };
+    const s = document.createElement('script');
+    s.src = 'https://sdk.scdn.co/spotify-player.js';
+    document.head.appendChild(s);
+  }
+
+  /** Busca en Spotify y pone la canción en el reproductor de esta página. */
+  async function spPlay(query) {
+    if (!spDevice) throw new Error('Spotify aún se está conectando. Intenta en unos segundos.');
+    const r = await spApi(`/search?type=track&limit=5&q=${encodeURIComponent(query)}`);
+    const t = r?.tracks?.items?.[0];
+    if (!t) throw new Error(`Spotify no tiene «${query}».`);
+    spPlayer.activateElement?.();
+    await spApi(`/me/player/play?device_id=${spDevice}`, { method: 'PUT', body: JSON.stringify({ uris: [t.uri] }) });
+    spLastUri = t.uri;
+    spPaused = false;
+    return { title: t.name, artist: (t.artists || []).map((a) => a.name).join(', '), spotifyUri: t.uri };
+  }
+
+  function renderSpotify() {
+    const card = $('spotifyCard');
+    if (!card) return;
+    card.classList.toggle('hidden', !SPOTIFY_ID);
+    const on = spConnected();
+    $('spotifyState').textContent = on
+      ? (spDevice ? 'Conectado: suena dentro de SmartBuds.' : 'Conectando…')
+      : 'Entra con tu cuenta Premium y la música suena aquí, controlada por Jarvis.';
+    $('spotifyBtn').textContent = on ? 'Desconectar' : 'Conectar';
+  }
+
   // ---------------------------------------------------------- Sonido permitido
   // Los navegadores del teléfono no dejan sonar música hasta que tocas la
   // página una vez. Si Jarvis arrancó solo (con el permiso ya dado) y pides una
@@ -458,7 +611,9 @@
       const query = item.query || [item.title, item.artist].filter(Boolean).join(' ');
       let info;
       let videoId = null;
-      if (target === 'here') {
+      if (target === 'spotifyin') {
+        info = await spPlay(query);
+      } else if (target === 'here') {
         if (item.videoId) {
           videoId = item.videoId;
           info = { title: item.title, artist: item.artist };
@@ -478,6 +633,7 @@
       finishCurrent(skipped);
       if (current && !fromHistory) history.push({ title: current.title, artist: current.artist });
       current = { ...info, key: keyFor(info.title, info.artist), videoId, startedAt: Date.now() };
+      if (target !== 'spotifyin' && spPlayer && !spPaused) spPlayer.pause();
       if (videoId) {
         $('playerWrap').classList.remove('empty');
         $('openCard').classList.add('hidden');
@@ -493,11 +649,14 @@
         // Aún no suena: se cuenta y se anuncia cuando YouTube confirme (onStateChange).
         $('nowSource').textContent = 'Cargando…';
         pendingConfirm = current;
+      } else if (current.spotifyUri) {
+        $('nowSource').textContent = 'Cargando en Spotify…';
+        pendingConfirm = current;
       } else {
         // En otra app no se puede confirmar que suene: no se cuenta como escuchada.
         $('nowSource').textContent = `Enviada a ${APPS[target].name} (SmartBuds no ve si suena)`;
       }
-      status(target === 'here' ? '' : `Lista en ${APPS[target].name}: toca «Abrir» si quieres salir de SmartBuds para escucharla allí.`);
+      status(target === 'here' || target === 'spotifyin' ? '' : `Lista en ${APPS[target].name}: toca «Abrir» si quieres salir de SmartBuds para escucharla allí.`);
     } catch (e) {
       status(e.message);
       say('No pude ponerla.');
@@ -521,6 +680,11 @@
   }
 
   function toggle() {
+    if (target === 'spotifyin') {
+      if (!current?.spotifyUri || !spPlayer) return favorites();
+      spPlayer.togglePlay();
+      return;
+    }
     if (target !== 'here') {
       if (current) status('La pausa se hace en la app de música (o con el botón de tus audífonos).');
       else favorites();
@@ -532,6 +696,11 @@
   }
 
   function setVol(delta) {
+    if (target === 'spotifyin') {
+      volume = Math.max(0, Math.min(100, volume + delta));
+      spPlayer?.setVolume(volume / 100);
+      return;
+    }
     if (target !== 'here') { status('El volumen se cambia con los botones del teléfono.'); return; }
     volume = Math.max(0, Math.min(100, volume + delta));
     if (playerReady) player.setVolume(volume);
@@ -978,18 +1147,22 @@
   $('login').onsubmit = (e) => { e.preventDefault(); doAuth('signin'); };
   $('signup').onclick = () => doAuth('signup');
   $('logout').onclick = signOut;
+  spFinishLogin();
+  if (target === 'spotifyin' && !spConnected()) target = 'here';
   const sel = $('target');
   for (const [id, a] of Object.entries(APPS)) {
+    if (id === 'spotifyin' && !spConnected()) continue;
     const o = document.createElement('option');
     o.value = id;
-    o.textContent = id === 'here' ? 'Aquí mismo (SmartBuds)' : `Botón para abrir en ${a.name}`;
+    o.textContent = id === 'here' ? 'Aquí mismo (SmartBuds)'
+      : id === 'spotifyin' ? 'Mi Spotify, dentro de SmartBuds' : `Botón para abrir en ${a.name}`;
     sel.appendChild(o);
   }
   sel.value = target;
   sel.onchange = () => {
     target = sel.value;
     saveJSON('smartbuds.target3', target);
-    status(target === 'here' ? 'La música suena aquí mismo.' : `Se mostrará un botón para abrirla en ${APPS[target].name} (no se sale sola).`);
+    status(target === 'here' ? 'La música suena aquí mismo.' : target === 'spotifyin' ? 'La música suena aquí, con tu Spotify.' : `Se mostrará un botón para abrirla en ${APPS[target].name} (no se sale sola).`);
   };
   $('continuous').checked = continuous;
   $('continuous').onchange = (e) => {
@@ -1013,6 +1186,17 @@
   $('nowTitle').textContent = 'Pide una canción';
   if (!SB || !KEY) authMsg('Falta configurar Supabase en config.js.', true);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  $('spotifyBtn').onclick = () => {
+    if (spConnected()) {
+      localStorage.removeItem('smartbuds.spotify');
+      spPlayer?.disconnect();
+      target = 'here';
+      saveJSON('smartbuds.target3', target);
+      location.reload();
+    } else spLogin();
+  };
+  renderSpotify();
+  spStartPlayer();
   setupVoice();
   renderMic();
   renderMusic();
