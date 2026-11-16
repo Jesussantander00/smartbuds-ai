@@ -227,12 +227,9 @@
     player = new YT.Player('player', {
       width: '100%',
       height: '100%',
-      // Sin controles de YouTube ni pantalla completa ni videos sugeridos:
-      // se maneja con los botones de SmartBuds y no te saca de la página.
-      playerVars: {
-        playsinline: 1, controls: 0, disablekb: 1, fs: 0, rel: 0,
-        iv_load_policy: 3, modestbranding: 1, origin: location.origin,
-      },
+      // Reproductor oficial tal cual lo exige YouTube: con sus controles, su
+      // logo y sin nada encima. SmartBuds lo maneja además con sus botones y la voz.
+      playerVars: { playsinline: 1, rel: 0, origin: location.origin },
       events: {
         onReady: () => {
           playerReady = true;
@@ -263,17 +260,6 @@
       },
     });
   };
-  // Capa transparente sobre el video: en el teléfono, tocar el video de YouTube
-  // puede abrir la app de YouTube. El video se sigue viendo; tocarlo pausa o sigue.
-  (() => {
-    const wrap = $('playerWrap');
-    if (!wrap) return;
-    const shield = document.createElement('button');
-    shield.className = 'player-shield';
-    shield.setAttribute('aria-label', 'Pausa o continúa');
-    shield.onclick = () => toggle();
-    wrap.appendChild(shield);
-  })();
   const yt = document.createElement('script');
   yt.src = 'https://www.youtube.com/iframe_api';
   document.head.appendChild(yt);
@@ -637,6 +623,8 @@
       if (videoId) {
         $('playerWrap').classList.remove('empty');
         $('openCard').classList.add('hidden');
+        // YouTube pide que el reproductor esté a la vista cuando empieza a sonar solo.
+        $('playerWrap').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         if (playerReady) player.loadVideoById(videoId); else pendingVideo = videoId;
         watchAutoplay(info);
       } else {
@@ -858,6 +846,11 @@
     let n = norm(said).replace(/^(oye |hey |hola )?(jarvis|smartbuds|musica)\s+/, '');
     said = said.replace(/^\s*(oye |hey |hola )?(jarvis|smartbuds)[,\s]+/i, '');
     if (!n) return false;
+    // Spotify prohíbe controlar su reproducción por voz: Jarvis no lo maneja.
+    if (target === 'spotifyin') {
+      status('Con Spotify la voz no está permitida (regla de Spotify). Usa los botones o cambia a «Aquí mismo».');
+      return true;
+    }
     if (awaitingSong && Date.now() - awaitingAt > 20000) awaitingSong = false; // la pregunta caducó
     $('heard').textContent = `Oí: «${said}»`;
     if (awaitingSong) {
