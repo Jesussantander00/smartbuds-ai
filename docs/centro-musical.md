@@ -48,3 +48,8 @@ La misma tabla está en la app: **Asistente → Música → Fuentes musicales**.
 4. Cambia la prioridad en Fuentes musicales y repite.
 5. Por voz: «busca música de Shakira», «reproduce la segunda», «busca otra versión», «agrega esta canción a la cola», «pausa», «continúa», «sube el volumen», «otra del mismo artista».
 6. Busca algo inexistente: SmartBuds no abre ninguna app.
+
+## Spotify dentro de la página web (cuenta de cada persona)
+- Reproductor oficial de Spotify para páginas (Web Playback SDK). Cada persona toca «Conectar» en Asistente → Ajustes, entra en la página de Spotify (SmartBuds nunca ve la contraseña; OAuth con PKCE) y la música suena dentro de SmartBuds, controlada por Jarvis.
+- Requisitos: cuenta **Premium**; `SPOTIFY_CLIENT_ID` en `web/config.js` (app gratuita en developer.spotify.com con «Redirect URI» `https://smartbuds-ai-web.vercel.app/` y «Web Playback SDK» + «Web API» marcados). Mientras la app esté en modo desarrollo solo funciona para las cuentas que el dueño agregue en «User Management».
+- Sin `SPOTIFY_CLIENT_ID` la opción no aparece. Solo web: en la app del teléfono Spotify no permite reproducir dentro de otra app.
