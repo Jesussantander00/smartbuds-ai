@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartbuds_ai/connectors/connector_interface.dart';
 import 'package:smartbuds_ai/core/capability_manager/capability_manager.dart';
 import 'package:smartbuds_ai/core/command_router/command_router.dart';
 import 'package:smartbuds_ai/core/connector_manager.dart';
