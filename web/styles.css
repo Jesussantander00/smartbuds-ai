@@ -312,3 +312,6 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
   background: rgba(10, 8, 6, .78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 #startGate b { font-size: 1.6rem; }
 #startGate small { opacity: .8; font-size: 1rem; max-width: 280px; }
+
+.player-note { display: block; text-align: center; margin-top: 6px; font-size: .78rem; }
+.player-wrap.empty + .player-note { display: none; }
