@@ -555,9 +555,11 @@
   function clearTapToPlay() {
     clearTimeout(autoplayTimer);
     autoplayTimer = null;
+    $('playerWrap').classList.remove('needs-tap');
     if (blockedInfo) {
       blockedInfo = null;
       $('openCard').classList.add('hidden');
+      status('');
     }
   }
 
@@ -568,18 +570,28 @@
       const st = player.getPlayerState?.();
       if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING || st === YT.PlayerState.PAUSED) return;
       blockedInfo = info;
+      if (IOS) {
+        // En iPhone, Safari solo deja empezar el video con un toque DENTRO del
+        // reproductor (un botón nuestro no sirve). Se lleva el video a la vista y
+        // se explica. Después de ese primer toque, lo que pidas por voz suena solo.
+        $('playerWrap').scrollIntoView({ block: 'center', behavior: 'smooth' });
+        $('playerWrap').classList.add('needs-tap');
+        status(`Toca ▶ en el centro del video para escuchar «${info.title}». Solo hace falta la primera vez; después lo que pidas por voz suena solo. No toques «Ver en YouTube».`);
+        return;
+      }
       const a = $('openApp');
       a.href = '#';
       a.textContent = `▶ Toca para escuchar «${info.title}»`;
       a.onclick = (ev) => { ev.preventDefault(); player.playVideo(); clearTapToPlay(); };
       $('openCard').classList.remove('hidden');
       status('El navegador pide un toque para dejar sonar la música. Toca una vez y lo demás sonará solo.');
-    }, 3500);
+    }, IOS ? 2000 : 3500);
   }
 
   // Cualquier toque en la página sirve para desbloquear el sonido pendiente.
   document.addEventListener('pointerdown', () => {
-    if (blockedInfo && playerReady) { player.playVideo(); clearTapToPlay(); status(''); }
+    // En iPhone esto no basta (hay que tocar el video); en los demás sí.
+    if (!IOS && blockedInfo && playerReady) { player.playVideo(); clearTapToPlay(); status(''); }
   }, { capture: true });
 
   /** Pone una canción {title, artist} o una búsqueda libre {query}. */

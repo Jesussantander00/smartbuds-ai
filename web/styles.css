@@ -315,3 +315,7 @@ body.is-playing .progress i { animation: progress 180s linear infinite; }
 
 .player-note { display: block; text-align: center; margin-top: 6px; font-size: .78rem; }
 .player-wrap.empty + .player-note { display: none; }
+
+/* iPhone: el video espera un toque en su botón ▶ */
+.player-wrap.needs-tap { outline: 3px solid var(--accent); outline-offset: 3px; animation: tapPulse 1.2s ease-in-out infinite; }
+@keyframes tapPulse { 50% { outline-color: transparent; } }
