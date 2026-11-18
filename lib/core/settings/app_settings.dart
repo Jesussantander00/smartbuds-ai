@@ -70,6 +70,10 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
   /// Reproducir la música dentro de SmartBuds (si una fuente lo permite).
   bool playInApp = true;
 
+  /// Usar mi YouTube Music (Premium): búsquedas y órdenes van a YouTube Music
+  /// sin salir de SmartBuds cuando su sesión está activa; abrirlo pide permiso.
+  bool useYouTubeMusic = false;
+
   /// Prioridad de fuentes del reproductor integrado (las completas van antes).
   List<String> sourceOrder = const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'];
 
@@ -537,6 +541,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     smartQueue = d['smartQueue'] == true;
     duckOnReply = d['duckOnReply'] == true;
     playInApp = d['playInApp'] != false;
+    useYouTubeMusic = d['useYouTubeMusic'] == true;
     final so = (d['sourceOrder'] as List?)?.whereType<String>().toList();
     if (so != null && so.isNotEmpty) {
       sourceOrder = [...so, ...const ['youtube', 'audius', 'deezerPreview', 'itunesPreview'].where((x) => !so.contains(x))];
@@ -668,6 +673,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     bool? smartQueue,
     bool? duckOnReply,
     bool? playInApp,
+    bool? useYouTubeMusic,
     bool? listenOnStart,
     bool? compact,
     bool? smoothTransitions,
@@ -694,6 +700,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
     if (smartQueue != null) this.smartQueue = smartQueue;
     if (duckOnReply != null) this.duckOnReply = duckOnReply;
     if (playInApp != null) this.playInApp = playInApp;
+    if (useYouTubeMusic != null) this.useYouTubeMusic = useYouTubeMusic;
     if (listenOnStart != null) this.listenOnStart = listenOnStart;
     if (compact != null) this.compact = compact;
     if (smoothTransitions != null) this.smoothTransitions = smoothTransitions;
@@ -800,6 +807,7 @@ class AppSettings extends ChangeNotifier implements LastUsedStore {
         'smartQueue': smartQueue,
         'duckOnReply': duckOnReply,
         'playInApp': playInApp,
+        'useYouTubeMusic': useYouTubeMusic,
         'sourceOrder': sourceOrder,
         'listenOnStart': listenOnStart,
         'lastHeadphone': lastHeadphone,

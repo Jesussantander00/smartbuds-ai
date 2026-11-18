@@ -174,6 +174,9 @@ enum CommandOutcome {
 
   /// Error al enviar el comando.
   failed,
+
+  /// Para hacerlo hay que abrir otra app: se pide permiso al usuario antes.
+  needsConsent,
 }
 
 class CommandResult {

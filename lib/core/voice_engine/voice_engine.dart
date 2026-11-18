@@ -532,6 +532,7 @@ class VoiceEngine extends ChangeNotifier {
         ClarifyIntent() => 'Pregunta: ¿qué quieres?',
         DiagnoseIntent() => 'Autodiagnóstico',
         ArrangeQueueIntent() => 'Ordenar la cola',
+        ConfirmOpenIntent() => 'Autorizar abrir la app de música',
         ResultPickIntent(:final index) => 'Resultado $index',
         OtherVersionIntent() => 'Otra versión',
         QueueCurrentIntent() => 'Agregar a la cola',
@@ -927,6 +928,7 @@ class VoiceEngine extends ChangeNotifier {
             TasteEvolutionIntent() ||
             DiagnoseIntent() ||
             ArrangeQueueIntent() ||
+            ConfirmOpenIntent() ||
             ResultPickIntent() ||
             OtherVersionIntent() ||
             QueueCurrentIntent() ||

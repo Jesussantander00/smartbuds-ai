@@ -97,18 +97,20 @@ class DetectedPlayerController extends ChangeNotifier {
     await searchRequest(request, source: source ?? testSource);
   }
 
-  Future<CommandResult?> searchRequest(SearchRequest r, {CommandSource? source}) async {
+  Future<CommandResult?> searchRequest(SearchRequest r, {CommandSource? source, bool allowOpen = true}) async {
     if (busy) return null;
     return _run(() => router.routeSearch(
           r.query,
           appPackage: r.appPackage,
           appName: r.appName,
           source: source ?? testSource,
+          allowOpen: allowOpen,
         ));
   }
 
-  Future<CommandResult?> searchVoice(SearchRequest r) =>
-      searchRequest(r, source: CommandSource.voice);
+  /// Búsqueda por voz: nunca abre otra app sin permiso (devuelve needsConsent).
+  Future<CommandResult?> searchVoice(SearchRequest r, {bool allowOpen = false}) =>
+      searchRequest(r, source: CommandSource.voice, allowOpen: allowOpen);
 
   /// Comando que llega del Voice Engine (siempre con origen voz).
   Future<CommandResult?> sendVoice(MusicCommand command) async {

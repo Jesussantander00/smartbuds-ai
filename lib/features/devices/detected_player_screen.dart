@@ -553,6 +553,7 @@ class _ResultTile extends StatelessWidget {
       CommandOutcome.sentUnverified => (Icons.schedule, Colors.orange),
       CommandOutcome.needsChoice => (Icons.help, Colors.blue),
       CommandOutcome.notAllowed => (Icons.block, Colors.red),
+      CommandOutcome.needsConsent => (Icons.open_in_new, Colors.orange),
       _ => (Icons.error_outline, Colors.red),
     };
     return ListTile(

@@ -313,6 +313,11 @@ class AlbumIntent extends VoiceIntent {
   final String query;
 }
 
+/// «Ábrelo»: autoriza abrir la app de música para la canción pendiente.
+class ConfirmOpenIntent extends VoiceIntent {
+  const ConfirmOpenIntent();
+}
+
 /// «No, la otra», «eso no era»: corrige la última acción.
 class CorrectionIntent extends VoiceIntent {
   const CorrectionIntent();
@@ -598,6 +603,7 @@ class CommandParser {
     'que te pasa', 'por que no funciona', 'revisate', 'haz una revision', 'todo funciona bien',
   };
   static const _arrangeQueue = {
+    'ábrelo', 'sí ábrelo', 'abre youtube music',
     'reproduce la primera', 'pon la primera', 'pon la segunda', 'pon la tercera', 'busca otra versión',
     'otra versión', 'agrega esta canción a la cola', 'agrega esta a la cola',
     'termina el viaje', 'viaje musical', 'haz un viaje musical', 'viaje musical de una hora', 'viaje musical de media hora',
@@ -700,6 +706,10 @@ class CommandParser {
     return ResultPickIntent(n);
   }
 
+  static const _confirmOpen = {
+    'abrelo', 'abrela', 'si abrelo', 'si abrela', 'dale abrelo', 'abre youtube music', 'si abre youtube music',
+    'puedes abrirlo', 'autorizo',
+  };
   static const _corrections = {
     'ordena la cola', 'organiza la cola', 'cola inteligente', 'ordena lo que sigue',
     'haz un diagnóstico', 'autodiagnóstico', 'revisa si todo funciona', 'qué te pasa',
@@ -852,6 +862,7 @@ class CommandParser {
     final seek = _seek[text];
     if (seek != null) return SeekIntent(seek);
     if (_activities.containsKey(text)) return ActivityIntent(_activities[text]);
+    if (_confirmOpen.contains(text)) return const ConfirmOpenIntent();
     final pick = parsePick(text);
     if (pick != null) return pick;
     if (_otherVersion.contains(text)) return const OtherVersionIntent();
