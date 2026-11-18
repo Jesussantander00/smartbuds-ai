@@ -245,15 +245,7 @@
             say(`Reproduciendo ${current.title}`);
             pendingConfirm = null;
           }
-          if (current?.videoId) {
-            $('nowSource').textContent = isPlaying ? 'Sonando en SmartBuds'
-              : e.data === YT.PlayerState.BUFFERING ? 'Cargando…'
-              : e.data === YT.PlayerState.PAUSED ? 'En pausa' : $('nowSource').textContent;
-          }
-          $('playBtn').innerHTML = isPlaying
-            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>'
-            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
-          document.body.classList.toggle('is-playing', isPlaying); // ecualizador animado
+          renderPlayState(e.data);
           if (e.data === YT.PlayerState.ENDED) next(false);
         },
         onError: () => { status('Esa canción no se puede poner aquí. Paso a otra.'); next(false); },
@@ -632,6 +624,8 @@
         if (playerReady) player.pauseVideo();
       }
       $('nowTitle').textContent = [info.title, info.artist].filter(Boolean).join(' — ');
+      lastShown = null;
+      updateMediaSession();
       publishDevice();
       if (videoId) {
         // Aún no suena: se cuenta y se anuncia cuando YouTube confirme (onStateChange).
@@ -667,6 +661,65 @@
     if (current) record({ ...item, key: keyFor(item.title, item.artist) }, 'repeat');
   }
 
+  // ------------------------------------------------ Estado real del reproductor
+  // En iPhone, si sales de Safari y vuelves a darle play desde el Centro de
+  // control, el reproductor de YouTube no siempre avisa a la página. Por eso,
+  // además de sus avisos, se lee su estado al volver y cada 2 s mientras se ve.
+  let lastShown = null;
+
+  function renderPlayState(st) {
+    if (!current?.videoId || st == null) return;
+    const isPlaying = st === YT.PlayerState.PLAYING;
+    if (isPlaying || st === YT.PlayerState.BUFFERING) clearTapToPlay();
+    if (st === lastShown) return;
+    lastShown = st;
+    $('nowSource').textContent = isPlaying ? 'Sonando en SmartBuds'
+      : st === YT.PlayerState.BUFFERING ? 'Cargando…'
+      : st === YT.PlayerState.PAUSED ? 'En pausa' : $('nowSource').textContent;
+    $('playBtn').innerHTML = isPlaying
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
+    document.body.classList.toggle('is-playing', isPlaying); // ecualizador animado
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }
+
+  function syncPlayState() {
+    if (!playerReady || target !== 'here' || !current?.videoId) return;
+    try { renderPlayState(player.getPlayerState()); } catch { /* reproductor aún cargando */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastShown = null; syncPlayState(); } });
+  window.addEventListener('pageshow', () => { lastShown = null; syncPlayState(); });
+  window.addEventListener('focus', syncPlayState);
+  setInterval(() => { if (!document.hidden) syncPlayState(); }, 2000);
+
+  // Pantalla de bloqueo / Centro de control: título de SmartBuds y botones
+  // anterior / siguiente (donde el sistema lo permita).
+  function updateMediaSession() {
+    if (!('mediaSession' in navigator) || !current) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: current.title || '', artist: current.artist || '', album: 'SmartBuds AI',
+        artwork: current.videoId ? [{ src: `https://i.ytimg.com/vi/${current.videoId}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }] : [],
+      });
+      navigator.mediaSession.setActionHandler('play', () => { if (playerReady) player.playVideo(); });
+      navigator.mediaSession.setActionHandler('pause', () => { if (playerReady) player.pauseVideo(); });
+      navigator.mediaSession.setActionHandler('nexttrack', () => next(true));
+      navigator.mediaSession.setActionHandler('previoustrack', () => previous());
+    } catch { /* el navegador no lo permite */ }
+  }
+
+  /** Si el navegador no dejó reanudar desde nuestro botón, se dice qué tocar. */
+  function checkResumed() {
+    setTimeout(() => {
+      if (!playerReady || !current?.videoId) return;
+      const st = player.getPlayerState?.();
+      if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING) return;
+      status(IOS
+        ? 'El iPhone pide tocar ▶ dentro del video para continuar (regla de Safari). Después los botones de SmartBuds vuelven a funcionar.'
+        : 'No se pudo continuar: toca ▶ dentro del video.');
+    }, 1500);
+  }
+
   function toggle() {
     if (target === 'spotifyin') {
       if (!current?.spotifyUri || !spPlayer) return favorites();
@@ -680,7 +733,8 @@
     }
     if (!playerReady || !current) return favorites();
     const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
-    playing ? player.pauseVideo() : player.playVideo();
+    if (playing) player.pauseVideo();
+    else { player.playVideo(); checkResumed(); }
   }
 
   function setVol(delta) {
