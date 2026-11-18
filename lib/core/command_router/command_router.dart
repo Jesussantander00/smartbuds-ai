@@ -127,6 +127,9 @@ class CommandRouter {
     String? appPackage,
     String? appName,
     CommandSource source = CommandSource.voice,
+    // false = nunca abrir la app de música: solo caminos invisibles (sesión
+    // multimedia). Si hiciera falta abrirla, devuelve needsConsent.
+    bool allowOpen = true,
   }) async {
     final s = search;
     if (s == null) {
@@ -183,6 +186,7 @@ class CommandRouter {
         }
 
         // 0b) Respaldo: enlace directo (YouTube Music se ve un instante).
+        if (!allowOpen) return _needsConsent(query, targetName, player);
         final opened = await s.openUri(uri: link, packageName: pkg);
         if (opened) {
           lastSearchPackage = pkg;
@@ -212,7 +216,8 @@ class CommandRouter {
       }
     }
 
-    // 2) Intención de búsqueda estándar.
+    // 2) Intención de búsqueda estándar (abre la app).
+    if (!allowOpen) return _needsConsent(query, targetName, player);
     final ok = await s.playFromSearch(
         packageName: pkg, query: query, mode: SearchMode.intent);
     if (!ok) {
@@ -232,6 +237,11 @@ class CommandRouter {
         '$targetName abrió la búsqueda de «$query», pero no empezó a reproducirla.',
         player: player);
   }
+
+  CommandResult _needsConsent(String query, String targetName, PlayerStatus? player) => CommandResult(
+      CommandOutcome.needsConsent,
+      'Para empezar «$query» hay que abrir $targetName un momento.',
+      player: player);
 
   /// Última app donde se buscó (destino por defecto de la siguiente búsqueda).
   String? lastSearchPackage;

@@ -1,8 +1,16 @@
 /// Novedades de SmartBuds, de la más reciente a la más antigua.
 /// Subir [latestChangelog] cuando se agrega una entrada.
-const latestChangelog = 40;
+const latestChangelog = 41;
 
 const changelog = <({int version, String title, List<String> items})>[
+  (
+    version: 41,
+    title: 'Tu YouTube Music, sin salir de SmartBuds',
+    items: [
+      'Nuevo ajuste «Usar mi YouTube Music Premium»: Jarvis busca y controla tu YouTube Music sin sacarte de la app cuando ya está abierto.',
+      'SmartBuds ya no abre otra app por su cuenta: si hace falta, te pregunta y esperas «ábrelo».',
+    ],
+  ),
   (
     version: 40,
     title: 'Centro musical',

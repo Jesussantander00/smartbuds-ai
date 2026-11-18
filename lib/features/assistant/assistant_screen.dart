@@ -263,6 +263,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   'Busca y suena aquí: YouTube (reproductor oficial, se ve el video), Audius completo o vista previa de '
                       'Deezer. Si lo apagas, se abre tu app de música.',
                   settings.playInApp, (v) => settings.update(playInApp: v)),
+              _switch('Usar mi YouTube Music Premium',
+                  'Android: búsquedas y órdenes de Jarvis van a tu YouTube Music sin salir de SmartBuds cuando ya '
+                      'está abierto en segundo plano. Si hay que abrirlo, te pregunta primero. Con Premium sigue con la pantalla apagada.',
+                  settings.useYouTubeMusic, (v) => settings.update(useYouTubeMusic: v)),
               if (_match('Fuentes musicales', 'spotify apple music youtube deezer soundcloud prioridad'))
                 ListTile(
                   leading: const Icon(Icons.hub_rounded),

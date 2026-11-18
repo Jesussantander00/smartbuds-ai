@@ -30,6 +30,7 @@ import '../discovery/journey.dart';
 import '../player/catalog.dart';
 import '../player/smartbuds_player.dart';
 import '../music_profile/music_profile.dart';
+import '../../core/command_router/command_router.dart';
 
 /// Coordina lo que pides por voz: reproductores, perfil musical y respuesta hablada.
 class Assistant extends ChangeNotifier {
@@ -288,6 +289,8 @@ class Assistant extends ChangeNotifier {
         await _say('No pude hacerlo.');
       case CommandOutcome.needsChoice:
         await _say('Hay varios reproductores. Abre SmartBuds para elegir uno.');
+      case CommandOutcome.needsConsent:
+        await _say(r.message);
       case CommandOutcome.verified:
       case CommandOutcome.sentUnverified:
         break;
@@ -299,8 +302,14 @@ class Assistant extends ChangeNotifier {
     _lastSearchAt = _clock(); // la canción que llega ya se anuncia con «Reproduciendo…»
     // Reproductor integrado: busca y suena DENTRO de SmartBuds (si una fuente lo permite).
     // «… en Spotify» pide otra app a propósito: entonces se abre esa app.
+    // «Usar mi YouTube Music»: la búsqueda va a YouTube Music (sin salir si su
+    // sesión está activa; si hay que abrirlo, se pide permiso).
+    final req = useYouTubeMusic && request.appPackage == null
+        ? SearchRequest(request.query, appPackage: CommandRouter.defaultSearchPackage, appName: 'YouTube Music')
+        : request;
     final p = inApp;
-    if (p != null && playInApp && request.appPackage == null) {
+    if (useYouTubeMusic && (p?.isPlaying ?? false)) await p!.pause(); // un solo audio a la vez
+    if (p != null && playInApp && !useYouTubeMusic && request.appPackage == null) {
       final t = await p.playQuery(request.query);
       _lastSearchAt = _clock();
       if (t != null) {
@@ -315,9 +324,15 @@ class Assistant extends ChangeNotifier {
           'Si quieres, en resultados puedes abrirla en tu app de música.');
       return;
     }
-    final r = await controller.searchVoice(request);
+    final r = await controller.searchVoice(req);
     if (r == null) return;
-    if (r.outcome == CommandOutcome.verified) {
+    if (r.outcome == CommandOutcome.needsConsent) {
+      // Nunca abrir otra app sin permiso: se pregunta y se espera «ábrelo».
+      pendingOpen = req;
+      _pendingOpenAt = _clock();
+      notifyListeners();
+      await _say('${r.message} ¿Lo abro? Di «ábrelo» o toca Abrir.');
+    } else if (r.outcome == CommandOutcome.verified) {
       await _say(_spokenTitle(r.message) ?? 'Listo.');
     } else if (r.outcome == CommandOutcome.notAllowed) {
       await _say('Ese reproductor no permite buscar por voz.');
@@ -361,6 +376,8 @@ class Assistant extends ChangeNotifier {
         } else {
           await handleSearch(SearchRequest(artist));
         }
+      case ConfirmOpenIntent():
+        await confirmOpen();
       case ResultPickIntent(:final index):
         final ok = await inApp?.pick(index - 1) ?? false;
         if (!ok) await _say('No hay resultado número $index. Primero di «busca …».');
@@ -941,6 +958,7 @@ class Assistant extends ChangeNotifier {
     final p = inApp;
     if (p == null || !p.isActive) return false;
     if (p.isPlaying) return true;
+    if (useYouTubeMusic) return false; // en pausa: «sigue» va a YouTube Music
     final d = controller.detection;
     final ext = d is PlayerDetected ? d.candidate.status : null;
     return !(ext?.isPlaying ?? false);
@@ -1016,8 +1034,47 @@ class Assistant extends ChangeNotifier {
 
   /// Abrir en la app de música SOLO por pedido explícito del usuario (botón).
   Future<void> openExternally(String query) async {
-    final r = await controller.searchVoice(SearchRequest(query));
+    // El usuario tocó el botón: es un permiso explícito para abrir la app.
+    final r = await controller.searchVoice(SearchRequest(query), allowOpen: true);
     if (r?.outcome == CommandOutcome.failed) await _say('No pude abrirla en tu app de música.');
+  }
+
+  // ----------------------------------------- Usar mi YouTube Music (Premium)
+
+  bool get useYouTubeMusic => settings?.useYouTubeMusic ?? false;
+
+  /// Búsqueda que necesita abrir la app de música y espera tu permiso.
+  SearchRequest? pendingOpen;
+  DateTime? _pendingOpenAt;
+
+  /// El permiso para abrir vale 2 minutos.
+  SearchRequest? get pendingOpenActive {
+    final at = _pendingOpenAt;
+    if (pendingOpen == null || at == null || _clock().difference(at) > const Duration(minutes: 2)) return null;
+    return pendingOpen;
+  }
+
+  /// «Ábrelo» / botón Abrir: ahora sí se abre la app (una vez) para esa canción.
+  Future<void> confirmOpen() async {
+    final req = pendingOpenActive;
+    pendingOpen = null;
+    notifyListeners();
+    if (req == null) {
+      await _say('No hay nada pendiente por abrir.');
+      return;
+    }
+    final r = await controller.searchVoice(req, allowOpen: true);
+    if (r == null) return;
+    if (r.executed) {
+      await _say(_spokenTitle(r.message) ?? 'Listo.');
+    } else {
+      await _say('No pude empezarla en ${req.appName ?? 'tu app de música'}.');
+    }
+  }
+
+  void cancelOpen() {
+    pendingOpen = null;
+    notifyListeners();
   }
 
   /// Buscar desde la pantalla: muestra los resultados dentro de SmartBuds.

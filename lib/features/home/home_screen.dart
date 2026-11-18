@@ -52,7 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _search() {
     final q = _query.text.trim();
     if (q.isEmpty) return;
-    if (widget.assistant.playInApp) {
+    if (widget.assistant.useYouTubeMusic) {
+      unawaited(widget.assistant.handleSearch(SearchRequest(q))); // a tu YouTube Music, sin salir
+    } else if (widget.assistant.playInApp) {
       unawaited(widget.assistant.searchInApp(q));
     } else {
       unawaited(widget.controller.search(q));
@@ -390,6 +392,28 @@ class _HomeScreenState extends State<HomeScreen> {
             if (widget.assistant.settings != null) _DesktopBar(settings: widget.assistant.settings!),
             if (voice != null) _MicStatus(voice: voice),
             if (voice != null) VoiceActionsCard(voice: voice),
+            if (widget.assistant.pendingOpenActive case final req?)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('¿Abrir ${req.appName ?? 'tu app de música'}?', style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      Text('Para empezar «${req.query}» hay que abrirla un momento. SmartBuds no la abre sin tu permiso. '
+                          'También puedes decir «ábrelo».'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(onPressed: widget.assistant.cancelOpen, child: const Text('Cancelar')),
+                          FilledButton.tonal(onPressed: widget.assistant.confirmOpen, child: const Text('Abrir')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             for (final id in widget.assistant.settings?.homeSections ?? AppSettings.allHomeSections)
               ..._section(id),
             if (widget.controller.lastResult != null) ...[
